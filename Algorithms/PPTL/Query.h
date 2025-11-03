@@ -1,6 +1,6 @@
 /**********************************************************************************
 
- Copyright (c) 2023-2025 Patrick Steil
+ Copyright (c) 2025 Patrick Steil
 
  MIT License
 
@@ -24,23 +24,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
-#include <unordered_map>
 #include <vector>
 
 #include "../../DataStructures/PPTL/Data.h"
-#include "../PTL/Profiler.h"
+#include "Profiler.h"
 
 namespace PPTL {
 
-template <typename PROFILER = PTL::NoProfiler> class Query {
+template <typename PROFILER = NoProfiler> class Query {
 public:
   using Profiler = PROFILER;
 
   Query(Data &data) : data(data) {
     profiler.registerPhases(
-        {PTL::PHASE_FIND_FIRST_VERTEX, PTL::PHASE_INSERT_HASH, PTL::PHASE_RUN});
-    profiler.registerMetrics({PTL::METRIC_INSERTED_HUBS, PTL::METRIC_CHECK_ARR_EVENTS,
-                              PTL::METRIC_CHECK_HUBS, PTL::METRIC_FOUND_SOLUTIONS});
+        {PHASE_FIND_FIRST_VERTEX, PHASE_INSERT_HASH, PHASE_RUN});
+    profiler.registerMetrics({METRIC_INSERTED_HUBS, METRIC_CHECK_ARR_EVENTS,
+                              METRIC_CHECK_HUBS, METRIC_FOUND_SOLUTIONS});
   };
 
   template <bool BINARY = true>
@@ -54,7 +53,7 @@ public:
 
     profiler.startPhase();
     prepareStartingVertex(source, departureTime);
-    profiler.donePhase(PTL::PHASE_FIND_FIRST_VERTEX);
+    profiler.donePhase(PHASE_FIND_FIRST_VERTEX);
 
     if (startingVertex == noVertex) {
       profiler.done();
@@ -63,7 +62,7 @@ public:
 
     profiler.startPhase();
     prepareSet();
-    profiler.donePhase(PTL::PHASE_INSERT_HASH);
+    profiler.donePhase(PHASE_INSERT_HASH);
 
     profiler.startPhase();
 
@@ -80,7 +79,9 @@ public:
       finalTime = scanHubs(arrEvents, left);
     }
 
-    profiler.donePhase(PTL::PHASE_RUN);
+    profiler.donePhase(PHASE_RUN);
+
+    undoSet();
     profiler.done();
 
     return finalTime;
@@ -108,24 +109,28 @@ public:
     AssertMsg(data.teData.isEvent(startingVertex),
               "First reachable node is not valid!");
 
-    hash.clear();
-
     for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
       const std::uint16_t pathId = extractPathId(fwdHub);
       const std::uint16_t pathPos = extractPathPos(fwdHub);
+      hashPos[pathId] = pathPos;
+      hasEntry[pathId] = true;
 
-      auto it = hash.find(pathId);
-      if (it == hash.end()) {
-        hash.emplace(pathId, pathPos);
-      } else {
-        // Keep the smallest path position (earliest in path)
-        it->second = std::min(it->second, pathPos);
-      }
-
-      profiler.countMetric(PTL::METRIC_INSERTED_HUBS);
+      profiler.countMetric(METRIC_INSERTED_HUBS);
     }
   }
 
+  inline void undoSet() noexcept {
+    AssertMsg(data.teData.isEvent(startingVertex),
+              "First reachable node is not valid!");
+
+    for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
+      const std::uint16_t pathId = extractPathId(fwdHub);
+      hashPos[pathId] = 0;
+      hasEntry[pathId] = false;
+
+      profiler.countMetric(METRIC_INSERTED_HUBS);
+    }
+  }
   inline size_t getIndexOfFirstEventAfterTime(const auto &arrEvents,
                                               const int time) noexcept {
     auto it = std::lower_bound(arrEvents.begin(), arrEvents.end(), time,
@@ -143,18 +148,25 @@ public:
 
       int arrTime = data.teData.getTimeOfVertex(Vertex(arrEventAtTarget));
 
-      profiler.countMetric(PTL::METRIC_CHECK_ARR_EVENTS);
+      profiler.countMetric(METRIC_CHECK_ARR_EVENTS);
 
       const auto &bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
+      for (std::size_t index = 0; index < bwdLabels.size(); ++index) {
+        profiler.countMetric(METRIC_CHECK_HUBS);
 
-      for (const auto &hub : bwdLabels) {
-        profiler.countMetric(PTL::METRIC_CHECK_HUBS);
-        const std::uint16_t pId = extractPathId(hub);
-        const std::uint16_t pPos = extractPathPos(hub);
+#ifdef ENABLE_PREFETCH
+        if (index + 4 < bwdLabels.size()) {
+          __builtin_prefetch(&hasEntry[extractPathId(bwdLabels[index + 4])]);
+          __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
+        }
+#endif
 
-        auto it = hash.find(pId);
-        if (it != hash.end() && it->second <= pPos) {
-          profiler.countMetric(PTL::METRIC_FOUND_SOLUTIONS);
+        const auto &hub = bwdLabels[index];
+        std::uint16_t pId = extractPathId(hub);
+        std::uint16_t pPos = extractPathPos(hub);
+
+        if (hasEntry[pId] && hashPos[pId] <= pPos) {
+          profiler.countMetric(METRIC_FOUND_SOLUTIONS);
           return arrTime;
         }
       }
@@ -182,17 +194,24 @@ public:
 
       const auto &arrEventAtTarget = arrEvents[mid];
 
-      profiler.countMetric(PTL::METRIC_CHECK_ARR_EVENTS);
+      profiler.countMetric(METRIC_CHECK_ARR_EVENTS);
 
       const auto &bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
+      for (std::size_t index = 0; index < bwdLabels.size(); ++index) {
+        profiler.countMetric(METRIC_CHECK_HUBS);
 
-      for (const auto &hub : bwdLabels) {
-        profiler.countMetric(PTL::METRIC_CHECK_HUBS);
+#ifdef ENABLE_PREFETCH
+        if (index + 4 < bwdLabels.size()) {
+          __builtin_prefetch(&hasEntry[extractPathId(bwdLabels[index + 4])]);
+          __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
+        }
+#endif
+
+        const auto &hub = bwdLabels[index];
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-        auto it = hash.find(pId);
-        found = (it != hash.end() && it->second <= pPos);
+        found = (hasEntry[pId] && hashPos[pId] <= pPos);
 
         if (found) {
           break;
@@ -210,7 +229,7 @@ public:
         i >= static_cast<int>(arrEvents.size())) {
       return -1;
     }
-    profiler.countMetric(PTL::METRIC_FOUND_SOLUTIONS);
+    profiler.countMetric(METRIC_FOUND_SOLUTIONS);
     return data.teData.getTimeOfVertex(Vertex(arrEvents[i]));
   }
 
@@ -218,7 +237,9 @@ public:
 
   Data &data;
   Vertex startingVertex;
-  std::unordered_map<std::uint16_t, std::uint16_t> hash;
   Profiler profiler;
+  std::array<std::uint16_t, 65536> hashPos;
+  std::array<bool, 65536> hasEntry;
 };
+
 } // namespace PPTL

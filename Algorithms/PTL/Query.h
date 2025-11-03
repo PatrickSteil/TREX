@@ -32,12 +32,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace PTL {
 
-template <typename PROFILER = NoProfiler>
-class Query {
- public:
+template <typename PROFILER = NoProfiler> class Query {
+public:
   using Profiler = PROFILER;
 
-  Query(Data& data) : data(data) {
+  Query(Data &data) : data(data) {
     profiler.registerPhases(
         {PHASE_FIND_FIRST_VERTEX, PHASE_INSERT_HASH, PHASE_RUN});
     profiler.registerMetrics({METRIC_INSERTED_HUBS, METRIC_CHECK_ARR_EVENTS,
@@ -68,7 +67,7 @@ class Query {
 
     profiler.startPhase();
 
-    const auto& arrEvents = data.teData.getArrivalsOfStop(target);
+    const auto &arrEvents = data.teData.getArrivalsOfStop(target);
 
     size_t left = getIndexOfFirstEventAfterTime(arrEvents, departureTime);
 
@@ -111,35 +110,35 @@ class Query {
 
     hash.clear();
 
-    for (auto& fwdHub : data.getFwdHubs(startingVertex)) {
+    for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
       hash.insert(fwdHub);
 
       profiler.countMetric(METRIC_INSERTED_HUBS);
     }
   }
 
-  inline size_t getIndexOfFirstEventAfterTime(const auto& arrEvents,
+  inline size_t getIndexOfFirstEventAfterTime(const auto &arrEvents,
                                               const int time) noexcept {
-    auto it = std::lower_bound(
-        arrEvents.begin(), arrEvents.end(), time,
-        [&](const size_t event, const int time) {
-          return data.teData.getTimeOfVertex(Vertex(event)) < time;
-        });
+    auto it = std::lower_bound(arrEvents.begin(), arrEvents.end(), time,
+                               [&](const size_t event, const int time) {
+                                 return data.teData.getTimeOfVertex(
+                                            Vertex(event)) < time;
+                               });
 
     return std::distance(arrEvents.begin(), it);
   }
 
-  inline int scanHubs(const auto& arrEvents, const size_t left = 0) noexcept {
+  inline int scanHubs(const auto &arrEvents, const size_t left = 0) noexcept {
     for (size_t i = left; i < arrEvents.size(); ++i) {
-      const auto& arrEventAtTarget = arrEvents[i];
+      const auto &arrEventAtTarget = arrEvents[i];
 
       int arrTime = data.teData.getTimeOfVertex(Vertex(arrEventAtTarget));
 
       profiler.countMetric(METRIC_CHECK_ARR_EVENTS);
 
-      const auto& bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
+      const auto &bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
 
-      for (const auto& hub : bwdLabels) {
+      for (const auto &hub : bwdLabels) {
         profiler.countMetric(METRIC_CHECK_HUBS);
 
         if (hash.find(hub) != hash.end()) [[unlikely]] {
@@ -151,9 +150,10 @@ class Query {
     return -1;
   }
 
-  inline int scanHubsBinary(const auto& arrEvents,
+  inline int scanHubsBinary(const auto &arrEvents,
                             const size_t left = 0) noexcept {
-    if (arrEvents.empty()) return -1;
+    if (arrEvents.empty())
+      return -1;
 
     // Use signed type to handle underflows correctly
     int i = static_cast<int>(left);
@@ -168,13 +168,13 @@ class Query {
                 "Mid ( " << mid << " ) is out of bounds (" << arrEvents.size()
                          << " )! i: " << i << ", j: " << j);
 
-      const auto& arrEventAtTarget = arrEvents[mid];
+      const auto &arrEventAtTarget = arrEvents[mid];
 
       profiler.countMetric(METRIC_CHECK_ARR_EVENTS);
 
-      const auto& bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
+      const auto &bwdLabels = data.getBwdHubs(Vertex(arrEventAtTarget));
 
-      for (const auto& hub : bwdLabels) {
+      for (const auto &hub : bwdLabels) {
         profiler.countMetric(METRIC_CHECK_HUBS);
 
         found = (hash.find(hub) != hash.end());
@@ -199,11 +199,11 @@ class Query {
     return data.teData.getTimeOfVertex(Vertex(arrEvents[i]));
   }
 
-  inline const Profiler& getProfiler() const noexcept { return profiler; }
+  inline const Profiler &getProfiler() const noexcept { return profiler; }
 
-  Data& data;
+  Data &data;
   Vertex startingVertex;
   std::set<Vertex> hash;
   Profiler profiler;
 };
-}  // namespace PTL
+} // namespace PTL

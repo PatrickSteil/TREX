@@ -1554,8 +1554,8 @@ public:
   virtual void execute() noexcept {
     PPTL::Data data = PPTL::Data::FromBinary(getParameter("PPTL input file"));
     data.printInfo();
-    PPTL::Query<PTL::AggregateProfiler> algorithmLinear(data);
-    PPTL::Query<PTL::AggregateProfiler> algorithmBinary(data);
+    PPTL::Query<PPTL::AggregateProfiler> algorithmLinear(data);
+    PPTL::Query<PPTL::AggregateProfiler> algorithmBinary(data);
 
     const size_t n = getParameter<size_t>("Number of queries");
     const std::vector<StopQuery> queries =
