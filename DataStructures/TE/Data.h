@@ -42,7 +42,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TE {
 
 class Data {
- private:
+private:
   struct Event {
     size_t id;
     StopId stop;
@@ -54,7 +54,7 @@ class Data {
         : id(id), stop(stop), time(time), trip(trip){};
   };
 
- public:
+public:
   Data(){};
 
   Data(const std::string &fileName) { deserialize(fileName); }
@@ -65,9 +65,9 @@ class Data {
     return data;
   }
 
-  inline static Data FromIntermediate(
-      const Intermediate::Data &inter,
-      const bool extractFootpaths = true) noexcept {
+  inline static Data
+  FromIntermediate(const Intermediate::Data &inter,
+                   const bool extractFootpaths = true) noexcept {
     Data data;
     data.stopData.clear();
     data.stopData.reserve(inter.stops.size());
@@ -272,7 +272,7 @@ class Data {
     return data;
   }
 
- public:
+public:
   inline size_t numberOfStops() const noexcept { return stopData.size(); }
   inline bool isStop(const StopId stop) const noexcept {
     return stop < numberOfStops();
@@ -307,8 +307,9 @@ class Data {
     return events[vertex].time;
   }
 
-  inline Vertex getFirstReachableDepartureVertexAtStop(
-      const StopId stop, const int time) const noexcept {
+  inline Vertex
+  getFirstReachableDepartureVertexAtStop(const StopId stop,
+                                         const int time) const noexcept {
     AssertMsg(isStop(stop), "Stop is not valid");
 
     const auto &departureEventAtToStop = depEventsAtStop[stop];
@@ -374,8 +375,8 @@ class Data {
     return arrEventsAtStop[stop];
   }
 
-  inline void writeAdditionalInfoOfVertex(
-      const std::string &fileName) const noexcept {
+  inline void
+  writeAdditionalInfoOfVertex(const std::string &fileName) const noexcept {
     std::ofstream file;
     file.open(fileName);
 
@@ -420,6 +421,40 @@ class Data {
     AssertMsg(file.good(), "Something went wrong!");
   }
 
+  inline void exportPaths(const std::string &fileName) const noexcept {
+    std::ofstream file;
+    file.open(fileName);
+
+    file << "P " << stopData.size() << std::endl;
+
+    for (StopId stop(0); stop < stopData.size(); ++stop) {
+      std::vector<size_t> allEvents;
+      allEvents.reserve(depEventsAtStop[stop].size() +
+                        arrEventsAtStop[stop].size());
+
+      // Combine departures and arrivals
+      allEvents.insert(allEvents.end(), depEventsAtStop[stop].begin(),
+                       depEventsAtStop[stop].end());
+      allEvents.insert(allEvents.end(), arrEventsAtStop[stop].begin(),
+                       arrEventsAtStop[stop].end());
+
+      // Sort by event time (earliest first)
+      std::sort(allEvents.begin(), allEvents.end(),
+                [&](const size_t a, const size_t b) {
+                  return events[a].time < events[b].time;
+                });
+
+      // Write all event IDs for this stop
+      for (auto id : allEvents) {
+        file << (id + 1) << " ";
+      }
+      file << std::endl;
+    }
+
+    file.close();
+    AssertMsg(file.good(), "Something went wrong writing exportPaths!");
+  }
+
   inline void exportChains(const std::string &fileName) const noexcept {
     std::ofstream file;
     file.open(fileName);
@@ -441,7 +476,7 @@ class Data {
     AssertMsg(file.good(), "Something went wrong!");
   }
 
- public:
+public:
   std::vector<RAPTOR::Stop> stopData;
   std::vector<Event> events;
   std::vector<std::vector<size_t>> depEventsAtStop;
@@ -450,4 +485,4 @@ class Data {
 
   TimeExpandedGraph timeExpandedGraph;
 };
-}  // namespace TE
+} // namespace TE
