@@ -83,6 +83,9 @@ int main(int argc, char **argv) {
   new TEToPTL(shell);
   new RunPTLQueries(shell);
 
+  new TEToPPTL(shell);
+  new RunPPTLQueries(shell);
+
   new DistanceNetwork(shell);
   new StopsImportance(shell);
 
