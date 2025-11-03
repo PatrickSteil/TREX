@@ -29,19 +29,19 @@ std::string to_string(bool b) {
 
 namespace String {
 
-inline std::string toUpper(const std::string& s) {
+inline std::string toUpper(const std::string &s) {
   std::string out;
   std::transform(s.begin(), s.end(), back_inserter(out), ::toupper);
   return out;
 }
 
-inline std::string toLower(const std::string& s) {
+inline std::string toLower(const std::string &s) {
   std::string out;
   std::transform(s.begin(), s.end(), back_inserter(out), ::tolower);
   return out;
 }
 
-inline std::string firstToUpper(const std::string& s) {
+inline std::string firstToUpper(const std::string &s) {
   if (s.empty()) return s;
   std::string result = s;
   if (s[0] >= 'a' && s[0] <= 'z') {
@@ -50,7 +50,7 @@ inline std::string firstToUpper(const std::string& s) {
   return result;
 }
 
-inline std::string firstToLower(const std::string& s) {
+inline std::string firstToLower(const std::string &s) {
   if (s.empty()) return s;
   std::string result = s;
   if (s[0] >= 'A' && s[0] <= 'Z') {
@@ -59,7 +59,7 @@ inline std::string firstToLower(const std::string& s) {
   return result;
 }
 
-inline bool contains(const std::string& fullString,
+inline bool contains(const std::string &fullString,
                      const char searchChar) noexcept {
   for (const char c : fullString) {
     if (c == searchChar) return true;
@@ -67,8 +67,8 @@ inline bool contains(const std::string& fullString,
   return false;
 }
 
-inline bool containsSubString(const std::string& fullString, const size_t index,
-                              const std::string& subString) noexcept {
+inline bool containsSubString(const std::string &fullString, const size_t index,
+                              const std::string &subString) noexcept {
   if (index + subString.size() > fullString.size()) return false;
   for (size_t i = 0; i < subString.size(); i++) {
     if (fullString[index + i] != subString[i]) return false;
@@ -76,8 +76,8 @@ inline bool containsSubString(const std::string& fullString, const size_t index,
   return true;
 }
 
-inline bool containsSubString(const std::string& fullString,
-                              const std::string& subString) noexcept {
+inline bool containsSubString(const std::string &fullString,
+                              const std::string &subString) noexcept {
   if (subString.size() > fullString.size()) return false;
   for (size_t i = 0; i <= fullString.size() - subString.size(); i++) {
     if (containsSubString(fullString, i, subString)) return true;
@@ -85,8 +85,8 @@ inline bool containsSubString(const std::string& fullString,
   return false;
 }
 
-inline size_t firstIndexOf(const std::string& fullString,
-                           const std::string& subString) noexcept {
+inline size_t firstIndexOf(const std::string &fullString,
+                           const std::string &subString) noexcept {
   if (subString.size() > fullString.size()) return fullString.size();
   for (size_t i = 0; i <= fullString.size() - subString.size(); i++) {
     if (containsSubString(fullString, i, subString)) return i;
@@ -94,8 +94,8 @@ inline size_t firstIndexOf(const std::string& fullString,
   return fullString.size();
 }
 
-inline size_t lastIndexOf(const std::string& fullString,
-                          const std::string& subString) noexcept {
+inline size_t lastIndexOf(const std::string &fullString,
+                          const std::string &subString) noexcept {
   if (subString.size() > fullString.size()) return fullString.size();
   for (size_t i = fullString.size() - subString.size(); i < fullString.size();
        i--) {
@@ -104,22 +104,22 @@ inline size_t lastIndexOf(const std::string& fullString,
   return fullString.size();
 }
 
-inline bool endsWith(const std::string& fullString,
-                     const std::string& endString) {
+inline bool endsWith(const std::string &fullString,
+                     const std::string &endString) {
   if (fullString.size() < endString.size()) return false;
   return fullString.compare(fullString.size() - endString.size(),
                             endString.size(), endString) == 0;
 }
 
-inline bool beginsWith(const std::string& fullString,
-                       const std::string& endString) {
+inline bool beginsWith(const std::string &fullString,
+                       const std::string &endString) {
   if (fullString.size() < endString.size()) return false;
   return fullString.compare(0, endString.size(), endString) == 0;
 }
 
 template <typename CONTAINER_TYPE>
-inline std::string join(const CONTAINER_TYPE& container,
-                        const std::string& delimiter) {
+inline std::string join(const CONTAINER_TYPE &container,
+                        const std::string &delimiter) {
   std::ostringstream s;
   for (typename CONTAINER_TYPE::const_iterator i = container.begin();
        i != container.end(); ++i) {
@@ -132,13 +132,13 @@ inline std::string join(const CONTAINER_TYPE& container,
 }
 
 template <typename TYPE>
-inline bool isNumber(const std::string& s) {
+inline bool isNumber(const std::string &s) {
   TYPE n;
   return ((std::istringstream(s) >> n >> std::ws).eof());
 }
 
 template <typename U, typename T>
-inline U lexicalCast(const T& in) {
+inline U lexicalCast(const T &in) {
   std::stringstream ss;
   ss << in;
   U out;
@@ -146,24 +146,24 @@ inline U lexicalCast(const T& in) {
   return out;
 }
 template <>
-inline bool lexicalCast(const std::string& in) {
+inline bool lexicalCast(const std::string &in) {
   return (in == "1") || (toLower(in) == "true");
 }
 template <>
-inline int lexicalCast(const std::string& in) {
+inline int lexicalCast(const std::string &in) {
   return atoi(in.c_str());
 }
 template <>
-inline double lexicalCast(const std::string& in) {
+inline double lexicalCast(const std::string &in) {
   return atof(in.c_str());
 }
 template <>
-inline std::string lexicalCast(const std::string& in) {
+inline std::string lexicalCast(const std::string &in) {
   return in;
 }
 
-inline std::vector<std::string>& split(const std::string& s, const char delim,
-                                       std::vector<std::string>& elems) {
+inline std::vector<std::string> &split(const std::string &s, const char delim,
+                                       std::vector<std::string> &elems) {
   std::stringstream ss(s);
   std::string item;
   while (std::getline(ss, item, delim)) {
@@ -171,12 +171,12 @@ inline std::vector<std::string>& split(const std::string& s, const char delim,
   }
   return elems;
 }
-inline std::vector<std::string> split(const std::string& s, const char delim) {
+inline std::vector<std::string> split(const std::string &s, const char delim) {
   std::vector<std::string> elems;
   return split(s, delim, elems);
 }
 
-inline size_t count(const std::string& s, const char c) {
+inline size_t count(const std::string &s, const char c) {
   size_t result = 0;
   for (const char x : s) {
     if (x == c) result++;
@@ -231,7 +231,7 @@ inline std::string prettyInt(T i) {
     tokens.push_back(",");
   }
   tokens.push_back(std::to_string(static_cast<short>(i)));
-  for (const std::string& s : descending(tokens)) ss << s;
+  for (const std::string &s : descending(tokens)) ss << s;
   return ss.str();
 }
 
@@ -290,10 +290,10 @@ inline std::string prettyDouble(const double number, const int precision = 2,
 }
 
 template <typename T>
-inline std::string binary(const T& value) {
+inline std::string binary(const T &value) {
   std::stringstream result;
-  const char* end = reinterpret_cast<const char*>(&value) - 1;
-  const char* begin = end + sizeof(T);
+  const char *end = reinterpret_cast<const char *>(&value) - 1;
+  const char *begin = end + sizeof(T);
   result << std::bitset<CHAR_BIT>(*begin--);
   while (begin != end) result << " " << std::bitset<CHAR_BIT>(*begin--);
   return result.str();
@@ -312,7 +312,7 @@ inline std::string colorToString(int r, int g, int b) {
   return color.str();
 }
 
-inline bool isColor(const std::string& color) {
+inline bool isColor(const std::string &color) {
   if (color.size() != 6) return false;
   for (int i = 0; i < 6; i++) {
     const char c = color[i];
@@ -440,16 +440,39 @@ inline std::string musToString(double t, int infinity) {
   return musToString<int>(t, infinity);
 }
 
+template <typename T>
+inline std::string nsToString(T t, T infinity = std::numeric_limits<T>::max()) {
+  if (t >= infinity) return "infinity";
+  if ((!(t >= 0)) && (t <= -infinity)) return "-infinity";
+  if (t == 0) return "0ns";
+
+  std::string result = std::to_string(t % 1000) + "ns";
+  if (t >= 1000) {
+    std::string fillIn = "";
+    if ((t % 1000) < 10)
+      fillIn = "  ";
+    else if ((t % 1000) < 100)
+      fillIn = " ";
+    result = musToString(t / 1000) + " " + fillIn + result;
+  }
+  return result;
+}
+
+inline std::string nsToString(double t) { return nsToString<int>(t); }
+inline std::string nsToString(double t, int infinity) {
+  return nsToString<int>(t, infinity);
+}
+
 inline std::string timeString() {
   time_t now = time(0);
-  tm* ltm = localtime(&now);
+  tm *ltm = localtime(&now);
   const int seconds = (((ltm->tm_hour * 60) + ltm->tm_min) * 60) + ltm->tm_sec;
   return secToTime(seconds, true);
 }
 
 inline std::string dateString() {
   time_t now = time(0);
-  tm* ltm = localtime(&now);
+  tm *ltm = localtime(&now);
   const std::string year = std::to_string(ltm->tm_year + 1900);
   const std::string month = std::to_string(ltm->tm_mon + 1);
   const std::string day = std::to_string(ltm->tm_mday);
@@ -479,7 +502,7 @@ inline std::string bytesToString(const long long bytes,
   return prettyDouble(b) + "TB";
 }
 
-inline int parseSeconds(const std::string& time) {
+inline int parseSeconds(const std::string &time) {
   AssertMsg(time.length() == 8 || time.length() == 9,
             "Time " << time << " has not the correct length!");
   int seconds = 0;
@@ -498,7 +521,7 @@ inline int parseSeconds(const std::string& time) {
   return (seconds * 60) + value;
 }
 
-inline int parseDay(const std::string& time) {
+inline int parseDay(const std::string &time) {
   if (time.size() != 8)
     error("The string " + time + " is not in the format YYYYMMDD");
   int year = lexicalCast<int>(time.substr(0, 4)) - 1900;
@@ -510,7 +533,7 @@ inline int parseDay(const std::string& time) {
                        : (seconds / (60 * 60 * 24));
 }
 
-std::string trim(const std::string& s) {
+std::string trim(const std::string &s) {
   std::stringstream ss;
   int end = s.size() - 1;
   while (end >= 0 && isWhiteSpace(s[end])) end--;
@@ -530,8 +553,8 @@ std::string trim(const std::string& s) {
   return ss.str();
 }
 
-std::string replaceAll(const std::string& s, const char c,
-                       const std::string& replacement) {
+std::string replaceAll(const std::string &s, const char c,
+                       const std::string &replacement) {
   std::stringstream ss;
   for (size_t i = 0; i < s.size(); i++) {
     char cs = s[i];
@@ -544,8 +567,8 @@ std::string replaceAll(const std::string& s, const char c,
   return ss.str();
 }
 
-std::string replaceAll(const std::string& s, const std::string& pattern,
-                       const std::string& replacement) {
+std::string replaceAll(const std::string &s, const std::string &pattern,
+                       const std::string &replacement) {
   if (pattern.size() > s.size()) return s;
   std::stringstream ss;
   size_t i = 0;
@@ -572,12 +595,12 @@ std::string replaceAll(const std::string& s, const std::string& pattern,
   return ss.str();
 }
 
-inline std::string longestCommonSubstring(const std::string& str1,
-                                          const std::string& str2) {
+inline std::string longestCommonSubstring(const std::string &str1,
+                                          const std::string &str2) {
   if (str1.empty() || str2.empty()) return "";
 
-  size_t* curr = new size_t[str2.size()];
-  size_t* prev = new size_t[str2.size()];
+  size_t *curr = new size_t[str2.size()];
+  size_t *prev = new size_t[str2.size()];
   size_t maxSubstr = 0;
   size_t pos;
 

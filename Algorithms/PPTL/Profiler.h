@@ -130,12 +130,13 @@ class AggregateProfiler : public NoProfiler {
     }
     for (const Phase phase : phases) {
       std::cout << PhaseNames[phase] << ": "
-                << String::musToString(phaseTime[phase] /
-                                       static_cast<double>(numQueries))
+                << String::nsToString(phaseTime[phase] * 1000.0 /
+                                      static_cast<double>(numQueries))
                 << std::endl;
     }
     std::cout << "Total Time                   : "
-              << String::musToString(totalTime / numQueries) << std::endl;
+              << String::nsToString(totalTime * 1000.0 / numQueries)
+              << std::endl;
   }
 
  private:
