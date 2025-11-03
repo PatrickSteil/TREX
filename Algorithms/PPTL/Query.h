@@ -31,11 +31,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace PPTL {
 
-template <typename PROFILER = NoProfiler> class Query {
-public:
+constexpr std::uint16_t INVALID_POS = static_cast<std::uint16_t>(-1);
+
+template <typename PROFILER = NoProfiler>
+class Query {
+ public:
   using Profiler = PROFILER;
 
   Query(Data &data) : data(data) {
+    std::fill(hashPos.begin(), hashPos.end(), INVALID_POS);
     profiler.registerPhases(
         {PHASE_FIND_FIRST_VERTEX, PHASE_INSERT_HASH, PHASE_RUN});
     profiler.registerMetrics({METRIC_INSERTED_HUBS, METRIC_CHECK_ARR_EVENTS,
@@ -113,7 +117,6 @@ public:
       const std::uint16_t pathId = extractPathId(fwdHub);
       const std::uint16_t pathPos = extractPathPos(fwdHub);
       hashPos[pathId] = pathPos;
-      hasEntry[pathId] = true;
 
       profiler.countMetric(METRIC_INSERTED_HUBS);
     }
@@ -125,19 +128,18 @@ public:
 
     for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
       const std::uint16_t pathId = extractPathId(fwdHub);
-      hashPos[pathId] = 0;
-      hasEntry[pathId] = false;
+      hashPos[pathId] = INVALID_POS;
 
       profiler.countMetric(METRIC_INSERTED_HUBS);
     }
   }
   inline size_t getIndexOfFirstEventAfterTime(const auto &arrEvents,
                                               const int time) noexcept {
-    auto it = std::lower_bound(arrEvents.begin(), arrEvents.end(), time,
-                               [&](const size_t event, const int time) {
-                                 return data.teData.getTimeOfVertex(
-                                            Vertex(event)) < time;
-                               });
+    auto it = std::lower_bound(
+        arrEvents.begin(), arrEvents.end(), time,
+        [&](const size_t event, const int time) {
+          return data.teData.getTimeOfVertex(Vertex(event)) < time;
+        });
 
     return std::distance(arrEvents.begin(), it);
   }
@@ -156,7 +158,6 @@ public:
 
 #ifdef ENABLE_PREFETCH
         if (index + 4 < bwdLabels.size()) {
-          __builtin_prefetch(&hasEntry[extractPathId(bwdLabels[index + 4])]);
           __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
         }
 #endif
@@ -165,7 +166,7 @@ public:
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-        if (hasEntry[pId] && hashPos[pId] <= pPos) {
+        if (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos) {
           profiler.countMetric(METRIC_FOUND_SOLUTIONS);
           return arrTime;
         }
@@ -176,8 +177,7 @@ public:
 
   inline int scanHubsBinary(const auto &arrEvents,
                             const size_t left = 0) noexcept {
-    if (arrEvents.empty())
-      return -1;
+    if (arrEvents.empty()) return -1;
 
     // Use signed type to handle underflows correctly
     int i = static_cast<int>(left);
@@ -202,7 +202,6 @@ public:
 
 #ifdef ENABLE_PREFETCH
         if (index + 4 < bwdLabels.size()) {
-          __builtin_prefetch(&hasEntry[extractPathId(bwdLabels[index + 4])]);
           __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
         }
 #endif
@@ -211,7 +210,7 @@ public:
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-        found = (hasEntry[pId] && hashPos[pId] <= pPos);
+        found = (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos);
 
         if (found) {
           break;
@@ -239,7 +238,6 @@ public:
   Vertex startingVertex;
   Profiler profiler;
   std::array<std::uint16_t, 65536> hashPos;
-  std::array<bool, 65536> hasEntry;
 };
 
-} // namespace PPTL
+}  // namespace PPTL

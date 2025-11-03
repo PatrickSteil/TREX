@@ -49,15 +49,17 @@ inline std::uint16_t extractPathPos(std::uint32_t packed) noexcept {
 }
 
 class Data {
-public:
+ public:
   Data(){};
 
   Data(TE::Data &teData)
-      : teData(teData), fwdHubs(teData.numberOfTEVertices()),
+      : teData(teData),
+        fwdHubs(teData.numberOfTEVertices()),
         bwdHubs(teData.numberOfTEVertices()){};
 
   Data(TE::Data &teData, const std::string fileName)
-      : teData(teData), fwdHubs(teData.numberOfTEVertices()),
+      : teData(teData),
+        fwdHubs(teData.numberOfTEVertices()),
         bwdHubs(teData.numberOfTEVertices()) {
     loadPathHub(fileName);
     sortLabels();
@@ -101,8 +103,7 @@ public:
     bwdHubs.assign(numVertices, {});
 
     while (std::getline(file, line)) {
-      if (line.empty())
-        continue;
+      if (line.empty()) continue;
 
       std::istringstream iss(line);
       iss >> type;
@@ -306,4 +307,4 @@ public:
   std::vector<std::vector<std::uint32_t>> fwdHubs;
   std::vector<std::vector<std::uint32_t>> bwdHubs;
 };
-} // namespace PPTL
+}  // namespace PPTL

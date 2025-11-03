@@ -42,7 +42,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TE {
 
 class Data {
-private:
+ private:
   struct Event {
     size_t id;
     StopId stop;
@@ -54,7 +54,7 @@ private:
         : id(id), stop(stop), time(time), trip(trip){};
   };
 
-public:
+ public:
   Data(){};
 
   Data(const std::string &fileName) { deserialize(fileName); }
@@ -65,9 +65,9 @@ public:
     return data;
   }
 
-  inline static Data
-  FromIntermediate(const Intermediate::Data &inter,
-                   const bool extractFootpaths = true) noexcept {
+  inline static Data FromIntermediate(
+      const Intermediate::Data &inter,
+      const bool extractFootpaths = true) noexcept {
     Data data;
     data.stopData.clear();
     data.stopData.reserve(inter.stops.size());
@@ -272,7 +272,7 @@ public:
     return data;
   }
 
-public:
+ public:
   inline size_t numberOfStops() const noexcept { return stopData.size(); }
   inline bool isStop(const StopId stop) const noexcept {
     return stop < numberOfStops();
@@ -307,9 +307,8 @@ public:
     return events[vertex].time;
   }
 
-  inline Vertex
-  getFirstReachableDepartureVertexAtStop(const StopId stop,
-                                         const int time) const noexcept {
+  inline Vertex getFirstReachableDepartureVertexAtStop(
+      const StopId stop, const int time) const noexcept {
     AssertMsg(isStop(stop), "Stop is not valid");
 
     const auto &departureEventAtToStop = depEventsAtStop[stop];
@@ -375,8 +374,8 @@ public:
     return arrEventsAtStop[stop];
   }
 
-  inline void
-  writeAdditionalInfoOfVertex(const std::string &fileName) const noexcept {
+  inline void writeAdditionalInfoOfVertex(
+      const std::string &fileName) const noexcept {
     std::ofstream file;
     file.open(fileName);
 
@@ -476,7 +475,7 @@ public:
     AssertMsg(file.good(), "Something went wrong!");
   }
 
-public:
+ public:
   std::vector<RAPTOR::Stop> stopData;
   std::vector<Event> events;
   std::vector<std::vector<size_t>> depEventsAtStop;
@@ -485,4 +484,4 @@ public:
 
   TimeExpandedGraph timeExpandedGraph;
 };
-} // namespace TE
+}  // namespace TE

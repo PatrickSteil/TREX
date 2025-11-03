@@ -55,11 +55,11 @@ constexpr const char *MetricNames[] = {
     "# Check Hubs                 ", "# Solutions                  "};
 
 class NoProfiler {
-public:
-  inline void
-  registerPhases(const std::initializer_list<Phase> &) const noexcept {}
-  inline void
-  registerMetrics(const std::initializer_list<Metric> &) const noexcept {}
+ public:
+  inline void registerPhases(
+      const std::initializer_list<Phase> &) const noexcept {}
+  inline void registerMetrics(
+      const std::initializer_list<Metric> &) const noexcept {}
 
   inline void start() const noexcept {}
   inline void done() const noexcept {}
@@ -73,20 +73,22 @@ public:
 };
 
 class AggregateProfiler : public NoProfiler {
-public:
+ public:
   AggregateProfiler()
-      : totalTime(0.0), phaseTime(NUM_PHASES, 0.0), metricValue(NUM_METRICS, 0),
+      : totalTime(0.0),
+        phaseTime(NUM_PHASES, 0.0),
+        metricValue(NUM_METRICS, 0),
         numQueries(0) {}
 
-  inline void
-  registerPhases(const std::initializer_list<Phase> &phaseList) noexcept {
+  inline void registerPhases(
+      const std::initializer_list<Phase> &phaseList) noexcept {
     for (const Phase phase : phaseList) {
       phases.push_back(phase);
     }
   }
 
-  inline void
-  registerMetrics(const std::initializer_list<Metric> &metricList) noexcept {
+  inline void registerMetrics(
+      const std::initializer_list<Metric> &metricList) noexcept {
     for (const Metric metric : metricList) {
       metrics.push_back(metric);
     }
@@ -136,7 +138,7 @@ public:
               << String::musToString(totalTime / numQueries) << std::endl;
   }
 
-private:
+ private:
   Timer totalTimer;
   double totalTime;
   std::vector<Phase> phases;
@@ -147,4 +149,4 @@ private:
   size_t numQueries;
 };
 
-} // namespace PPTL
+}  // namespace PPTL

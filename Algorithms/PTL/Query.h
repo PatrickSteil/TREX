@@ -32,8 +32,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace PTL {
 
-template <typename PROFILER = NoProfiler> class Query {
-public:
+template <typename PROFILER = NoProfiler>
+class Query {
+ public:
   using Profiler = PROFILER;
 
   Query(Data &data) : data(data) {
@@ -119,11 +120,11 @@ public:
 
   inline size_t getIndexOfFirstEventAfterTime(const auto &arrEvents,
                                               const int time) noexcept {
-    auto it = std::lower_bound(arrEvents.begin(), arrEvents.end(), time,
-                               [&](const size_t event, const int time) {
-                                 return data.teData.getTimeOfVertex(
-                                            Vertex(event)) < time;
-                               });
+    auto it = std::lower_bound(
+        arrEvents.begin(), arrEvents.end(), time,
+        [&](const size_t event, const int time) {
+          return data.teData.getTimeOfVertex(Vertex(event)) < time;
+        });
 
     return std::distance(arrEvents.begin(), it);
   }
@@ -152,8 +153,7 @@ public:
 
   inline int scanHubsBinary(const auto &arrEvents,
                             const size_t left = 0) noexcept {
-    if (arrEvents.empty())
-      return -1;
+    if (arrEvents.empty()) return -1;
 
     // Use signed type to handle underflows correctly
     int i = static_cast<int>(left);
@@ -206,4 +206,4 @@ public:
   std::set<Vertex> hash;
   Profiler profiler;
 };
-} // namespace PTL
+}  // namespace PTL
