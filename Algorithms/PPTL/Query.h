@@ -27,6 +27,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <vector>
 
 #include "../../DataStructures/PPTL/Data.h"
+#include "../../Helpers/flat_hash_map.hpp"
 #include "Profiler.h"
 
 namespace PPTL {
@@ -39,7 +40,7 @@ class Query {
   using Profiler = PROFILER;
 
   Query(Data &data) : data(data) {
-    std::fill(hashPos.begin(), hashPos.end(), INVALID_POS);
+    hashPos.reserve(128);
     profiler.registerPhases(
         {PHASE_FIND_FIRST_VERTEX, PHASE_INSERT_HASH, PHASE_RUN});
     profiler.registerMetrics({METRIC_INSERTED_HUBS, METRIC_CHECK_ARR_EVENTS,
@@ -59,7 +60,7 @@ class Query {
     prepareStartingVertex(source, departureTime);
     profiler.donePhase(PHASE_FIND_FIRST_VERTEX);
 
-    if (startingVertex == noVertex) {
+    if (startingVertex == noVertex) [[unlikely]] {
       profiler.done();
       return -1;
     }
@@ -99,7 +100,7 @@ class Query {
     startingVertex = noVertex;
 
     // Did we reach any transfer node?
-    if (!data.teData.isEvent(firstReachableNode)) {
+    if (!data.teData.isEvent(firstReachableNode)) [[unlikely]] {
       return false;
     }
 
@@ -116,7 +117,8 @@ class Query {
     for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
       const std::uint16_t pathId = extractPathId(fwdHub);
       const std::uint16_t pathPos = extractPathPos(fwdHub);
-      hashPos[pathId] = pathPos;
+      /* hashPos[pathId] = pathPos; */
+      hashPos.emplace(pathId, pathPos);
 
       profiler.countMetric(METRIC_INSERTED_HUBS);
     }
@@ -126,13 +128,9 @@ class Query {
     AssertMsg(data.teData.isEvent(startingVertex),
               "First reachable node is not valid!");
 
-    for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
-      const std::uint16_t pathId = extractPathId(fwdHub);
-      hashPos[pathId] = INVALID_POS;
-
-      profiler.countMetric(METRIC_INSERTED_HUBS);
-    }
+    hashPos.clear();
   }
+
   inline size_t getIndexOfFirstEventAfterTime(const auto &arrEvents,
                                               const int time) noexcept {
     auto it = std::lower_bound(
@@ -156,17 +154,19 @@ class Query {
       for (std::size_t index = 0; index < bwdLabels.size(); ++index) {
         profiler.countMetric(METRIC_CHECK_HUBS);
 
-#ifdef ENABLE_PREFETCH
-        if (index + 4 < bwdLabels.size()) {
-          __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
-        }
-#endif
+/* #ifdef ENABLE_PREFETCH */
+/*         if (index + 4 < bwdLabels.size()) { */
+/*           __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]); */
+/*         } */
+/* #endif */
 
         const auto &hub = bwdLabels[index];
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-        if (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos) {
+        /* if (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos) { */
+	auto it = hashPos.find(pId);
+        if (it != hashPos.end() && it->second <= pPos) [[unlikely]] {
           profiler.countMetric(METRIC_FOUND_SOLUTIONS);
           return arrTime;
         }
@@ -202,7 +202,8 @@ class Query {
 
 #ifdef ENABLE_PREFETCH
         if (index + 4 < bwdLabels.size()) {
-          __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
+          __builtin_prefetch(&bwdLabels[index + 4]);
+          /* __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]); */
         }
 #endif
 
@@ -210,9 +211,11 @@ class Query {
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-        found = (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos);
+	auto it = hashPos.find(pId);
+        found =(it != hashPos.end() && it->second <= pPos);
+        /* found = (hashPos[pId] != INVALID_POS && hashPos[pId] <= pPos); */
 
-        if (found) {
+        if (found) [[unlikely]] {
           break;
         }
       }
@@ -225,7 +228,7 @@ class Query {
 
     // Properly handle the case when no valid index is found
     if ((i == static_cast<int>(arrEvents.size()) - 1 && !found) ||
-        i >= static_cast<int>(arrEvents.size())) {
+        i >= static_cast<int>(arrEvents.size())) [[unlikely]] {
       return -1;
     }
     profiler.countMetric(METRIC_FOUND_SOLUTIONS);
@@ -237,7 +240,8 @@ class Query {
   Data &data;
   Vertex startingVertex;
   Profiler profiler;
-  std::array<std::uint16_t, 65536> hashPos;
+  /* std::array<std::uint16_t, 65536> hashPos; */
+  ska::flat_hash_map<std::uint16_t,std::uint16_t> hashPos;
 };
 
 }  // namespace PPTL
