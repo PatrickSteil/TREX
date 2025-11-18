@@ -114,6 +114,19 @@ public:
       const StopId stop = data.getStopOfStopEvent(StopEventId(event));
       AssertMsg(data.raptorData.isStop(stop), "Stop is not a stop!");
       cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
+
+      eventLookup[event] = EventLookup(data.arrivalEvents[event].stop,
+                                       data.arrivalEvents[event].arrivalTime);
+      eventArrTimes[event] = data.arrivalEvents[event].arrivalTime;
+    }
+
+    // this is to test how well trip-ranked pruning works
+    std::vector<uint8_t> rankOfTrip(data.numberOfTrips(), 0);
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      TripId trip = data.tripOfStopEvent[StopEventId(from)];
+      AssertMsg(trip < rankOfTrip.size(), "Trip is out of bounds!");
+      rankOfTrip[trip] =
+          std::max(rankOfTrip[trip], data.stopEventGraph.get(LocalLevel, edge));
     }
 
     for (const Edge edge : data.stopEventGraph.edges()) {
@@ -125,14 +138,9 @@ public:
           StopIndex(data.stopEventGraph.get(ToVertex, edge) -
                     edgeLabels[edge].getFirstEvent() + 1));
       edgeLabels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge));
+      /// TODO check other ranks
       edgeLabels[edge].setCellId(
           cellIdOfEvent[edgeLabels[edge].getStopEvent() - 1]);
-    }
-#pragma omp parallel for
-    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
-      eventLookup[event] = EventLookup(data.arrivalEvents[event].stop,
-                                       data.arrivalEvents[event].arrivalTime);
-      eventArrTimes[event] = data.arrivalEvents[event].arrivalTime;
     }
 
     for (const RouteId route : data.raptorData.routes()) {
