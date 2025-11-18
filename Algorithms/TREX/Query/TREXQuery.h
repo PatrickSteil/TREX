@@ -102,6 +102,15 @@ public:
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
     reverseTransferGraph.revert();
 
+    // this is to test how well trip-ranked pruning works
+    std::vector<uint8_t> rankOfTrip(data.numberOfTrips(), 0);
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      TripId trip = data.tripOfStopEvent[StopEventId(from)];
+      AssertMsg(trip < rankOfTrip.size(), "Trip is out of bounds!");
+      rankOfTrip[trip] =
+          std::max(rankOfTrip[trip], data.stopEventGraph.get(LocalLevel, edge));
+    }
+
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
       edgeLabels[edge].trip =
           data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
@@ -110,9 +119,14 @@ public:
       edgeLabels[edge].stopEvent =
           StopIndex(StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1) -
                     edgeLabels[edge].firstEvent);
-      edgeLabels[edge].localLevel =
-          data.getLocalLevelOfEvent(StopEventId(from));
-      /* edgeLabels[edge].localLevel = data.stopEventGraph.get(LocalLevel, edge); */
+
+      TripId trip = data.tripOfStopEvent[StopEventId(from)];
+      AssertMsg(trip < rankOfTrip.size(), "Trip is out of bounds!");
+      edgeLabels[edge].localLevel = rankOfTrip[trip];
+      /* edgeLabels[edge].localLevel = */
+      /*     data.getLocalLevelOfEvent(StopEventId(from)); */
+      /* edgeLabels[edge].localLevel = data.stopEventGraph.get(LocalLevel,
+       * edge); */
       edgeLabels[edge].cellId = ((uint16_t)data.getCellIdOfStop(
           data.getStopOfStopEvent(StopEventId(from))));
     }
