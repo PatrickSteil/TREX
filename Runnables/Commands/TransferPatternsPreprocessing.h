@@ -29,6 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string>
 
 #include "../../Algorithms/TransferPattern/Preprocessing/TransferPatternBuilder.h"
+#include "../../Algorithms/TransferPattern/Query/DFSQuery.h"
 #include "../../Algorithms/TransferPattern/Query/Query.h"
 #include "../../Algorithms/TransferPattern/Query/QueryAStar.h"
 #include "../../DataStructures/Graph/Graph.h"
@@ -42,8 +43,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class RunTransferPatternQueries : public ParameterizedCommand {
- public:
-  RunTransferPatternQueries(BasicShell& shell)
+public:
+  RunTransferPatternQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTPQueries",
             "Runs the given number of random Transfer Pattern Queries.") {
@@ -67,7 +68,7 @@ class RunTransferPatternQueries : public ParameterizedCommand {
       TransferPattern::Query<TransferPattern::AggregateProfiler> algorithm(
           data);
       double numJourneys = 0;
-      for (const StopQuery& query : queries) {
+      for (const StopQuery &query : queries) {
         algorithm.run(query.source, query.departureTime, query.target);
         numJourneys += algorithm.getJourneys().size();
       }
@@ -80,7 +81,7 @@ class RunTransferPatternQueries : public ParameterizedCommand {
       TransferPattern::QueryAStar<TransferPattern::AggregateProfiler> algorithm(
           data);
       double numJourneys = 0;
-      for (const StopQuery& query : queries) {
+      for (const StopQuery &query : queries) {
         algorithm.run(query.source, query.departureTime, query.target);
         numJourneys += algorithm.getJourneys().size();
       }
@@ -93,9 +94,45 @@ class RunTransferPatternQueries : public ParameterizedCommand {
   }
 };
 
+class RunDFSTransferPatternQueries : public ParameterizedCommand {
+public:
+  RunDFSTransferPatternQueries(BasicShell &shell)
+      : ParameterizedCommand(shell, "runDFSTPQueries",
+                             "Runs the given number of random DFS-based "
+                             "Transfer Pattern Queries.") {
+    addParameter("Input file (TP Data)");
+    addParameter("Number of queries");
+  }
+
+  virtual void execute() noexcept {
+    const std::string inputFile = getParameter("Input file (TP Data)");
+
+    TransferPattern::Data data(inputFile);
+    data.printInfo();
+
+    const size_t n = getParameter<size_t>("Number of queries");
+    const std::vector<StopQuery> queries =
+        generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+
+    TransferPattern::DFSQuery<TransferPattern::AggregateProfiler> algorithm(
+        data);
+    double numJourneys = 0;
+    for (const StopQuery &query : queries) {
+      algorithm.run(query.source, query.departureTime, query.target);
+      numJourneys += algorithm.getNumJourneysFound();
+      /* numJourneys += algorithm.getJourneys().size(); */
+    }
+
+    std::cout << "#### Stats ####" << std::endl;
+    algorithm.getProfiler().printStatistics();
+    std::cout << "Avg. journeys                : "
+              << String::prettyDouble(numJourneys / n) << std::endl;
+  }
+};
+
 class ComputeTPUsingTB : public ParameterizedCommand {
- public:
-  ComputeTPUsingTB(BasicShell& shell)
+public:
+  ComputeTPUsingTB(BasicShell &shell)
       : ParameterizedCommand(
             shell, "computeTPUsingTB",
             "Computs all Transfer Patterns using TB Profile Queries!") {
@@ -148,7 +185,7 @@ class ComputeTPUsingTB : public ParameterizedCommand {
     tpData.serialize(outputFile);
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -159,8 +196,8 @@ class ComputeTPUsingTB : public ParameterizedCommand {
 };
 
 class ExportTPDAGOfStop : public ParameterizedCommand {
- public:
-  ExportTPDAGOfStop(BasicShell& shell)
+public:
+  ExportTPDAGOfStop(BasicShell &shell)
       : ParameterizedCommand(shell, "exportTPDAGofStop",
                              "Exports the computed Transfer Patterns of the "
                              "given stop in the given type file.") {

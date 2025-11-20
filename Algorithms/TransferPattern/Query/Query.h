@@ -139,7 +139,7 @@ class Query {
                              PHASE_EXTRACT_JOURNEYS});
     profiler.registerMetrics(
         {METRIC_NUM_VERTICES_QUERY_GRAPH, METRIC_NUM_EDGES_QUERY_GRAPH,
-         METRIC_SEETLED_VERTICES, METRIC_RELAXED_TRANSFER_EDGES,
+         METRIC_SETTLED_VERTICES, METRIC_RELAXED_TRANSFER_EDGES,
          METRIC_INCORPERATED_LABELS});
   }
 
@@ -379,7 +379,7 @@ class Query {
 
         arrivalByEdge(v, vLabel);
       }
-      profiler.countMetric(METRIC_SEETLED_VERTICES);
+      profiler.countMetric(METRIC_SETTLED_VERTICES);
     }
 
     profiler.donePhase(PHASE_EVAL_GRAPH);

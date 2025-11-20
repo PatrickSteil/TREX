@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 using namespace Shell;
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   CommandLineParser clp(argc, argv);
   pinThreadToCoreId(clp.value<int>("core", 1));
   checkAsserts();
@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
 
   new ExportTPDAGOfStop(shell);
   new RunTransferPatternQueries(shell);
+  new RunDFSTransferPatternQueries(shell);
   new ComputeTPUsingTB(shell);
 
   shell.run();
