@@ -195,6 +195,97 @@ class ComputeTPUsingTB : public ParameterizedCommand {
   }
 };
 
+class ComputeSelectedTPUsingTB : public ParameterizedCommand {
+ public:
+  ComputeSelectedTPUsingTB(BasicShell &shell)
+      : ParameterizedCommand(
+            shell, "computeSelectedTPUsingTB",
+            "Computs all Transfer Patterns using TB Profile Queries!") {
+    addParameter("Input file (TripBased Data)");
+    addParameter("Input file (Stop List)");
+    addParameter("Output file (TP Data)");
+    addParameter("Number of threads", "max");
+    addParameter("Pin multiplier", "1");
+  }
+
+  virtual void execute() noexcept {
+    const std::string inputFile = getParameter("Input file (TripBased Data)");
+    const std::string stopInputFile = getParameter("Input file (Stop List)");
+    const std::string outputFile = getParameter("Output file (TP Data)");
+    const int numberOfThreads = getNumberOfThreads();
+    const int pinMultiplier = getParameter<int>("Pin multiplier");
+
+    if (numberOfThreads <= 0) {
+      std::cout << "Positive number of threads required!" << std::endl;
+      return;
+    }
+
+    std::vector<StopId> sourceStops = loadSourceStops(stopInputFile);
+
+    TripBased::Data data(inputFile);
+    data.printInfo();
+
+    std::cout << "Computing Selected Transfer Pattern with "
+              << (int)numberOfThreads << " # of threads!" << std::endl;
+
+    TransferPattern::Data tpData(data.raptorData);
+
+    TransferPattern::ComputeTransferPatternUsingTripBased(
+        data, tpData, sourceStops, numberOfThreads, pinMultiplier);
+
+    long long totalNumVertices(0);
+    long long totalNumEdges(0);
+
+    for (const StopId stop : sourceStops) {
+      totalNumVertices += tpData.transferPatternOfStop[stop].numVertices();
+      totalNumEdges += tpData.transferPatternOfStop[stop].numEdges();
+    }
+
+    std::cout << "Total Size:       "
+              << String::bytesToString(tpData.byteSize()) << std::endl;
+    std::cout << "Average # Nodes:  "
+              << String::prettyDouble(totalNumVertices /
+                                      data.raptorData.numberOfStops())
+              << std::endl;
+    std::cout << "Average # Edges:  "
+              << String::prettyDouble(totalNumEdges /
+                                      data.raptorData.numberOfStops())
+              << std::endl;
+
+    tpData.serialize(outputFile);
+  }
+
+ private:
+  inline int getNumberOfThreads() const noexcept {
+    if (getParameter("Number of threads") == "max") {
+      return numberOfCores();
+    } else {
+      return getParameter<int>("Number of threads");
+    }
+  }
+
+  inline std::vector<StopId> loadSourceStops(const std::string &fileName) {
+    std::vector<StopId> result;
+    std::ifstream file(fileName);
+    if (!file) {
+      std::cerr << "Error: Could not open file " << fileName << "\n";
+      return result;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+      try {
+        int value = std::stoi(line);
+        result.push_back(StopId(value));
+      } catch (const std::exception &e) {
+        std::cerr << "Skipping invalid line: " << line << "\n";
+      }
+    }
+    /// this will be handle by RVO
+    return result;
+  }
+};
+
 class ExportTPDAGOfStop : public ParameterizedCommand {
  public:
   ExportTPDAGOfStop(BasicShell &shell)

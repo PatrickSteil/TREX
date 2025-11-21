@@ -38,7 +38,9 @@ int main(int argc, char **argv) {
   new ExportTPDAGOfStop(shell);
   new RunTransferPatternQueries(shell);
   new RunDFSTransferPatternQueries(shell);
+
   new ComputeTPUsingTB(shell);
+  new ComputeSelectedTPUsingTB(shell);
 
   shell.run();
   return 0;

@@ -53,9 +53,7 @@ class TransferPatternBuilder {
  public:
   TransferPatternBuilder(TripBased::Data &data)
       : data(data),
-        query(data)
-        /* , query(data.raptorData) */
-        ,
+        query(data),
         dynamicDAG(),
         minDep(0),
         maxDep(24 * 60 * 60 - 1) {
@@ -266,4 +264,46 @@ inline void ComputeTransferPatternUsingTripBased(TripBased::Data &data,
   }
   progress.finished();
 }
+
+inline void ComputeTransferPatternUsingTripBased(
+    TripBased::Data &data, TransferPattern::Data &tpData,
+    const std::vector<StopId> &sources, const int numberOfThreads,
+    const int pinMultiplier = 1) {
+  const size_t numberOfStops = sources.size();
+  Progress progress(numberOfStops);
+
+  const int numCores = numberOfCores();
+
+  omp_set_num_threads(numberOfThreads);
+#pragma omp parallel
+  {
+    int threadId = omp_get_thread_num();
+    pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+    AssertMsg(omp_get_num_threads() == numberOfThreads,
+              "Number of threads is " << omp_get_num_threads()
+                                      << ", but should be " << numberOfThreads
+                                      << "!");
+
+    TransferPatternBuilder bobTheBuilder(data);
+
+#pragma omp for schedule(dynamic, 1)
+    for (size_t i = 0; i < numberOfStops; ++i) {
+      StopId sourceStop = sources[i];
+      bobTheBuilder.computeTransferPatternForStop(sourceStop);
+      AssertMsg(
+          Graph::isAcyclic<DynamicDAGTransferPattern>(bobTheBuilder.getDAG()),
+          "Graph is not acyclic!");
+
+      Graph::move(std::move(bobTheBuilder.getDAG()),
+                  tpData.transferPatternOfStop[sourceStop]);
+      tpData.transferPatternOfStop[sourceStop].sortEdges(ToVertex);
+
+      tpData.assignLowerBounds(sourceStop, bobTheBuilder.getMinTravelTimes(),
+                               bobTheBuilder.getMinNumberOfTransfers());
+      ++progress;
+    }
+  }
+  progress.finished();
+}
+
 }  // namespace TransferPattern

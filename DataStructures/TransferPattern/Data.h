@@ -41,7 +41,7 @@ class Data {
  public:
   Data() {}
 
-  Data(const RAPTOR::Data& data)
+  Data(const RAPTOR::Data &data)
       : raptorData(data),
         lineLookup(data.numberOfRoutes()),
         stopLookup(data.numberOfStops()),
@@ -57,7 +57,7 @@ class Data {
     buildStopLookup();
   }
 
-  Data(const std::string& fileName) { deserialize(fileName); }
+  Data(const std::string &fileName) { deserialize(fileName); }
 
  private:
   inline void buildLineLookup(const bool verbose = true) {
@@ -134,8 +134,8 @@ class Data {
 
  public:
   inline void assignLowerBounds(const StopId stop,
-                                std::vector<int>& bestTravelTimes,
-                                std::vector<uint8_t>& bestMinNumberOfTrips) {
+                                std::vector<int> &bestTravelTimes,
+                                std::vector<uint8_t> &bestMinNumberOfTrips) {
     AssertMsg(raptorData.isStop(stop), "Stop is not a valid stop!");
     AssertMsg(bestTravelTimes.size() == raptorData.numberOfStops(),
               "BestTravelTimes has not the right amount of elements!");
@@ -153,7 +153,7 @@ class Data {
     }
   }
 
-  inline int getLowerBoundTravelTime(const StopId& target, const StopId& u) {
+  inline int getLowerBoundTravelTime(const StopId &target, const StopId &u) {
     AssertMsg(raptorData.isStop(target), "Target is not a stop!");
     AssertMsg(raptorData.isStop(u), "Stop u is not a stop!");
 
@@ -216,7 +216,7 @@ class Data {
 
   inline std::pair<size_t, size_t> maxNumVerticesAndNumEdgesInTP() const {
     std::pair<size_t, size_t> result(0, 0);
-    for (auto& tp : transferPatternOfStop) {
+    for (auto &tp : transferPatternOfStop) {
       result.first = std::max(result.first, tp.numVertices());
       result.second = std::max(result.second, tp.numEdges());
     }
@@ -226,7 +226,7 @@ class Data {
 
   inline void printStatsAboutTP() const {
     size_t sumVertices(0), sumEdges(0), maxVertices(0), maxEdges(0);
-    for (auto& tp : transferPatternOfStop) {
+    for (auto &tp : transferPatternOfStop) {
       maxVertices = std::max(tp.numVertices(), maxVertices);
       maxEdges = std::max(tp.numEdges(), maxEdges);
 
@@ -267,14 +267,14 @@ class Data {
               << String::bytesToString(byteSize()) << std::endl;
   }
 
-  inline void serialize(const std::string& fileName) {
+  inline void serialize(const std::string &fileName) {
     raptorData.serialize(fileName + ".raptor");
     IO::serialize(fileName, lineLookup, stopLookup, firstTripIdOfLine,
                   lowerBounds);
     IO::serialize(fileName + ".transferPattern", transferPatternOfStop);
   }
 
-  inline void deserialize(const std::string& fileName) {
+  inline void deserialize(const std::string &fileName) {
     raptorData.deserialize(fileName + ".raptor");
     IO::deserialize(fileName, lineLookup, stopLookup, firstTripIdOfLine,
                     lowerBounds);
