@@ -8,7 +8,7 @@
 #include "flat_hash_map.hpp"
 
 class HubLookup {
-public:
+ public:
   using Key = std::uint32_t;
   using Value = std::uint16_t;
 
@@ -36,7 +36,7 @@ public:
 
   void clearMap() { map_.clear(); }
 
-private:
+ private:
   static constexpr Value empty_value_ = std::numeric_limits<Value>::max();
   alignas(8) std::array<Value, 65536> array_;
   ska::flat_hash_map<Key, Value> map_;

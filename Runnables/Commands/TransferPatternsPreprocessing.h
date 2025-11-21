@@ -43,7 +43,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class RunTransferPatternQueries : public ParameterizedCommand {
-public:
+ public:
   RunTransferPatternQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTPQueries",
@@ -95,7 +95,7 @@ public:
 };
 
 class RunDFSTransferPatternQueries : public ParameterizedCommand {
-public:
+ public:
   RunDFSTransferPatternQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runDFSTPQueries",
                              "Runs the given number of random DFS-based "
@@ -131,7 +131,7 @@ public:
 };
 
 class ComputeTPUsingTB : public ParameterizedCommand {
-public:
+ public:
   ComputeTPUsingTB(BasicShell &shell)
       : ParameterizedCommand(
             shell, "computeTPUsingTB",
@@ -185,7 +185,7 @@ public:
     tpData.serialize(outputFile);
   }
 
-private:
+ private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -196,7 +196,7 @@ private:
 };
 
 class ExportTPDAGOfStop : public ParameterizedCommand {
-public:
+ public:
   ExportTPDAGOfStop(BasicShell &shell)
       : ParameterizedCommand(shell, "exportTPDAGofStop",
                              "Exports the computed Transfer Patterns of the "

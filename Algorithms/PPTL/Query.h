@@ -130,7 +130,7 @@ class Query {
     AssertMsg(data.teData.isEvent(startingVertex),
               "First reachable node is not valid!");
 
-   for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
+    for (auto &fwdHub : data.getFwdHubs(startingVertex)) {
       const std::uint32_t pathId = extractPathId(fwdHub);
       /* const std::uint16_t pathPos = extractPathPos(fwdHub); */
       /* hashPos[pathId] = pathPos; */
@@ -165,20 +165,21 @@ class Query {
       for (std::size_t index = 0; index < bwdLabels.size(); ++index) {
         profiler.countMetric(METRIC_CHECK_HUBS);
 
-/* #ifdef ENABLE_PREFETCH */
-/*         if (index + 4 < bwdLabels.size()) { */
-/*           __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]); */
-/*         } */
-/* #endif */
+        /* #ifdef ENABLE_PREFETCH */
+        /*         if (index + 4 < bwdLabels.size()) { */
+        /*           __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index
+         * + 4])]); */
+        /*         } */
+        /* #endif */
 
         const auto &hub = bwdLabels[index];
         std::uint32_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-	/* auto it = hashPos.find(pId); */
+        /* auto it = hashPos.find(pId); */
         /* if (it != hashPos.end() && it->second <= pPos) [[unlikely]] { */
-	auto val = hashPos.find(pId);
-	// the sentinel is the biggest value
+        auto val = hashPos.find(pId);
+        // the sentinel is the biggest value
         if (val <= pPos) {
           profiler.countMetric(METRIC_FOUND_SOLUTIONS);
           return arrTime;
@@ -216,7 +217,8 @@ class Query {
 #ifdef ENABLE_PREFETCH
         if (index + 4 < bwdLabels.size()) {
           __builtin_prefetch(&bwdLabels[index + 4]);
-          /* __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]); */
+          /* __builtin_prefetch(&hashPos[extractPathPos(bwdLabels[index + 4])]);
+           */
         }
 #endif
 
@@ -224,7 +226,7 @@ class Query {
         std::uint16_t pId = extractPathId(hub);
         std::uint16_t pPos = extractPathPos(hub);
 
-	/* auto it = hashPos.find(pId); */
+        /* auto it = hashPos.find(pId); */
         /* found =(it != hashPos.end() && it->second <= pPos); */
         found = (hashPos.find(pId) <= pPos);
 
