@@ -36,6 +36,8 @@ int main(int argc, char **argv) {
   ::Shell::Shell shell;
 
   new ExportTPDAGOfStop(shell);
+  new GenerateRandomSourceTargetQueries(shell);
+
   new RunTransferPatternQueries(shell);
   new RunDFSTransferPatternQueries(shell);
 

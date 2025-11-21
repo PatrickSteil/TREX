@@ -35,8 +35,8 @@ struct VertexQuery {
               const int departureTime = never)
       : source(source), target(target), departureTime(departureTime) {}
 
-  inline friend std::ostream& operator<<(std::ostream& out,
-                                         const VertexQuery& query) noexcept {
+  inline friend std::ostream &operator<<(std::ostream &out,
+                                         const VertexQuery &query) noexcept {
     return out << query.source << " -> " << query.target << " @ "
                << query.departureTime << std::endl;
   }
@@ -46,9 +46,10 @@ struct VertexQuery {
   int departureTime;
 };
 
-inline std::vector<VertexQuery> generateRandomVertexQueries(
-    const size_t numVertices, const size_t numQueries, const int startTime = 0,
-    const int endTime = 24 * 60 * 60) noexcept {
+inline std::vector<VertexQuery>
+generateRandomVertexQueries(const size_t numVertices, const size_t numQueries,
+                            const int startTime = 0,
+                            const int endTime = 24 * 60 * 60) noexcept {
   std::mt19937 randomGenerator(42);
   std::uniform_int_distribution<> vertexDistribution(0, numVertices - 1);
   std::uniform_int_distribution<> timeDistribution(startTime, endTime - 1);
@@ -69,9 +70,10 @@ struct OneToAllQuery {
   int departureTime;
 };
 
-inline std::vector<OneToAllQuery> generateRandomOneToAllQueries(
-    const size_t numVertices, const size_t numQueries, const int startTime = 0,
-    const int endTime = 24 * 60 * 60) noexcept {
+inline std::vector<OneToAllQuery>
+generateRandomOneToAllQueries(const size_t numVertices, const size_t numQueries,
+                              const int startTime = 0,
+                              const int endTime = 24 * 60 * 60) noexcept {
   std::mt19937 randomGenerator(42);
   std::uniform_int_distribution<> vertexDistribution(0, numVertices - 1);
   std::uniform_int_distribution<> timeDistribution(startTime, endTime - 1);
@@ -88,8 +90,8 @@ struct StopQuery {
             const int departureTime = never)
       : source(source), target(target), departureTime(departureTime) {}
 
-  inline friend std::ostream& operator<<(std::ostream& out,
-                                         const StopQuery& query) noexcept {
+  inline friend std::ostream &operator<<(std::ostream &out,
+                                         const StopQuery &query) noexcept {
     return out << query.source << " -> " << query.target << " @ "
                << query.departureTime << std::endl;
   }
@@ -99,9 +101,10 @@ struct StopQuery {
   int departureTime;
 };
 
-inline std::vector<StopQuery> generateRandomStopQueries(
-    const size_t numStops, const size_t numQueries, const int startTime = 0,
-    const int endTime = 24 * 60 * 60) noexcept {
+inline std::vector<StopQuery>
+generateRandomStopQueries(const size_t numStops, const size_t numQueries,
+                          const int startTime = 0,
+                          const int endTime = 24 * 60 * 60) noexcept {
   std::mt19937 randomGenerator(42);
   std::uniform_int_distribution<> stopDistribution(0, numStops - 1);
   std::uniform_int_distribution<> timeDistribution(startTime, endTime - 1);
@@ -112,4 +115,29 @@ inline std::vector<StopQuery> generateRandomStopQueries(
                          timeDistribution(randomGenerator));
   }
   return queries;
+}
+
+inline std::vector<StopQuery>
+loadFromFileStopQueries(const std::string &fileName) noexcept {
+  std::vector<StopQuery> result;
+  std::ifstream file(fileName);
+
+  if (!file) {
+    std::cerr << "Error: Could not open file " << fileName << "\n";
+    return result;
+  }
+
+  StopId from, to;
+  int departureTime;
+
+  while (file >> from >> to >> departureTime) {
+    result.emplace_back(from, to, departureTime);
+  }
+
+  if (!file.eof()) {
+    std::cerr << "Warning: Some lines in " << fileName
+              << " could not be parsed.\n";
+  }
+
+  return result; // RVO applies
 }

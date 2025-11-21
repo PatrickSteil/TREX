@@ -43,26 +43,33 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class RunTransferPatternQueries : public ParameterizedCommand {
- public:
+public:
   RunTransferPatternQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTPQueries",
             "Runs the given number of random Transfer Pattern Queries.") {
     addParameter("Input file (TP Data)");
-    addParameter("Number of queries");
+    addParameter("Number of queries", "10000");
+    addParameter("Query input file", "");
     addParameter("A Star enabled?", "false");
   }
 
   virtual void execute() noexcept {
     const bool useAStar = getParameter<bool>("A Star enabled?");
     const std::string inputFile = getParameter("Input file (TP Data)");
+    const std::string queryFile = getParameter("Query input file");
 
     TransferPattern::Data data(inputFile);
     data.printInfo();
 
     const size_t n = getParameter<size_t>("Number of queries");
-    const std::vector<StopQuery> queries =
-        generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+
+    std::vector<StopQuery> queries;
+    if (queryFile == "") {
+      queries = generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+    } else {
+      queries = loadFromFileStopQueries(queryFile);
+    }
 
     if (!useAStar) {
       TransferPattern::Query<TransferPattern::AggregateProfiler> algorithm(
@@ -72,11 +79,11 @@ class RunTransferPatternQueries : public ParameterizedCommand {
         algorithm.run(query.source, query.departureTime, query.target);
         numJourneys += algorithm.getJourneys().size();
       }
-
       std::cout << "#### Stats ####" << std::endl;
       algorithm.getProfiler().printStatistics();
       std::cout << "Avg. journeys                : "
-                << String::prettyDouble(numJourneys / n) << std::endl;
+                << String::prettyDouble(numJourneys / queries.size())
+                << std::endl;
     } else {
       TransferPattern::QueryAStar<TransferPattern::AggregateProfiler> algorithm(
           data);
@@ -89,30 +96,37 @@ class RunTransferPatternQueries : public ParameterizedCommand {
       std::cout << "#### Stats ####" << std::endl;
       algorithm.getProfiler().printStatistics();
       std::cout << "Avg. journeys                : "
-                << String::prettyDouble(numJourneys / n) << std::endl;
+                << String::prettyDouble(numJourneys / queries.size())
+                << std::endl;
     }
   }
 };
 
 class RunDFSTransferPatternQueries : public ParameterizedCommand {
- public:
+public:
   RunDFSTransferPatternQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runDFSTPQueries",
                              "Runs the given number of random DFS-based "
                              "Transfer Pattern Queries.") {
     addParameter("Input file (TP Data)");
-    addParameter("Number of queries");
+    addParameter("Number of queries", "10000");
+    addParameter("Query input file", "");
   }
 
   virtual void execute() noexcept {
     const std::string inputFile = getParameter("Input file (TP Data)");
+    const std::string queryFile = getParameter("Query input file");
 
     TransferPattern::Data data(inputFile);
     data.printInfo();
 
     const size_t n = getParameter<size_t>("Number of queries");
-    const std::vector<StopQuery> queries =
-        generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+    std::vector<StopQuery> queries;
+    if (queryFile == "") {
+      queries = generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+    } else {
+      queries = loadFromFileStopQueries(queryFile);
+    }
 
     TransferPattern::DFSQuery<TransferPattern::AggregateProfiler> algorithm(
         data);
@@ -120,18 +134,55 @@ class RunDFSTransferPatternQueries : public ParameterizedCommand {
     for (const StopQuery &query : queries) {
       algorithm.run(query.source, query.departureTime, query.target);
       numJourneys += algorithm.getNumJourneysFound();
-      /* numJourneys += algorithm.getJourneys().size(); */
     }
 
     std::cout << "#### Stats ####" << std::endl;
     algorithm.getProfiler().printStatistics();
     std::cout << "Avg. journeys                : "
-              << String::prettyDouble(numJourneys / n) << std::endl;
+              << String::prettyDouble(numJourneys / queries.size())
+              << std::endl;
+  }
+};
+
+class GenerateRandomSourceTargetQueries : public ParameterizedCommand {
+public:
+  GenerateRandomSourceTargetQueries(BasicShell &shell)
+      : ParameterizedCommand(shell, "generateRandomQueries",
+                             "Given TB data, generate random stop-to-stop "
+                             "queries and save to file.") {
+    addParameter("Input file (TB Data)");
+    addParameter("Output file");
+    addParameter("Number of queries");
+  }
+
+  virtual void execute() noexcept {
+    const std::string inputFile = getParameter("Input file (TB Data)");
+    const std::string outputFile = getParameter("Output file");
+
+    TripBased::Data data(inputFile);
+    data.printInfo();
+
+    const size_t n = getParameter<size_t>("Number of queries");
+    const std::vector<StopQuery> queries =
+        generateRandomStopQueries(data.raptorData.numberOfStops(), n);
+
+    std::ofstream out(outputFile);
+    if (!out) {
+      std::cout << "File not loadable!" << std::endl;
+      return;
+    }
+
+    for (const StopQuery &query : queries) {
+      out << (int)query.source << " " << (int)query.target << " "
+          << (int)query.departureTime << "\n";
+    }
+
+    out.close();
   }
 };
 
 class ComputeTPUsingTB : public ParameterizedCommand {
- public:
+public:
   ComputeTPUsingTB(BasicShell &shell)
       : ParameterizedCommand(
             shell, "computeTPUsingTB",
@@ -185,7 +236,7 @@ class ComputeTPUsingTB : public ParameterizedCommand {
     tpData.serialize(outputFile);
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -196,7 +247,7 @@ class ComputeTPUsingTB : public ParameterizedCommand {
 };
 
 class ComputeSelectedTPUsingTB : public ParameterizedCommand {
- public:
+public:
   ComputeSelectedTPUsingTB(BasicShell &shell)
       : ParameterizedCommand(
             shell, "computeSelectedTPUsingTB",
@@ -255,7 +306,7 @@ class ComputeSelectedTPUsingTB : public ParameterizedCommand {
     tpData.serialize(outputFile);
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -267,27 +318,31 @@ class ComputeSelectedTPUsingTB : public ParameterizedCommand {
   inline std::vector<StopId> loadSourceStops(const std::string &fileName) {
     std::vector<StopId> result;
     std::ifstream file(fileName);
+
     if (!file) {
       std::cerr << "Error: Could not open file " << fileName << "\n";
       return result;
     }
 
-    std::string line;
-    while (std::getline(file, line)) {
-      try {
-        int value = std::stoi(line);
-        result.push_back(StopId(value));
-      } catch (const std::exception &e) {
-        std::cerr << "Skipping invalid line: " << line << "\n";
-      }
+    int from, to, deptime;
+
+    while (file >> from >> to >> deptime) {
+      result.push_back(StopId(from));
     }
-    /// this will be handle by RVO
-    return result;
+
+    if (!file.eof()) {
+      std::cerr << "Warning: Some lines could not be parsed.\n";
+    }
+
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+
+    return result; // RVO applies
   }
 };
 
 class ExportTPDAGOfStop : public ParameterizedCommand {
- public:
+public:
   ExportTPDAGOfStop(BasicShell &shell)
       : ParameterizedCommand(shell, "exportTPDAGofStop",
                              "Exports the computed Transfer Patterns of the "
