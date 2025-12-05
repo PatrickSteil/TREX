@@ -54,7 +54,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class ApplyPartitionFile : public ParameterizedCommand {
- public:
+public:
   ApplyPartitionFile(BasicShell &shell)
       : ParameterizedCommand(
             shell, "applyPartitionFile",
@@ -83,7 +83,7 @@ class ApplyPartitionFile : public ParameterizedCommand {
 };
 
 class RAPTORToTREX : public ParameterizedCommand {
- public:
+public:
   RAPTORToTREX(BasicShell &shell)
       : ParameterizedCommand(shell, "raptorToTREX",
                              "Reads RAPTOR Data, Number of Levels and Number "
@@ -130,7 +130,7 @@ class RAPTORToTREX : public ParameterizedCommand {
     data.serialize(mltbFile);
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -141,7 +141,7 @@ class RAPTORToTREX : public ParameterizedCommand {
 };
 
 class BuildTBTEGraph : public ParameterizedCommand {
- public:
+public:
   BuildTBTEGraph(BasicShell &shell)
       : ParameterizedCommand(shell, "buildTBTEGraph",
                              "Given the TREX data, builds the TBTE Graph.") {
@@ -159,7 +159,7 @@ class BuildTBTEGraph : public ParameterizedCommand {
 };
 
 class CreateCompactLayoutGraph : public ParameterizedCommand {
- public:
+public:
   CreateCompactLayoutGraph(BasicShell &shell)
       : ParameterizedCommand(
             shell, "createCompactLayoutGraph",
@@ -194,7 +194,7 @@ class CreateCompactLayoutGraph : public ParameterizedCommand {
 };
 
 class Customization : public ParameterizedCommand {
- public:
+public:
   Customization(BasicShell &shell)
       : ParameterizedCommand(shell, "customize",
                              "Computes the customization of TREX") {
@@ -226,7 +226,7 @@ class Customization : public ParameterizedCommand {
     data.serialize(output);
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -237,7 +237,7 @@ class Customization : public ParameterizedCommand {
 };
 
 class ShowInfoOfTREX : public ParameterizedCommand {
- public:
+public:
   ShowInfoOfTREX(BasicShell &shell)
       : ParameterizedCommand(shell, "showInfoOfTREX",
                              "Shows Information about the given TREX file.") {
@@ -282,12 +282,13 @@ class ShowInfoOfTREX : public ParameterizedCommand {
     /*                       << std::endl; */
     /*         } */
 
-    if (writeToCSV) data.writeLocalLevelOfTripsToCSV(fileName);
+    if (writeToCSV)
+      data.writeLocalLevelOfTripsToCSV(fileName);
   }
 };
 
 class RunTREXQuery : public ParameterizedCommand {
- public:
+public:
   RunTREXQuery(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTREXQueries",
@@ -441,7 +442,7 @@ class RunTREXQuery : public ParameterizedCommand {
 };
 
 class RunTREXProfileQueries : public ParameterizedCommand {
- public:
+public:
   RunTREXProfileQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runTREXProfileQueries",
                              "Runs the given number of random transitive "
@@ -472,7 +473,7 @@ class RunTREXProfileQueries : public ParameterizedCommand {
 };
 
 class WriteTREXToCSV : public ParameterizedCommand {
- public:
+public:
   WriteTREXToCSV(BasicShell &shell)
       : ParameterizedCommand(shell, "writeTREXToCSV",
                              "Writes TREX Data to csv files") {
@@ -496,7 +497,7 @@ class WriteTREXToCSV : public ParameterizedCommand {
 };
 
 class EventDistributionOverTime : public ParameterizedCommand {
- public:
+public:
   EventDistributionOverTime(BasicShell &shell)
       : ParameterizedCommand(shell, "eventDistribution",
                              "Shows the distribution of events over time. "
@@ -519,7 +520,8 @@ class EventDistributionOverTime : public ParameterizedCommand {
     for (size_t eventId(0); eventId < data.numberOfStopEvents(); ++eventId) {
       auto &depTime = data.departureTime(StopEventId(eventId));
 
-      if ((24 * 60 * 60) <= depTime) continue;
+      if ((24 * 60 * 60) <= depTime)
+        continue;
 
       // this is due to our implicit representation
       if (depTime < 0) {
@@ -535,7 +537,7 @@ class EventDistributionOverTime : public ParameterizedCommand {
 };
 
 class RunGeoRankedTREXQueries : public ParameterizedCommand {
- public:
+public:
   RunGeoRankedTREXQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runGeoRankedTREXQueries",
                              "Runs TREX queries to the 2^r th stop, where "
@@ -635,7 +637,7 @@ class RunGeoRankedTREXQueries : public ParameterizedCommand {
 };
 
 class CheckBorderStops : public ParameterizedCommand {
- public:
+public:
   CheckBorderStops(BasicShell &shell)
       : ParameterizedCommand(shell, "checkBorderStops",
                              "Check stop-to-stop (only border stops) and see "
@@ -755,7 +757,7 @@ class CheckBorderStops : public ParameterizedCommand {
     csv.close();
   }
 
- private:
+private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -766,7 +768,7 @@ class CheckBorderStops : public ParameterizedCommand {
 };
 
 class ExportTREXTimeExpandedGraph : public ParameterizedCommand {
- public:
+public:
   ExportTREXTimeExpandedGraph(BasicShell &shell)
       : ParameterizedCommand(
             shell, "exportTREXAsTE",
@@ -824,7 +826,7 @@ class ExportTREXTimeExpandedGraph : public ParameterizedCommand {
 };
 
 class ShowInducedCellOfNetwork : public ParameterizedCommand {
- public:
+public:
   ShowInducedCellOfNetwork(BasicShell &shell)
       : ParameterizedCommand(
             shell, "showInducedCellOfNetwork",
@@ -880,7 +882,7 @@ class ShowInducedCellOfNetwork : public ParameterizedCommand {
 };
 
 class StopsImportance : public ParameterizedCommand {
- public:
+public:
   StopsImportance(BasicShell &shell)
       : ParameterizedCommand(shell, "stopsImportance",
                              "Export the importance of each stop into a csv.") {
@@ -918,5 +920,25 @@ class StopsImportance : public ParameterizedCommand {
           << mltb.raptorData.stopData[stop].coordinates.longitude << "\n";
     }
     csv.close();
+  }
+};
+
+class WriteTREXStopFailureDistribution : public ParameterizedCommand {
+public:
+  WriteTREXStopFailureDistribution(BasicShell &shell)
+      : ParameterizedCommand(
+            shell, "writeTREXStopFailureDistribution",
+            "Writes some metrics per stop of the given TREX data "
+            "to a csv file.") {
+    addParameter("TREX Binary");
+    addParameter("Output file");
+  }
+
+  virtual void execute() noexcept {
+    const std::string networkFile = getParameter("TREX Binary");
+    const std::string outputFile = getParameter("Output file");
+
+    TripBased::TREXData data(networkFile);
+    data.exportStopFailureDistribution(outputFile);
   }
 };

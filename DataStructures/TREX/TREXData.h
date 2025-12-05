@@ -39,18 +39,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TripBased {
 
 class TREXData : public Data {
- public:
+public:
   TREXData(const RAPTOR::Data &raptor, const int numLevels)
-      : Data(raptor),
-        numberOfLevels(numLevels),
-        unionFind(numberOfStops()),
-        layoutGraph(),
-        localLevelOfEvent(raptor.numberOfStopEvents(), 0),
+      : Data(raptor), numberOfLevels(numLevels), unionFind(numberOfStops()),
+        layoutGraph(), localLevelOfEvent(raptor.numberOfStopEvents(), 0),
         cellIds(raptor.numberOfStops(), 0) {}
 
   TREXData(const std::string &fileName) { deserialize(fileName); }
 
- public:
+public:
   inline void addInformationToStopEventGraph() noexcept {
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);
@@ -158,23 +155,24 @@ class TREXData : public Data {
         Vertex fromVertexUnion = Vertex(unionFind(stopsInCurrentRoute[i - 1]));
         Vertex toVertexUnion = Vertex(unionFind(stopsInCurrentRoute[i]));
 
-        if (fromVertexUnion == toVertexUnion) continue;
+        if (fromVertexUnion == toVertexUnion)
+          continue;
 
         Edge edgeHeadTail =
             dynamicLayoutGraph.findEdge(fromVertexUnion, toVertexUnion);
         if (edgeHeadTail != noEdge) {
-          dynamicLayoutGraph.set(
-              Weight, edgeHeadTail,
-              dynamicLayoutGraph.get(Weight, edgeHeadTail) + numberOfTrips);
+          dynamicLayoutGraph.set(Weight, edgeHeadTail,
+                                 dynamicLayoutGraph.get(Weight, edgeHeadTail) +
+                                     numberOfTrips);
           Edge edgeTailHead =
               dynamicLayoutGraph.findEdge(toVertexUnion, fromVertexUnion);
           AssertMsg(edgeTailHead != noEdge,
                     "A reverse edge is missing between "
                         << stopsInCurrentRoute[i - 1] << " and "
                         << stopsInCurrentRoute[i] << "\n");
-          dynamicLayoutGraph.set(
-              Weight, edgeTailHead,
-              dynamicLayoutGraph.get(Weight, edgeTailHead) + numberOfTrips);
+          dynamicLayoutGraph.set(Weight, edgeTailHead,
+                                 dynamicLayoutGraph.get(Weight, edgeTailHead) +
+                                     numberOfTrips);
 
         } else {
           dynamicLayoutGraph.addEdge(fromVertexUnion, toVertexUnion)
@@ -220,7 +218,7 @@ class TREXData : public Data {
 
     unsigned long n = layoutGraph.numVertices();
     unsigned long m =
-        layoutGraph.numEdges() >> 1;  // halbieren weil METIS das braucht
+        layoutGraph.numEdges() >> 1; // halbieren weil METIS das braucht
 
     std::ofstream file(fileName + ".metis");
 
@@ -261,7 +259,7 @@ class TREXData : public Data {
 
     unsigned long n = layoutGraph.numVertices();
     unsigned long m =
-        layoutGraph.numEdges();  // halbieren weil METIS das braucht
+        layoutGraph.numEdges(); // halbieren weil METIS das braucht
 
     std::ofstream file(fileName + ".hypmetis");
 
@@ -304,8 +302,8 @@ class TREXData : public Data {
     return cellIds[stop];
   }
 
-  inline SubRange<std::vector<RAPTOR::RouteSegment>> routesContainingStop(
-      const StopId stop) const noexcept {
+  inline SubRange<std::vector<RAPTOR::RouteSegment>>
+  routesContainingStop(const StopId stop) const noexcept {
     return raptorData.routesContainingStop(stop);
   }
 
@@ -314,8 +312,8 @@ class TREXData : public Data {
     return localLevelOfEvent[event];
   }
 
-  inline std::vector<StopEventId> getStopEventOfStopInRoute(
-      const StopId stop, const RouteId route) noexcept {
+  inline std::vector<StopEventId>
+  getStopEventOfStopInRoute(const StopId stop, const RouteId route) noexcept {
     std::vector<StopEventId> result;
     result.reserve(raptorData.numberOfTripsInRoute(route));
 
@@ -400,8 +398,8 @@ class TREXData : public Data {
 
   inline void setNumberOfLevels(int level) noexcept { numberOfLevels = level; }
 
-  inline void writeLocalLevelOfTripsToCSV(
-      const std::string &fileName) const noexcept {
+  inline void
+  writeLocalLevelOfTripsToCSV(const std::string &fileName) const noexcept {
     std::vector<size_t> outgoingLocalLevelOfTrip(numberOfTrips(), 0);
     std::vector<size_t> incomingLocalLevelOfTrip(numberOfTrips(), 0);
     std::vector<std::vector<size_t>> numOfTransferPerLevel(numberOfTrips());
@@ -449,7 +447,42 @@ class TREXData : public Data {
     file.close();
   }
 
- public:
+  void exportStopFailureDistribution(const std::string &fileName) const {
+    std::cout << "Load and export number of events per stop" << std::endl;
+    std::vector<std::tuple<size_t, size_t>> importancePerStop(numberOfStops(),
+                                                              {0, 0});
+
+    for (const RouteId route : routes()) {
+      const size_t nrTrips = raptorData.numberOfTripsInRoute(route);
+
+      for (const auto s : raptorData.stopsOfRoute(route)) {
+        assert(s < raptorData.numberOfStopEvents());
+        std::get<0>(importancePerStop[s]) += nrTrips;
+      }
+    }
+
+    for (StopEventId e(0); e < raptorData.numberOfStopEvents(); ++e) {
+      uint8_t level = localLevelOfEvent[e];
+      StopId s = getStopOfStopEvent(e);
+
+      assert(s < raptorData.numberOfStopEvents());
+      std::get<1>(importancePerStop[s]) =
+          std::max(size_t(level), std::get<1>(importancePerStop[s]));
+    }
+
+    std::ofstream file(fileName);
+    file << "StopId,StopName,NrEvents,HighestLevel\n";
+
+    for (const StopId s : stops()) {
+      file << (int)s << ",\"" << raptorData.stopData[s].name << "\","
+           << std::get<0>(importancePerStop[s]) << ","
+           << std::get<1>(importancePerStop[s]) << "\n";
+    }
+
+    file.close();
+  }
+
+public:
   int numberOfLevels;
   UnionFind unionFind;
   StaticGraphWithWeightsAndCoordinates layoutGraph;
@@ -461,4 +494,4 @@ class TREXData : public Data {
   std::vector<uint16_t> cellIds;
 };
 
-}  // namespace TripBased
+} // namespace TripBased
