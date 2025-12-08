@@ -74,6 +74,7 @@ typedef enum {
   NUMBER_OF_RUNS,
   DISCARDED_EDGE,
   METRIC_TREX_COLLECTED_IBES,
+  METRIC_TREX_CREATED_SHORTCUTS,
   NUM_METRICS
 } Metric;
 
@@ -86,14 +87,15 @@ constexpr const char *MetricNames[] = {"Rounds",
                                        "Distance / MaxSpeed",
                                        "Number of Runs",
                                        "Number of discarded edges",
-                                       "Number of collected IBEs"};
+                                       "Number of collected IBEs",
+                                       "Number of created shortcuts"};
 
 class NoProfiler {
- public:
-  inline void registerPhases(
-      const std::initializer_list<Phase> &) const noexcept {}
-  inline void registerMetrics(
-      const std::initializer_list<Metric> &) const noexcept {}
+public:
+  inline void
+  registerPhases(const std::initializer_list<Phase> &) const noexcept {}
+  inline void
+  registerMetrics(const std::initializer_list<Metric> &) const noexcept {}
 
   inline void start() const noexcept {}
   inline void done() const noexcept {}
@@ -102,6 +104,7 @@ class NoProfiler {
   inline void donePhase(const Phase) const noexcept {}
 
   inline void countMetric(const Metric) const noexcept {}
+  inline void addToMetric(const Metric, const long long) const noexcept {}
 
   inline void printStatistics() const noexcept {}
 
@@ -111,22 +114,20 @@ class NoProfiler {
 };
 
 class AggregateProfiler : public NoProfiler {
- public:
+public:
   AggregateProfiler()
-      : totalTime(0.0),
-        phaseTime(NUM_PHASES, 0.0),
-        metricValue(NUM_METRICS, 0),
+      : totalTime(0.0), phaseTime(NUM_PHASES, 0.0), metricValue(NUM_METRICS, 0),
         numQueries(0) {}
 
-  inline void registerPhases(
-      const std::initializer_list<Phase> &phaseList) noexcept {
+  inline void
+  registerPhases(const std::initializer_list<Phase> &phaseList) noexcept {
     for (const Phase phase : phaseList) {
       phases.push_back(phase);
     }
   }
 
-  inline void registerMetrics(
-      const std::initializer_list<Metric> &metricList) noexcept {
+  inline void
+  registerMetrics(const std::initializer_list<Metric> &metricList) noexcept {
     for (const Metric metric : metricList) {
       metrics.push_back(metric);
     }
@@ -147,6 +148,11 @@ class AggregateProfiler : public NoProfiler {
 
   inline void countMetric(const Metric metric) noexcept {
     metricValue[metric]++;
+  }
+
+  inline void addToMetric(const Metric metric,
+                          const long long amount) noexcept {
+    metricValue[metric] += amount;
   }
 
   inline double getTotalTime() const noexcept { return totalTime / numQueries; }
@@ -198,7 +204,7 @@ class AggregateProfiler : public NoProfiler {
     numQueries = 0;
   }
 
- private:
+private:
   Timer totalTimer;
   double totalTime;
   std::vector<Phase> phases;
@@ -209,4 +215,4 @@ class AggregateProfiler : public NoProfiler {
   size_t numQueries;
 };
 
-}  // namespace TripBased
+} // namespace TripBased

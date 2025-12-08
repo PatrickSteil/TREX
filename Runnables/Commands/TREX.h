@@ -223,6 +223,7 @@ public:
 
     std::cout << "******* Stats *******\n";
     bobTheBuilder.getProfiler().printStatistics();
+
     data.serialize(output);
   }
 
@@ -939,6 +940,7 @@ public:
     const std::string outputFile = getParameter("Output file");
 
     TripBased::TREXData data(networkFile);
+    data.printInfo();
     data.exportStopFailureDistribution(outputFile);
   }
 };

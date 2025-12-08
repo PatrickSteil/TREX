@@ -53,23 +53,24 @@ constexpr uint32_t TRIPOFFSET = 8;
 constexpr uint32_t STOPINDEX_MASK = ((1 << 8) - 1);
 
 class Builder {
- public:
-  Builder(TREXData& data, const int numberOfThreads = 1,
+public:
+  Builder(TREXData &data, const int numberOfThreads = 1,
           const int pinMultiplier = 1)
-      : data(data),
-        numberOfThreads(numberOfThreads),
-        pinMultiplier(pinMultiplier),
-        seekers(),
-        IBEs() {
+      : data(data), numberOfThreads(numberOfThreads),
+        pinMultiplier(pinMultiplier), seekers(), IBEs() {
     // set number of threads
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
 
     seekers.reserve(numberOfThreads);
-    for (int i = 0; i < numberOfThreads; ++i) seekers.emplace_back(data);
+    for (int i = 0; i < numberOfThreads; ++i) {
+      seekers.emplace_back(data);
+      seekers.back().resetStats();
+    }
 
-    profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
+    profiler.registerMetrics(
+        {METRIC_TREX_COLLECTED_IBES, METRIC_TREX_CREATED_SHORTCUTS});
     profiler.registerPhases({
         PHASE_TREX_COLLECT_IBES,
         PHASE_TREX_SORT_IBES,
@@ -104,11 +105,12 @@ class Builder {
     };
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
-      for (const RAPTOR::RouteSegment& route :
+      for (const RAPTOR::RouteSegment &route :
            data.routesContainingStop(stop)) {
         // EDGE CASE: a stop is not a border stop (of a route) if it's at either
         // end (start or end)
-        if (route.stopIndex == 0) continue;
+        if (route.stopIndex == 0)
+          continue;
 
         // check if the next / previous stop in stop array of route is in
         // another cell
@@ -120,8 +122,10 @@ class Builder {
                         data.raptorData.stopOfRouteSegment(neighbourSeg))) {
           // add all stop events of this route
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1))) continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1))) break;
+            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
+              continue;
+            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
+              break;
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
             IBEs.push_back((trip << TRIPOFFSET) | (route.stopIndex - 1));
           }
@@ -189,7 +193,7 @@ class Builder {
                                             << ", but should be "
                                             << numberOfThreads << "!");
 
-          auto& values = IBEs[i];
+          auto &values = IBEs[i];
           seekers[threadId].run(TripId(values >> TRIPOFFSET),
                                 StopIndex(values & STOPINDEX_MASK), level);
           ++progress;
@@ -198,16 +202,26 @@ class Builder {
 
       progress.finished();
 
-      if (level < data.getNumberOfLevels() - 1) filterIrrelevantIBEs(level + 1);
+      if (level < data.getNumberOfLevels() - 1)
+        filterIrrelevantIBEs(level + 1);
 
-      if (VERBOSE) std::cout << "done!\n";
+      if (VERBOSE) {
+        std::size_t addedShortCuts = 0;
+        for (auto &seeker : seekers) {
+          addedShortCuts += seeker.getNumberOfAddedShortcuts();
+          seeker.resetStats();
+        }
+        std::cout << "done! (# ShortCuts " << addedShortCuts << ")\n";
+
+        profiler.addToMetric(METRIC_TREX_CREATED_SHORTCUTS, addedShortCuts);
+      }
     }
     profiler.done();
   }
 
-  inline AggregateProfiler& getProfiler() noexcept { return profiler; }
+  inline AggregateProfiler &getProfiler() noexcept { return profiler; }
 
-  TREXData& data;
+  TREXData &data;
   const int numberOfThreads;
   const int pinMultiplier;
 
@@ -215,4 +229,4 @@ class Builder {
   std::vector<PackedIBE> IBEs;
   AggregateProfiler profiler;
 };
-}  // namespace TripBased
+} // namespace TripBased

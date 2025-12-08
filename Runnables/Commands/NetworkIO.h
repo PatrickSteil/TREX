@@ -43,7 +43,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class ParseGTFS : public ParameterizedCommand {
- public:
+public:
   ParseGTFS(BasicShell &shell)
       : ParameterizedCommand(shell, "parseGTFS",
                              "Parses raw GTFS data from the given directory "
@@ -63,7 +63,7 @@ class ParseGTFS : public ParameterizedCommand {
 };
 
 class GTFSToIntermediate : public ParameterizedCommand {
- public:
+public:
   GTFSToIntermediate(BasicShell &shell)
       : ParameterizedCommand(
             shell, "gtfsToIntermediate",
@@ -95,7 +95,7 @@ class GTFSToIntermediate : public ParameterizedCommand {
 };
 
 class IntermediateToCSA : public ParameterizedCommand {
- public:
+public:
   IntermediateToCSA(BasicShell &shell)
       : ParameterizedCommand(
             shell, "intermediateToCSA",
@@ -117,7 +117,7 @@ class IntermediateToCSA : public ParameterizedCommand {
 };
 
 class IntermediateToRAPTOR : public ParameterizedCommand {
- public:
+public:
   IntermediateToRAPTOR(BasicShell &shell)
       : ParameterizedCommand(
             shell, "intermediateToRAPTOR",
@@ -156,7 +156,7 @@ class IntermediateToRAPTOR : public ParameterizedCommand {
 };
 
 class IntermediateToTD : public ParameterizedCommand {
- public:
+public:
   IntermediateToTD(BasicShell &shell)
       : ParameterizedCommand(
             shell, "intermediateToTD",
@@ -180,7 +180,7 @@ class IntermediateToTD : public ParameterizedCommand {
 };
 
 class IntermediateToTE : public ParameterizedCommand {
- public:
+public:
   IntermediateToTE(BasicShell &shell)
       : ParameterizedCommand(
             shell, "intermediateToTE",
@@ -206,7 +206,7 @@ class IntermediateToTE : public ParameterizedCommand {
 };
 
 class TEToPTL : public ParameterizedCommand {
- public:
+public:
   TEToPTL(BasicShell &shell)
       : ParameterizedCommand(shell, "tEToPTL",
                              "Converts TE data to PTL format.") {
@@ -237,7 +237,7 @@ class TEToPTL : public ParameterizedCommand {
 };
 
 class TEToPPTL : public ParameterizedCommand {
- public:
+public:
   TEToPPTL(BasicShell &shell)
       : ParameterizedCommand(shell, "tEToPPTL",
                              "Converts TE data to PPTL format.") {
@@ -267,7 +267,7 @@ class TEToPPTL : public ParameterizedCommand {
 };
 
 class BuildMultimodalRAPTORData : public ParameterizedCommand {
- public:
+public:
   BuildMultimodalRAPTORData(BasicShell &shell)
       : ParameterizedCommand(
             shell, "buildMultimodalRAPTORData",
@@ -286,7 +286,7 @@ class BuildMultimodalRAPTORData : public ParameterizedCommand {
 };
 
 class AddModeToMultimodalRAPTORData : public ParameterizedCommand {
- public:
+public:
   AddModeToMultimodalRAPTORData(BasicShell &shell)
       : ParameterizedCommand(shell, "addModeToMultimodalRAPTORData",
                              "Adds a transfer graph for the specified mode to "
@@ -311,7 +311,7 @@ class AddModeToMultimodalRAPTORData : public ParameterizedCommand {
 };
 
 class BuildMultimodalTripBasedData : public ParameterizedCommand {
- public:
+public:
   BuildMultimodalTripBasedData(BasicShell &shell)
       : ParameterizedCommand(
             shell, "buildMultimodalTripBasedData",
@@ -330,7 +330,7 @@ class BuildMultimodalTripBasedData : public ParameterizedCommand {
 };
 
 class AddModeToMultimodalTripBasedData : public ParameterizedCommand {
- public:
+public:
   AddModeToMultimodalTripBasedData(BasicShell &shell)
       : ParameterizedCommand(shell, "addModeToMultimodalTripBasedData",
                              "Adds a transfer graph for the specified mode to "
@@ -355,7 +355,7 @@ class AddModeToMultimodalTripBasedData : public ParameterizedCommand {
 };
 
 class LoadDimacsGraph : public ParameterizedCommand {
- public:
+public:
   LoadDimacsGraph(BasicShell &shell)
       : ParameterizedCommand(
             shell, "loadDimacsGraph",
@@ -375,9 +375,8 @@ class LoadDimacsGraph : public ParameterizedCommand {
     }
   }
 
- private:
-  template <typename GRAPH_TYPE>
-  inline void load() const noexcept {
+private:
+  template <typename GRAPH_TYPE> inline void load() const noexcept {
     DimacsGraphWithCoordinates dimacs;
     dimacs.fromDimacs<true>(getParameter("Input file"),
                             getParameter<double>("Coordinate factor"));
@@ -392,7 +391,7 @@ class LoadDimacsGraph : public ParameterizedCommand {
 };
 
 class WriteIntermediateToCSV : public ParameterizedCommand {
- public:
+public:
   WriteIntermediateToCSV(BasicShell &shell)
       : ParameterizedCommand(
             shell, "writeIntermediateToCSV",
@@ -411,7 +410,7 @@ class WriteIntermediateToCSV : public ParameterizedCommand {
 };
 
 class WriteRAPTORToCSV : public ParameterizedCommand {
- public:
+public:
   WriteRAPTORToCSV(BasicShell &shell)
       : ParameterizedCommand(shell, "writeRAPTORToCSV",
                              "Writes all the RAPTOR Data into csv files.") {
@@ -455,7 +454,7 @@ RAPTOR::TRANSFER_WEIGHTED, true);
 };
 */
 class WriteTripBasedToCSV : public ParameterizedCommand {
- public:
+public:
   WriteTripBasedToCSV(BasicShell &shell)
       : ParameterizedCommand(shell, "writeTripBasedToCSV",
                              "Writes all the TripBased Data into csv files.") {
@@ -505,7 +504,7 @@ RAPTOR::TRANSFER_WEIGHTED, true);
 */
 
 class ExportTEGraphToHubLabelFile : public ParameterizedCommand {
- public:
+public:
   ExportTEGraphToHubLabelFile(BasicShell &shell)
       : ParameterizedCommand(shell, "exportTEGraphToHubLabelFile",
                              "Writes all the TE Data into text file.") {
@@ -607,7 +606,7 @@ class ExportTEGraphToHubLabelFile : public ParameterizedCommand {
 };
 
 class WriteRAPTORLayoutGraphToMetis : public ParameterizedCommand {
- public:
+public:
   WriteRAPTORLayoutGraphToMetis(BasicShell &shell)
       : ParameterizedCommand(shell, "writeRAPTORLayoutGraphToMetis",
                              "Writes the layout graph of the given RAPTOR data "
@@ -624,3 +623,4 @@ class WriteRAPTORLayoutGraphToMetis : public ParameterizedCommand {
     data.writeLayoutGraphToFile(outputFile);
   }
 };
+

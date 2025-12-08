@@ -37,20 +37,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
 namespace TripBased {
 
-template <typename PROFILER = NoProfiler>
-class TransferSearch {
- public:
+template <typename PROFILER = NoProfiler> class TransferSearch {
+public:
   using Profiler = PROFILER;
   using Type = TransferSearch<Profiler>;
 
- private:
+private:
   struct TripLabel {
     TripLabel(const StopEventId begin = noStopEvent,
               const StopEventId end = noStopEvent, const u_int32_t parent = -1,
               const Edge parentTransfer = noEdge)
-        : begin(begin),
-          end(end),
-          parent(parent),
+        : begin(begin), end(end), parent(parent),
           parentTransfer(parentTransfer) {}
     StopEventId begin;
     StopEventId end;
@@ -95,8 +92,7 @@ class TransferSearch {
 
     ShortCutToInsert(StopEventId fromStopEventId, StopEventId toStopEventId,
                      uint8_t hopCounter)
-        : fromStopEventId(fromStopEventId),
-          toStopEventId(toStopEventId),
+        : fromStopEventId(fromStopEventId), toStopEventId(toStopEventId),
           hopCounter(hopCounter) {}
 
     bool operator<(const ShortCutToInsert &other) {
@@ -106,20 +102,17 @@ class TransferSearch {
     }
   };
 
- public:
+public:
   TransferSearch(TREXData &data)
       : data(data),
         /* edgesToInsert(), */
-        queue(data.numberOfStopEvents()),
-        edgeRanges(data.numberOfStopEvents()),
-        queueSize(0),
-        reachedIndex(data),
+        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
+        queueSize(0), reachedIndex(data),
         edgeLabels(data.stopEventGraph.numEdges()),
         routeLabels(data.numberOfRoutes()),
         toBeUnpacked(data.numberOfStopEvents()),
         fromStopEventId(data.stopEventGraph.numEdges()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0),
-        currentRun(0)
+        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0)
   /* , extractedPaths(0) */
   /* , totalLengthPfExtractedPaths(0) */
   /* , numAddedShortcuts(0) */
@@ -180,7 +173,7 @@ class TransferSearch {
 
   inline Profiler &getProfiler() noexcept { return profiler; }
 
- private:
+private:
   inline void clear() noexcept {
     queueSize = 0;
     reachedIndex.clear();
@@ -255,7 +248,8 @@ class TransferSearch {
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (reachedIndex.alreadyReached(trip, index)) return;
+    if (reachedIndex.alreadyReached(trip, index))
+      return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue[queueSize] = TripLabel(StopEventId(firstEvent + index),
                                  StopEventId(firstEvent + reachedIndex(trip)));
@@ -334,8 +328,8 @@ class TransferSearch {
     while (currentEdge != noEdge) {
       // commented this out since I want to create shortcuts, hence i need to
       // rewind all transfers, even if i have already seen it.
-      if (lastExtractedRun[currentEdge] == currentRun) return;
-      lastExtractedRun[currentEdge] = currentRun;
+      /* if (lastExtractedRun[currentEdge] == currentRun) return; */
+      /* lastExtractedRun[currentEdge] = currentRun; */
 
       /* // set the locallevel of the events */
       /* fromVertex = fromStopEventId[currentEdge]; */
@@ -344,8 +338,8 @@ class TransferSearch {
       data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
 
       // set the locallevel of the events
-      StopEventId e = fromStopEventId[currentEdge];
-      data.getLocalLevelOfEvent(e) = minLevel + 1;
+      /* StopEventId e = fromStopEventId[currentEdge]; */
+      /* data.getLocalLevelOfEvent(e) = minLevel + 1; */
 
       index = label.parent;
       label = queue[index];
@@ -369,30 +363,27 @@ class TransferSearch {
      * currentHopCounter); *1/ */
 
     /*     // STATS */
-    /*     ++numAddedShortcuts; */
+    ++numAddedShortcuts;
     /* } */
   }
 
- public:
-  /* inline double getAvgPathLengthPerLevel() noexcept */
-  /* { */
-  /*     return (double)totalLengthPfExtractedPaths / (double)extractedPaths; */
-  /* } */
+public:
+  inline double getAvgPathLengthPerLevel() noexcept {
+    return (double)totalLengthPfExtractedPaths / (double)extractedPaths;
+  }
 
-  /* inline uint64_t getNumberOfAddedShortcuts() noexcept */
-  /* { */
-  /*     return numAddedShortcuts; */
-  /* } */
+  inline uint64_t getNumberOfAddedShortcuts() noexcept {
+    return numAddedShortcuts;
+  }
 
-  /* inline void resetStats() noexcept */
-  /* { */
-  /*     // STATS */
-  /*     totalLengthPfExtractedPaths = 0; */
-  /*     extractedPaths = 0; */
-  /*     numAddedShortcuts = 0; */
-  /* } */
+  inline void resetStats() noexcept {
+    // STATS
+    totalLengthPfExtractedPaths = 0;
+    extractedPaths = 0;
+    numAddedShortcuts = 0;
+  }
 
- private:
+private:
   TREXData &data;
   /* std::vector<ShortCutToInsert> edgesToInsert; */
 
@@ -423,9 +414,9 @@ class TransferSearch {
   uint32_t currentRun;
 
   // stats
-  /* uint64_t extractedPaths; */
-  /* uint64_t totalLengthPfExtractedPaths; */
-  /* uint64_t numAddedShortcuts; */
+  uint64_t extractedPaths;
+  uint64_t totalLengthPfExtractedPaths;
+  uint64_t numAddedShortcuts;
 };
 
-}  // namespace TripBased
+} // namespace TripBased

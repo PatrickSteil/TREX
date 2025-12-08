@@ -2,7 +2,7 @@ CC=g++ -fopenmp
 FLAGS=-std=c++2b -pipe
 OPTIMIZATION=-march=native -O3
 DEBUG=-rdynamic -Werror -Wno-pedantic -Wall -Wextra -Wparentheses -Wfatal-errors -D_GLIBCXX_DEBUG -g -fno-omit-frame-pointer
-RELEASE=-ffast-math -ftree-vectorize -Wfatal-errors -DNDEBUG -fomit-frame-pointer -mtune=native -fno-stack-protector -mavx2 -mno-avx256-split-unaligned-load -mno-avx256-split-unaligned-store -funroll-loops
+RELEASE=-ffast-math -ftree-vectorize -Wfatal-errors -DNDEBUG -fomit-frame-pointer -mtune=native -fno-stack-protector -mavx2 -mno-avx256-split-unaligned-load -mno-avx256-split-unaligned-store -funroll-loops -flto
 PREFETCH=-DENABLE_PREFETCH -DUSE_SIMD
 # SPARSEHASH=-I ../ExternalLibs/sparsehash/include
 
