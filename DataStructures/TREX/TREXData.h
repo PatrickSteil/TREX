@@ -448,35 +448,45 @@ public:
   }
 
   void exportStopFailureDistribution(const std::string &fileName) const {
-    std::cout << "Load and export number of events per stop" << std::endl;
-    std::vector<std::tuple<size_t, size_t>> importancePerStop(numberOfStops(),
-                                                              {0, 0});
-
-    for (const RouteId route : routes()) {
-      const size_t nrTrips = raptorData.numberOfTripsInRoute(route);
-
-      for (const auto s : raptorData.stopsOfRoute(route)) {
-        assert(s < raptorData.numberOfStopEvents());
-        std::get<0>(importancePerStop[s]) += nrTrips;
-      }
+    if (numberOfLevels <= 0) {
+      std::cout << "Number Of Levels is not positive!" << std::endl;
+      return;
     }
+
+    if (numberOfLevels > 32) {
+      std::cout << "Number Of Levels is too large!" << std::endl;
+      return;
+    }
+    std::cout << "Load and export number of events per stop" << std::endl;
+    std::vector<std::vector<size_t>> importancePerStop(
+        numberOfStops(), std::vector<size_t>(numberOfLevels + 1, 0));
 
     for (StopEventId e(0); e < raptorData.numberOfStopEvents(); ++e) {
       uint8_t level = localLevelOfEvent[e];
       StopId s = getStopOfStopEvent(e);
 
       assert(s < raptorData.numberOfStopEvents());
-      std::get<1>(importancePerStop[s]) =
-          std::max(size_t(level), std::get<1>(importancePerStop[s]));
+      assert(level <= numberOfLevels);
+
+      importancePerStop[s][level] += 1;
     }
 
     std::ofstream file(fileName);
-    file << "StopId,StopName,NrEvents,HighestLevel\n";
+    file << "StopId,StopName";
+
+    for (int l = 0; l <= numberOfLevels; ++l) {
+      file << ",EventsL" << l;
+    }
+
+    file << "\n";
 
     for (const StopId s : stops()) {
-      file << (int)s << ",\"" << raptorData.stopData[s].name << "\","
-           << std::get<0>(importancePerStop[s]) << ","
-           << std::get<1>(importancePerStop[s]) << "\n";
+      file << (int)s << ",\"" << raptorData.stopData[s].name << "\"";
+
+      for (auto nr : importancePerStop[s]) {
+        file << "," << nr;
+      }
+      file << "\n";
     }
 
     file.close();
