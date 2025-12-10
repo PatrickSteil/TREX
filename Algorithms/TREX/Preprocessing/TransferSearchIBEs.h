@@ -267,17 +267,18 @@ private:
         [[likely]]
       return;
 
-    if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
-      return;
+    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
+    /*   return; */
 
     queue[queueSize] = TripLabel(
         label.stopEvent,
         StopEventId(label.firstEvent + reachedIndex(label.trip)), parent, edge);
 
-    queueSize++;
-    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
     reachedIndex.update(label.trip,
                         StopIndex(label.stopEvent - label.firstEvent));
+
+    queueSize++;
+    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
   }
 
   // all marked events which we want to marks as local for the next level
@@ -294,17 +295,20 @@ private:
       }
 #endif
       unpackStopEvent(indexToLoopOver[i]);
-
-      // STATS
-      ++extractedPaths;
     }
   }
 
   // unpacks a reached stop event
   inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
-    TripLabel label = queue[index];
+    TripLabel &label = queue[index];
     Edge currentEdge = label.parentTransfer;
+
+    if (currentEdge == noEdge) [[unlikely]]
+      return;
+
+    // STATS
+    ++extractedPaths;
 
     // new vertices for the shortcut
     StopEventId toVertex = label.begin;
@@ -320,30 +324,26 @@ private:
 
       /* // set the locallevel of the events */
       fromVertex = fromStopEventId[currentEdge];
+      AssertMsg(currentHopCounter <
+                    256 - data.stopEventGraph.get(Hop, currentEdge),
+                "Current Hop Counter too large!");
       currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
-      AssertMsg(currentHopCounter < 256, "Current Hop Counter too large!");
 
-      data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
-
-      // set the locallevel of the events
-      /* StopEventId e = fromStopEventId[currentEdge]; */
-      /* data.getLocalLevelOfEvent(e) = minLevel + 1; */
+      /* data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1); */
 
       index = label.parent;
       label = queue[index];
       currentEdge = label.parentTransfer;
-
-      // STATS
-      ++totalLengthOfExtractedPaths;
     }
+
+    totalLengthOfExtractedPaths += currentHopCounter;
 
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
 
-    if (currentHopCounter < 1) {
-      return;
-    }
+    AssertMsg(currentHopCounter > 0,
+              "The unrolling did not work as exxpected!");
 
     /* // only add a shortcut if we can skip at least 2 transfers */
     /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
