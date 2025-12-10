@@ -42,10 +42,10 @@ struct ArrivalEvent {
 };
 
 class Data {
- public:
+public:
   Data() {}
 
-  Data(const RAPTOR::Data& data) : raptorData(data) {
+  Data(const RAPTOR::Data &data) : raptorData(data) {
     for (const RouteId route : routes()) {
       firstTripOfRoute.emplace_back(TripId(routeOfTrip.size()));
       const size_t tripLength = raptorData.numberOfStopsInRoute(route);
@@ -75,9 +75,9 @@ class Data {
     }
   }
 
-  Data(const std::string& fileName) { deserialize(fileName); }
+  Data(const std::string &fileName) { deserialize(fileName); }
 
- public:
+public:
   inline size_t numberOfStops() const noexcept {
     return raptorData.numberOfStops();
   }
@@ -135,8 +135,8 @@ class Data {
         .stopIds[raptorData.firstStopIdOfRoute[routeOfTrip[trip]] + index];
   }
 
-  inline RouteId getRouteOfStopEvent(
-      const StopEventId stopEvent) const noexcept {
+  inline RouteId
+  getRouteOfStopEvent(const StopEventId stopEvent) const noexcept {
     return routeOfTrip[tripOfStopEvent[stopEvent]];
   }
 
@@ -154,8 +154,8 @@ class Data {
     return StopEventId(firstStopEventOfTrip[trip] + index);
   }
 
-  inline const RAPTOR::StopEvent& getStopEvent(
-      const TripId trip, const StopIndex index) const noexcept {
+  inline const RAPTOR::StopEvent &
+  getStopEvent(const TripId trip, const StopIndex index) const noexcept {
     AssertMsg(isTrip(trip), "The id " << trip << " does not represent a trip!");
     AssertMsg(index < numberOfStopsInTrip(trip),
               "The trip " << trip << " has only " << numberOfStopsInTrip(trip)
@@ -163,19 +163,19 @@ class Data {
     return raptorData.stopEvents[firstStopEventOfTrip[trip] + index];
   }
 
-  inline const int& arrivalTime(const StopEventId stopEvent) const noexcept {
+  inline const int &arrivalTime(const StopEventId stopEvent) const noexcept {
     return raptorData.stopEvents[stopEvent].arrivalTime;
   }
 
-  inline int& arrivalTime(const StopEventId stopEvent) noexcept {
+  inline int &arrivalTime(const StopEventId stopEvent) noexcept {
     return raptorData.stopEvents[stopEvent].arrivalTime;
   }
 
-  inline const int& departureTime(const StopEventId stopEvent) const noexcept {
+  inline const int &departureTime(const StopEventId stopEvent) const noexcept {
     return raptorData.stopEvents[stopEvent].departureTime;
   }
 
-  inline int& departureTime(const StopEventId stopEvent) noexcept {
+  inline int &departureTime(const StopEventId stopEvent) noexcept {
     return raptorData.stopEvents[stopEvent].departureTime;
   }
 
@@ -185,13 +185,13 @@ class Data {
     return Range<TripId>(firstTripOfRoute[route], firstTripOfRoute[route + 1]);
   }
 
-  inline const StopId* stopArrayOfTrip(const TripId trip) const noexcept {
+  inline const StopId *stopArrayOfTrip(const TripId trip) const noexcept {
     AssertMsg(isTrip(trip), "The id " << trip << " does not represent a trip!");
     return raptorData.stopArrayOfRoute(routeOfTrip[trip]);
   }
 
-  inline const RAPTOR::StopEvent* eventArrayOfTrip(
-      const TripId trip) const noexcept {
+  inline const RAPTOR::StopEvent *
+  eventArrayOfTrip(const TripId trip) const noexcept {
     AssertMsg(isTrip(trip), "The id " << trip << " does not represent a trip!");
     return &(raptorData.stopEvents[firstStopEventOfTrip[trip]]);
   }
@@ -201,12 +201,12 @@ class Data {
     return getEarliestTripBinary(RAPTOR::RouteSegment(route, stopIndex), time);
   }
 
-  inline TripId getEarliestTrip(const RAPTOR::RouteSegment& route,
+  inline TripId getEarliestTrip(const RAPTOR::RouteSegment &route,
                                 const int time) const noexcept {
     return getEarliestTripBinary(route, time);
   }
 
-  inline TripId getEarliestTripLinear(const RAPTOR::RouteSegment& route,
+  inline TripId getEarliestTripLinear(const RAPTOR::RouteSegment &route,
                                       const int time) const noexcept {
     if (route.stopIndex + 1 == raptorData.numberOfStopsInRoute(route.routeId))
       return noTripId;
@@ -220,7 +220,7 @@ class Data {
     return noTripId;
   }
 
-  inline TripId getEarliestTripBinary(const RAPTOR::RouteSegment& route,
+  inline TripId getEarliestTripBinary(const RAPTOR::RouteSegment &route,
                                       const int time) const noexcept {
     if (route.stopIndex + 1 == raptorData.numberOfStopsInRoute(route.routeId))
       return noTripId;
@@ -229,23 +229,27 @@ class Data {
         time, [&](const TripId trip, const int time) {
           return getStopEvent(trip, route.stopIndex).departureTime < time;
         });
-    if (trip < firstTripOfRoute[route.routeId + 1]) return trip;
+    if (trip < firstTripOfRoute[route.routeId + 1])
+      return trip;
     return noTripId;
   }
 
-  inline TripId getEarliestTripPeek(const RAPTOR::RouteSegment& route,
+  inline TripId getEarliestTripPeek(const RAPTOR::RouteSegment &route,
                                     const int time) const noexcept {
     if (route.stopIndex + 1 == raptorData.numberOfStopsInRoute(route.routeId))
       return noTripId;
     const TripId tripsBegin = firstTripOfRoute[route.routeId];
     const TripId tripsEnd = firstTripOfRoute[route.routeId + 1];
-    if (tripsBegin == tripsEnd) return noTripId;
+    if (tripsBegin == tripsEnd)
+      return noTripId;
     const int firstDeparture =
         getStopEvent(tripsBegin, route.stopIndex).departureTime;
     const int lastDeparture =
         getStopEvent(TripId(tripsEnd - 1), route.stopIndex).departureTime;
-    if (firstDeparture >= time) return tripsBegin;
-    if (lastDeparture < time) return noTripId;
+    if (firstDeparture >= time)
+      return tripsBegin;
+    if (lastDeparture < time)
+      return noTripId;
     TripId trip = TripId(
         tripsBegin + (((time - firstDeparture) * (tripsEnd - tripsBegin - 1)) /
                       (lastDeparture - firstDeparture)));
@@ -262,7 +266,7 @@ class Data {
     return trip;
   }
 
- public:
+public:
   inline void convertStopEventGraphToDynamicEventGraph() noexcept {
     std::cout << "Converting StopEventGraph to the DynamicEventGraph"
               << std::endl;
@@ -313,7 +317,7 @@ class Data {
     return reverseNetwork(dummy);
   }
 
-  inline Data reverseNetwork(Permutation& stopEventPermutation) const noexcept {
+  inline Data reverseNetwork(Permutation &stopEventPermutation) const noexcept {
     const RAPTOR::Data reverseRaptorData =
         raptorData.reverseNetwork(stopEventPermutation);
     Data reverseData(reverseRaptorData);
@@ -327,10 +331,11 @@ class Data {
   inline void printInfo() const noexcept {
     int firstDay = std::numeric_limits<int>::max();
     int lastDay = std::numeric_limits<int>::min();
-    for (const RAPTOR::StopEvent& stopEvent : raptorData.stopEvents) {
+    for (const RAPTOR::StopEvent &stopEvent : raptorData.stopEvents) {
       if (firstDay > stopEvent.departureTime)
         firstDay = stopEvent.departureTime;
-      if (lastDay < stopEvent.arrivalTime) lastDay = stopEvent.arrivalTime;
+      if (lastDay < stopEvent.arrivalTime)
+        lastDay = stopEvent.arrivalTime;
     }
     std::cout << "Trip-Based public transit data:" << std::endl;
     std::cout << "   Number of Stops:          " << std::setw(12)
@@ -360,7 +365,7 @@ class Data {
               << raptorData.boundingBox() << std::endl;
   }
 
-  inline void serialize(const std::string& fileName) const noexcept {
+  inline void serialize(const std::string &fileName) const noexcept {
     raptorData.serialize(fileName + ".raptor");
     IO::serialize(fileName, firstTripOfRoute, routeOfTrip, firstStopIdOfTrip,
                   firstStopEventOfTrip, tripOfStopEvent, indexOfStopEvent,
@@ -368,7 +373,7 @@ class Data {
     stopEventGraph.writeBinary(fileName + ".graph");
   }
 
-  inline void deserialize(const std::string& fileName) noexcept {
+  inline void deserialize(const std::string &fileName) noexcept {
     raptorData.deserialize(fileName + ".raptor");
     IO::deserialize(fileName, firstTripOfRoute, routeOfTrip, firstStopIdOfTrip,
                     firstStopEventOfTrip, tripOfStopEvent, indexOfStopEvent,
@@ -376,7 +381,7 @@ class Data {
     stopEventGraph.readBinary(fileName + ".graph");
   }
 
-  inline void writeHypMETISFile(const std::string& fileName,
+  inline void writeHypMETISFile(const std::string &fileName,
                                 const bool verbose = true) noexcept {
     if (verbose)
       std::cout << "Start creating HypMETIS file " << fileName << " ...\n";
@@ -424,7 +429,7 @@ class Data {
       std::cout << "Finished creating HypMETIS file " << fileName << "!\n";
   }
 
- public:
+public:
   RAPTOR::Data raptorData;
 
   std::vector<TripId> firstTripOfRoute;
@@ -436,10 +441,11 @@ class Data {
   std::vector<TripId> tripOfStopEvent;
   std::vector<StopIndex> indexOfStopEvent;
 
-  TransferGraphWithLocalLevel stopEventGraph;
+  TransferGraphWithLocalLevelAndHop stopEventGraph;
+  /* TransferGraphWithLocalLevel stopEventGraph; */
   DynamicEventGraph dynamicEventGraph;
 
   std::vector<ArrivalEvent> arrivalEvents;
 };
 
-}  // namespace TripBased
+} // namespace TripBased

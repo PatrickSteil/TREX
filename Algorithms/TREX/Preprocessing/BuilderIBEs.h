@@ -209,9 +209,16 @@ public:
         std::size_t addedShortCuts = 0;
         for (auto &seeker : seekers) {
           addedShortCuts += seeker.getNumberOfAddedShortcuts();
+          /* std::cout << "Total Path Length:   " */
+          /*           << seeker.getTotalLengthOfExtractedPaths() << std::endl;
+           */
+          /* std::cout << "Total Numb Paths:    " */
+          /*           << seeker.getNumberofExtractedPaths() << std::endl; */
+          std::cout << "Avg Shortcut Length: "
+                    << seeker.getAvgPathLengthPerLevel() << std::endl;
           seeker.resetStats();
         }
-        std::cout << "done! (# ShortCuts " << addedShortCuts << ")\n";
+        std::cout << "done! [# ShortCuts " << addedShortCuts << "]\n";
 
         profiler.addToMetric(METRIC_TREX_CREATED_SHORTCUTS, addedShortCuts);
       }

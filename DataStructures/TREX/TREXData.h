@@ -52,8 +52,8 @@ public:
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);
 
-    /* std::vector<uint8_t> initHops(stopEventGraph.numEdges(), 1); */
-    /* stopEventGraph.get(Hop).swap(initHops); */
+    std::vector<uint8_t> initHops(stopEventGraph.numEdges(), 1);
+    stopEventGraph.get(Hop).swap(initHops);
   }
 
   inline void readPartitionFile(const std::string &fileName) {

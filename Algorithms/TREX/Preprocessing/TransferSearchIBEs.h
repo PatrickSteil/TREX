@@ -104,19 +104,15 @@ private:
 
 public:
   TransferSearch(TREXData &data)
-      : data(data),
-        /* edgesToInsert(), */
-        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
-        queueSize(0), reachedIndex(data),
+      : data(data), edgesToInsert(), queue(data.numberOfStopEvents()),
+        edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         edgeLabels(data.stopEventGraph.numEdges()),
         routeLabels(data.numberOfRoutes()),
         toBeUnpacked(data.numberOfStopEvents()),
         fromStopEventId(data.stopEventGraph.numEdges()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0)
-  /* , extractedPaths(0) */
-  /* , totalLengthPfExtractedPaths(0) */
-  /* , numAddedShortcuts(0) */
-  {
+        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+        extractedPaths(0), totalLengthOfExtractedPaths(0),
+        numAddedShortcuts(0) {
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
       edgeLabels[edge].stopEvent =
           StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
@@ -286,15 +282,6 @@ private:
 
   // all marked events which we want to marks as local for the next level
   inline void unpack() {
-    /* for (auto start = toBeUnpacked.begin(), end = toBeUnpacked.end(); */
-    /*      start < end; ++start) { */
-    /* #ifdef ENABLE_PREFETCH */
-    /*   if (start + 4 < end) { */
-    /*     __builtin_prefetch(&queue[*(start + 4)]); */
-    /*   } */
-    /* #endif */
-    /*   unpackStopEvent(*start); */
-    /* } */
     // we need to loop over the collected queue elements,
     // and for each element, we stored the latest ('das hinterste') event which
     // we want to mark as local
@@ -309,7 +296,7 @@ private:
       unpackStopEvent(indexToLoopOver[i]);
 
       // STATS
-      // ++extractedPaths;
+      ++extractedPaths;
     }
   }
 
@@ -320,10 +307,10 @@ private:
     Edge currentEdge = label.parentTransfer;
 
     // new vertices for the shortcut
-    /* StopEventId toVertex = label.begin; */
-    /* StopEventId fromVertex = noStopEvent; // will be assigned */
+    StopEventId toVertex = label.begin;
+    StopEventId fromVertex = noStopEvent; // will be assigned
 
-    /* uint8_t currentHopCounter(0); */
+    uint8_t currentHopCounter(0);
 
     while (currentEdge != noEdge) {
       // commented this out since I want to create shortcuts, hence i need to
@@ -332,8 +319,9 @@ private:
       /* lastExtractedRun[currentEdge] = currentRun; */
 
       /* // set the locallevel of the events */
-      /* fromVertex = fromStopEventId[currentEdge]; */
-      /* currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
+      fromVertex = fromStopEventId[currentEdge];
+      currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
+      AssertMsg(currentHopCounter < 256, "Current Hop Counter too large!");
 
       data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
 
@@ -346,46 +334,57 @@ private:
       currentEdge = label.parentTransfer;
 
       // STATS
-      /* ++totalLengthPfExtractedPaths; */
+      ++totalLengthOfExtractedPaths;
     }
 
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
 
-    /* // only add a shortcut if we can skip at least 2 transfers */
-    /* if ((currentHopCounter / (minLevel+1)) >= 2) { */
-    /*     /1* AssertMsg(fromVertex != noStopEvent, "From StopEvent has not been
-     * assigned properly"); *1/ */
-    /*     /1* AssertMsg(fromVertex != toVertex, "From- and To StopEvent should
-     * not be the same"); *1/ */
-    /*     /1* edgesToInsert.emplace_back(fromVertex, toVertex,
-     * currentHopCounter); *1/ */
+    if (currentHopCounter < 1) {
+      return;
+    }
 
-    /*     // STATS */
+    /* // only add a shortcut if we can skip at least 2 transfers */
+    /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
+    AssertMsg(fromVertex != noStopEvent,
+              "From StopEvent has not been assigned properly");
+    AssertMsg(fromVertex != toVertex,
+              "From- and To StopEvent should not be the same");
+    /* edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter); */
+
+    // STATS
     ++numAddedShortcuts;
     /* } */
   }
 
 public:
   inline double getAvgPathLengthPerLevel() noexcept {
-    return (double)totalLengthPfExtractedPaths / (double)extractedPaths;
+    return (double)totalLengthOfExtractedPaths / (double)extractedPaths;
   }
 
   inline uint64_t getNumberOfAddedShortcuts() noexcept {
     return numAddedShortcuts;
   }
 
+  inline uint64_t getTotalLengthOfExtractedPaths() noexcept {
+    return totalLengthOfExtractedPaths;
+  }
+
+  inline uint64_t getNumberofExtractedPaths() noexcept {
+    return extractedPaths;
+  }
+
   inline void resetStats() noexcept {
     // STATS
-    totalLengthPfExtractedPaths = 0;
+    totalLengthOfExtractedPaths = 0;
     extractedPaths = 0;
     numAddedShortcuts = 0;
   }
 
 private:
   TREXData &data;
-  /* std::vector<ShortCutToInsert> edgesToInsert; */
+  std::vector<ShortCutToInsert> edgesToInsert;
 
   std::vector<TripLabel> queue;
   std::vector<EdgeRange> edgeRanges;
@@ -415,7 +414,7 @@ private:
 
   // stats
   uint64_t extractedPaths;
-  uint64_t totalLengthPfExtractedPaths;
+  uint64_t totalLengthOfExtractedPaths;
   uint64_t numAddedShortcuts;
 };
 
