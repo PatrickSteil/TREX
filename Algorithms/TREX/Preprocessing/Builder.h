@@ -39,7 +39,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TripBased {
 
 class Builder {
- public:
+public:
   Builder(TREXData &data) : data(data), search(data), stopEvents() {}
 
   void collectUsingMasks(const uint64_t LEVELMASK, const uint64_t TARGETMASK) {
@@ -51,7 +51,8 @@ class Builder {
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
       // does the global id match the mask and does it have a neighbor where the
       // mask does not match?
-      if (!masksMatches(stop)) continue;
+      if (!masksMatches(stop))
+        continue;
 
       // check the neighbors in compact layoutGraph
       AssertMsg(data.layoutGraph.isVertex(stop),
@@ -61,7 +62,8 @@ class Builder {
            data.routesContainingStop(stop)) {
         // EDGE CASE: a stop is not a border stop (of a route) if it's at either
         // end (start or end)
-        if (route.stopIndex == 0) continue;
+        if (route.stopIndex == 0)
+          continue;
 
         // check if the next / previous stop in stop array of route is in
         // another cell
@@ -108,7 +110,6 @@ class Builder {
 
 inline void Customize(TREXData &data, const bool verbose = true) {
   data.createCompactLayoutGraph();
-
   data.addInformationToStopEventGraph();
 
   uint64_t LEVELMASK = (~0);
@@ -193,4 +194,4 @@ inline void Customize(TREXData &data, const int numberOfThreads,
     progress.finished();
   }
 }
-}  // namespace TripBased
+} // namespace TripBased

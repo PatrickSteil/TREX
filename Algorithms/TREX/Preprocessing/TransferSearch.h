@@ -88,11 +88,12 @@ private:
     StopEventId fromStopEventId;
     StopEventId toStopEventId;
     uint8_t hopCounter;
+    uint8_t level;
 
     ShortCutToInsert(StopEventId fromStopEventId, StopEventId toStopEventId,
-                     uint8_t hopCounter)
+                     uint8_t hopCounter, uint8_t level)
         : fromStopEventId(fromStopEventId), toStopEventId(toStopEventId),
-          hopCounter(hopCounter) {}
+          hopCounter(hopCounter), level(level) {}
 
     bool operator<(const ShortCutToInsert &other) {
       return std::tie(fromStopEventId, toStopEventId, hopCounter) <
@@ -109,7 +110,8 @@ public:
         routeLabels(data.numberOfRoutes()),
         toBeUnpacked(data.numberOfStopEvents()),
         fromStopEventId(data.stopEventGraph.numEdges()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+        /* lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+         */
         extractedPaths(0), totalLengthPfExtractedPaths(0),
         numAddedShortcuts(0) {
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
@@ -253,8 +255,8 @@ private:
             label.trip, StopIndex(label.stopEvent - label.firstEvent - 1))))
       return;
 
-    if (minLevel > data.stopEventGraph.get(LocalLevel, edge))
-      return;
+    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) */
+    /*   return; */
 
     queue[queueSize] = TripLabel(
         label.stopEvent,
@@ -302,7 +304,7 @@ private:
       fromVertex = fromStopEventId[currentEdge];
       currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
 
-      data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
+      /* data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1); */
 
       // set the locallevel of the events
       /* StopEventId e = fromStopEventId[currentEdge]; */
@@ -352,6 +354,10 @@ public:
     numAddedShortcuts = 0;
   }
 
+  const std::vector<ShortCutToInsert> &getShortcuts() const {
+    return edgesToInsert;
+  }
+
 private:
   TREXData &data;
   std::vector<ShortCutToInsert> edgesToInsert;
@@ -380,8 +386,8 @@ private:
 
   // like a timestamp, used to check in which run the stop event has already
   // been extracted
-  std::vector<size_t> lastExtractedRun;
-  size_t currentRun;
+  /* std::vector<size_t> lastExtractedRun; */
+  /* size_t currentRun; */
 
   // stats
   uint64_t extractedPaths;

@@ -89,14 +89,17 @@ private:
     StopEventId fromStopEventId;
     StopEventId toStopEventId;
     uint8_t hopCounter;
+    uint8_t level;
 
     ShortCutToInsert(StopEventId fromStopEventId, StopEventId toStopEventId,
-                     uint8_t hopCounter)
+                     uint8_t hopCounter, uint8_t level)
         : fromStopEventId(fromStopEventId), toStopEventId(toStopEventId),
-          hopCounter(hopCounter) {}
+          hopCounter(hopCounter), level(level) {}
 
-    bool operator<(const ShortCutToInsert &other) {
-      return std::tie(fromStopEventId, toStopEventId, hopCounter) <
+    bool operator==(const ShortCutToInsert &other) const = default;
+
+    auto operator<=>(const ShortCutToInsert &other) const {
+      return std::tie(fromStopEventId, toStopEventId, hopCounter) <=>
              std::tie(other.fromStopEventId, other.toStopEventId,
                       other.hopCounter);
     }
@@ -110,7 +113,8 @@ public:
         routeLabels(data.numberOfRoutes()),
         toBeUnpacked(data.numberOfStopEvents()),
         fromStopEventId(data.stopEventGraph.numEdges()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+        /* lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+         */
         extractedPaths(0), totalLengthOfExtractedPaths(0),
         numAddedShortcuts(0) {
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
@@ -144,6 +148,8 @@ public:
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
                               METRIC_ENQUEUES});
+
+    edgesToInsert.clear();
   }
 
   inline void run(const TripId trip, const StopIndex stopIndex,
@@ -175,10 +181,10 @@ private:
     reachedIndex.clear();
     toBeUnpacked.clear();
 
-    if (currentRun == 0) {
-      lastExtractedRun.assign(data.stopEventGraph.numEdges(), 0);
-    }
-    ++currentRun;
+    /* if (currentRun == 0) { */
+    /*   lastExtractedRun.assign(data.stopEventGraph.numEdges(), 0); */
+    /* } */
+    /* ++currentRun; */
   }
 
   inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
@@ -244,7 +250,7 @@ private:
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (reachedIndex.alreadyReached(trip, index))
+    if (reachedIndex.alreadyReached(trip, index)) [[unlikely]]
       return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue[queueSize] = TripLabel(StopEventId(firstEvent + index),
@@ -256,6 +262,8 @@ private:
 
   inline void enqueue(const Edge edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
+    AssertMsg(edge != noEdge, "Given edge should not be nonEdge!");
+
     const EdgeLabel &label = edgeLabels[edge];
 
     // break if a) already reached OR b) the stop if this transfer is not in the
@@ -270,6 +278,7 @@ private:
     /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
     /*   return; */
 
+    AssertMsg(parent < queueSize, "Given parent is out of bounds!");
     queue[queueSize] = TripLabel(
         label.stopEvent,
         StopEventId(label.firstEvent + reachedIndex(label.trip)), parent, edge);
@@ -301,7 +310,7 @@ private:
   // unpacks a reached stop event
   inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
-    TripLabel &label = queue[index];
+    TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
 
     if (currentEdge == noEdge) [[unlikely]]
@@ -338,12 +347,12 @@ private:
 
     totalLengthOfExtractedPaths += currentHopCounter;
 
+    AssertMsg(currentHopCounter > 0,
+              "The unrolling did not work as exxpected!");
+
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
-
-    AssertMsg(currentHopCounter > 0,
-              "The unrolling did not work as exxpected!");
 
     /* // only add a shortcut if we can skip at least 2 transfers */
     /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
@@ -351,7 +360,8 @@ private:
               "From StopEvent has not been assigned properly");
     AssertMsg(fromVertex != toVertex,
               "From- and To StopEvent should not be the same");
-    /* edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter); */
+    edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
+                               minLevel + 1);
 
     // STATS
     ++numAddedShortcuts;
@@ -382,6 +392,16 @@ public:
     numAddedShortcuts = 0;
   }
 
+  void sortShortcuts() {
+    std::sort(edgesToInsert.begin(), edgesToInsert.end());
+    edgesToInsert.erase(std::unique(edgesToInsert.begin(), edgesToInsert.end()),
+                        edgesToInsert.end());
+  }
+
+  const std::vector<ShortCutToInsert> &getShortcuts() const {
+    return edgesToInsert;
+  }
+
 private:
   TREXData &data;
   std::vector<ShortCutToInsert> edgesToInsert;
@@ -409,8 +429,8 @@ private:
 
   // like a timestamp, used to check in which run the stop event has already
   // been extracted
-  std::vector<uint32_t> lastExtractedRun;
-  uint32_t currentRun;
+  /* std::vector<uint32_t> lastExtractedRun; */
+  /* uint32_t currentRun; */
 
   // stats
   uint64_t extractedPaths;

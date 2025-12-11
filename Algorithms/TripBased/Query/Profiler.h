@@ -45,6 +45,7 @@ typedef enum {
   PHASE_TREX_COLLECT_IBES,
   PHASE_TREX_SORT_IBES,
   PHASE_TREX_FILTER_IBES,
+  PHASE_TREX_UPDATE_STOPEVENTGRAPH,
   NUM_PHASES,
 } Phase;
 
@@ -61,6 +62,7 @@ constexpr const char *PhaseNames[] = {
     "Collect IBEs",
     "Sort IBEs",
     "Filter IBEs",
+    "Update StopEventGraph",
 };
 
 typedef enum {

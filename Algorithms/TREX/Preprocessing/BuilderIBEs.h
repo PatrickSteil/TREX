@@ -75,6 +75,7 @@ public:
         PHASE_TREX_COLLECT_IBES,
         PHASE_TREX_SORT_IBES,
         PHASE_TREX_FILTER_IBES,
+        PHASE_TREX_UPDATE_STOPEVENTGRAPH,
     });
   }
 
@@ -223,6 +224,24 @@ public:
         profiler.addToMetric(METRIC_TREX_CREATED_SHORTCUTS, addedShortCuts);
       }
     }
+
+    profiler.startPhase();
+    DynamicTransferGraphWithLocalLevelAndHop dynamicGraph;
+    Graph::copy(data.stopEventGraph, dynamicGraph);
+
+    for (auto &seeker : seekers) {
+      seeker.sortShortcuts();
+      for (const auto &shortcut : seeker.getShortcuts()) {
+        auto edge = dynamicGraph.addEdge(Vertex(shortcut.fromStopEventId),
+                                         Vertex(shortcut.toStopEventId));
+        dynamicGraph.set(Hop, edge, shortcut.hopCounter);
+        dynamicGraph.set(LocalLevel, edge, shortcut.level);
+      }
+    }
+
+    Graph::move(std::move(dynamicGraph), data.stopEventGraph);
+    profiler.donePhase(PHASE_TREX_UPDATE_STOPEVENTGRAPH);
+
     profiler.done();
   }
 
