@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <array>
 
+#include "../../../DataStructures/Container/MultiQueue.h"
 #include "../../../DataStructures/Container/Set.h"
 #include "../../../DataStructures/Graph/Utils/Conversion.h"
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
@@ -93,10 +94,10 @@ public:
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
-        lastTarget(StopId(0)), reachedRoutes(data.numberOfRoutes()),
-        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
-        queueSize(0), reachedIndex(data), targetLabels(1),
-        minArrivalTime(INFTY), edgeLabels(data.stopEventGraph.numEdges()),
+        lastTarget(StopId(0)), reachedRoutes(data.numberOfRoutes()), queue(),
+        edgeRanges(data.numberOfStopEvents()), reachedIndex(data),
+        targetLabels(1), minArrivalTime(INFTY),
+        edgeLabels(data.stopEventGraph.numEdges()),
         routeLabels(data.numberOfRoutes()), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
@@ -213,7 +214,7 @@ public:
 
 private:
   inline void clear() noexcept {
-    queueSize = 0;
+    queue.clear_all();
     reachedIndex.clear();
     targetLabels.resize(1);
     targetLabels[0] = TargetLabel();
@@ -325,23 +326,14 @@ private:
 
   inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
     profiler.startPhase();
-    u_int8_t currentRoundNumber = 0;
-    size_t roundBegin = 0;
-    size_t roundEnd = queueSize;
-    while (roundBegin < roundEnd && currentRoundNumber < MAX_ROUNDS) {
-      ++currentRoundNumber;
+    u_int8_t currentRound = 0;
+    // TODO we should abort if no later round has someting useful
+    while (!queue.empty(currentRound) && currentRound < MAX_ROUNDS) {
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
-      // Evaluate final transfers in order to check if the target is
-      // reachable
-      for (size_t i = roundBegin; i < roundEnd; ++i) {
-#ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
-        }
-#endif
 
-        const TripLabel &label = queue[i];
+      while (!queue.empty(currentRound)) {
+        const TripLabel &label = queue.front(currentRound);
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
@@ -349,39 +341,27 @@ private:
             break;
           const int timeToTarget = transferToTarget[data.arrivalEvents[j].stop];
           if (timeToTarget != INFTY) {
-            addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget, i);
+            addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget,
+                           -1);
           }
         }
-      }
-      // Find the range of transfers for each trip
-      for (size_t i = roundBegin; i < roundEnd; i++) {
-#ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
-          __builtin_prefetch(&edgeRanges[i + 4]);
-        }
-#endif
-        TripLabel &label = queue[i];
-        for (StopEventId j = label.begin; j < label.end; j++) {
-          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
-            label.end = j;
-        }
-        edgeRanges[i].begin =
+
+        // do not relax into a 17'th round or some
+        if (currentRound + 1 == MAX_ROUNDS)
+          continue;
+
+        const auto edgeRangeBegin =
             data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
-        edgeRanges[i].end =
+        const auto edgeRangeEnd =
             data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
-      }
-      // Relax the transfers for each trip
-      for (size_t i = roundBegin; i < roundEnd; i++) {
-        const EdgeRange &label = edgeRanges[i];
-        for (Edge edge = label.begin; edge < label.end; edge++) {
+        for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-          enqueue(edge, i);
+          enqueue(edge, -1, currentRound);
         }
+        queue.pop(currentRound);
       }
 
-      roundBegin = roundEnd;
-      roundEnd = queueSize;
+      ++currentRound;
     }
     profiler.donePhase(PHASE_SCAN_TRIPS);
   }
@@ -391,33 +371,39 @@ private:
     if (reachedIndex.alreadyReached(trip, index))
       return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
-    queue[queueSize] = TripLabel(StopEventId(firstEvent + index),
-                                 StopEventId(firstEvent + reachedIndex(trip)));
-    ++queueSize;
-    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
+    queue.push(0, TripLabel(StopEventId(firstEvent + index),
+                            StopEventId(firstEvent + reachedIndex(trip))));
     reachedIndex.update(trip, index);
   }
 
-  inline void enqueue(const Edge edge, const size_t parent) noexcept {
+  inline void enqueue(const Edge edge, const size_t parent,
+                      const int currentRound) noexcept {
+    assert(currentRound + 1 < 16);
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
     if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
       return;
 
-    if (((label.cellId ^ sourceCellId) >> label.localLevel) &&
-        ((label.cellId ^ targetCellId) >> label.localLevel)) [[likely]] {
-      profiler.countMetric(DISCARDED_EDGE);
-      reachedIndex.update(label.trip, StopIndex(label.stopEvent));
-      return;
-    }
+    /* if (((label.cellId ^ sourceCellId) >> label.localLevel) && */
+    /*     ((label.cellId ^ targetCellId) >> label.localLevel)) [[likely]] { */
+    /*   profiler.countMetric(DISCARDED_EDGE); */
+    /*   reachedIndex.update(label.trip, StopIndex(label.stopEvent)); */
+    /*   return; */
+    /* } */
 
-    queue[queueSize] = TripLabel(
-        StopEventId(label.stopEvent + label.firstEvent),
-        StopEventId(label.firstEvent + reachedIndex(label.trip)), parent);
-    ++queueSize;
-    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+    const uint8_t hop = data.stopEventGraph.get(Hop, edge);
+    assert(hop < 16);
+
+    if ((int)hop + (int)currentRound < 16) {
+      queue.push(
+          currentRound + hop,
+          TripLabel(StopEventId(label.stopEvent + label.firstEvent),
+                    StopEventId(label.firstEvent + reachedIndex(label.trip)),
+                    parent));
+      // TODO check how to change reachability info
+      reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+    }
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -430,52 +416,8 @@ private:
   }
 
   inline RAPTOR::Journey
-  getJourney(const TargetLabel &targetLabel) const noexcept {
+  getJourney(const TargetLabel & /* targetLabel */) const noexcept {
     RAPTOR::Journey result;
-    u_int32_t parent = targetLabel.parent;
-    if (parent == u_int32_t(-1)) {
-      result.emplace_back(sourceStop, targetStop, sourceDepartureTime,
-                          targetLabel.arrivalTime, false);
-      return result;
-    }
-    StopEventId departureStopEvent = noStopEvent;
-    Vertex departureStop = targetStop;
-    int lastTime(sourceDepartureTime);
-    while (parent != u_int32_t(-1)) {
-      AssertMsg(parent < queueSize, "Parent " << parent << " is out of range!");
-      const TripLabel &label = queue[parent];
-      StopEventId arrivalStopEvent;
-      Edge edge;
-      std::tie(arrivalStopEvent, edge) =
-          (departureStopEvent == noStopEvent)
-              ? getParent(label, targetLabel)
-              : getParent(label, StopEventId(departureStopEvent + 1));
-
-      const StopId arrivalStop = data.getStopOfStopEvent(arrivalStopEvent);
-      const int arrivalTime =
-          data.raptorData.stopEvents[arrivalStopEvent].arrivalTime;
-      const int transferArrivalTime =
-          (edge == noEdge)
-              ? targetLabel.arrivalTime
-              : arrivalTime + data.stopEventGraph.get(TravelTime, edge);
-      result.emplace_back(arrivalStop, departureStop, arrivalTime,
-                          transferArrivalTime, edge);
-
-      departureStopEvent = StopEventId(label.begin - 1);
-      departureStop = data.getStopOfStopEvent(departureStopEvent);
-      const RouteId route = data.getRouteOfStopEvent(departureStopEvent);
-      const int departureTime =
-          data.raptorData.stopEvents[departureStopEvent].departureTime;
-      lastTime = departureTime;
-      result.emplace_back(departureStop, arrivalStop, departureTime,
-                          arrivalTime, true, route);
-
-      parent = label.parent;
-    }
-    const int timeFromSource = transferFromSource[departureStop];
-    result.emplace_back(sourceStop, departureStop,
-                        sourceDepartureTime + timeFromSource, lastTime, noEdge);
-    Vector::reverse(result);
     return result;
   }
 
@@ -526,9 +468,9 @@ private:
 
   IndexedSet<false, RouteId> reachedRoutes;
 
-  std::vector<TripLabel> queue;
+  MultiQueue<TripLabel, 16> queue;
+
   std::vector<EdgeRange> edgeRanges;
-  size_t queueSize;
   ReachedIndex reachedIndex;
 
   std::vector<TargetLabel> targetLabels;
