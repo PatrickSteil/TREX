@@ -332,9 +332,12 @@ private:
     u_int8_t currentRound = 0;
     while (queue.laterQueueHasElement(currentRound) &&
            currentRound < MAX_ROUNDS) {
+      std::cout << "Start round " << (int)currentRound << std::endl;
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
+      std::cout << "Current Queue has size: " << (int)queue.size(currentRound)
+                << std::endl;
       while (!queue.empty(currentRound)) {
         const TripLabel &label = queue.front(currentRound);
         profiler.countMetric(METRIC_SCANNED_TRIPS);
@@ -350,16 +353,15 @@ private:
         }
 
         // do not relax into a 17'th round or some
-        if (currentRound + 1 == MAX_ROUNDS) [[unlikely]]
-          continue;
-
-        const auto edgeRangeBegin =
-            data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
-        const auto edgeRangeEnd =
-            data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
-        for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
-          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-          enqueue(edge, -1, currentRound);
+        if (currentRound + 1 < MAX_ROUNDS) {
+          const auto edgeRangeBegin =
+              data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
+          const auto edgeRangeEnd =
+              data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
+          for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
+            profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+            enqueue(edge, -1, currentRound);
+          }
         }
         queue.pop(currentRound);
       }
@@ -388,17 +390,22 @@ private:
     if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
       return;
 
-    int lclSource = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
-                                                                sourceCellId));
-    int lclTarget = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
-                                                                targetCellId));
-    auto lcl = std::min(lclSource, lclTarget);
+    /*     int lclSource = 16 -
+     * std::countl_zero(static_cast<uint16_t>(label.cellId ^ */
+    /*                                                                 sourceCellId));
+     */
+    /*     int lclTarget = 16 -
+     * std::countl_zero(static_cast<uint16_t>(label.cellId ^ */
+    /*                                                                 targetCellId));
+     */
+    /*     auto lcl = std::min(lclSource, lclTarget); */
 
-    if (lcl != label.localLevel) [[likely]] {
-      profiler.countMetric(DISCARDED_EDGE);
-      /* reachedIndex.update(label.trip, StopIndex(label.stopEvent)); */
-      return;
-    }
+    /*     if (lcl != label.localLevel) [[likely]] { */
+    /*       profiler.countMetric(DISCARDED_EDGE); */
+    /*       /1* reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+     * *1/ */
+    /*       return; */
+    /*     } */
 
     assert(label.hop < 16);
 
@@ -409,7 +416,7 @@ private:
                     StopEventId(label.firstEvent + reachedIndex(label.trip)),
                     parent));
       // TODO check how to change reachability info
-      /* reachedIndex.update(label.trip, StopIndex(label.stopEvent)); */
+      reachedIndex.update(label.trip, StopIndex(label.stopEvent));
     }
   }
 
