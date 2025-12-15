@@ -33,8 +33,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
 #include "../../../DataStructures/TREX/TREXData.h"
+#include "../../TripBased/Query/ProfileReachedIndexSIMD.h"
 #include "../../TripBased/Query/Profiler.h"
-#include "../../TripBased/Query/ReachedIndex.h"
 
 namespace TripBased {
 
@@ -330,14 +330,11 @@ private:
   inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
     profiler.startPhase();
     u_int8_t currentRound = 0;
-    while (queue.laterQueueHasElement(currentRound) &&
-           currentRound < MAX_ROUNDS) {
-      std::cout << "Start round " << (int)currentRound << std::endl;
+    while (currentRound < MAX_ROUNDS &&
+           queue.laterQueueHasElement(currentRound)) {
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
-      std::cout << "Current Queue has size: " << (int)queue.size(currentRound)
-                << std::endl;
       while (!queue.empty(currentRound)) {
         const TripLabel &label = queue.front(currentRound);
         profiler.countMetric(METRIC_SCANNED_TRIPS);
@@ -373,12 +370,12 @@ private:
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (reachedIndex.alreadyReached(trip, index))
+    if (reachedIndex.alreadyReached(trip, index, 1))
       return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue.push(0, TripLabel(StopEventId(firstEvent + index),
                             StopEventId(firstEvent + reachedIndex(trip))));
-    reachedIndex.update(trip, index);
+    reachedIndex.update(trip, index, 1);
   }
 
   inline void enqueue(const Edge edge, const size_t parent,
@@ -387,36 +384,34 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
+    if (reachedIndex.alreadyReached(label.trip, label.stopEvent,
+                                    currentRound + 1)) [[likely]]
       return;
 
-    /*     int lclSource = 16 -
-     * std::countl_zero(static_cast<uint16_t>(label.cellId ^ */
-    /*                                                                 sourceCellId));
-     */
-    /*     int lclTarget = 16 -
-     * std::countl_zero(static_cast<uint16_t>(label.cellId ^ */
-    /*                                                                 targetCellId));
-     */
-    /*     auto lcl = std::min(lclSource, lclTarget); */
+    int lclSource = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
+                                                                sourceCellId));
+    int lclTarget = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
+                                                                targetCellId));
+    auto lcl = std::min(lclSource, lclTarget);
 
-    /*     if (lcl != label.localLevel) [[likely]] { */
-    /*       profiler.countMetric(DISCARDED_EDGE); */
-    /*       /1* reachedIndex.update(label.trip, StopIndex(label.stopEvent));
-     * *1/ */
-    /*       return; */
-    /*     } */
+    if (lcl != label.localLevel) [[likely]] {
+      profiler.countMetric(DISCARDED_EDGE);
+      reachedIndex.update(label.trip, StopIndex(label.stopEvent),
+                          currentRound + 1);
+      return;
+    }
 
     assert(label.hop < 16);
 
     if ((int)label.hop + (int)currentRound < 16) {
-      queue.push(
-          currentRound + label.hop,
-          TripLabel(StopEventId(label.stopEvent + label.firstEvent),
-                    StopEventId(label.firstEvent + reachedIndex(label.trip)),
-                    parent));
-      // TODO check how to change reachability info
-      reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+      queue.push(currentRound + label.hop,
+                 TripLabel(StopEventId(label.stopEvent + label.firstEvent),
+                           StopEventId(label.firstEvent +
+                                       reachedIndex(label.trip,
+                                                    label.hop + currentRound)),
+                           parent));
+      reachedIndex.update(label.trip, StopIndex(label.stopEvent),
+                          label.hop + currentRound);
     }
   }
 
@@ -485,7 +480,7 @@ private:
   MultiQueue<TripLabel, 16> queue;
 
   std::vector<EdgeRange> edgeRanges;
-  ReachedIndex reachedIndex;
+  ProfileReachedIndexSIMD reachedIndex;
 
   std::vector<TargetLabel> targetLabels;
   int minArrivalTime;
