@@ -332,6 +332,8 @@ private:
     u_int8_t currentRound = 0;
     while (currentRound < MAX_ROUNDS &&
            queue.laterQueueHasElement(currentRound)) {
+      std::cout << "CurrenRound " << (int)currentRound << ", "
+                << queue.size(currentRound) << std::endl;
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
@@ -393,25 +395,31 @@ private:
     int lclTarget = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
                                                                 targetCellId));
     auto lcl = std::min(lclSource, lclTarget);
+    /* std::cout << "Query s: " << sourceStop << " -> t: " << targetStop << ",
+     * s: " */
+    /*           << data.getStopOfStopEvent( */
+    /*                  StopEventId(label.firstEvent + label.stopEvent)) */
+    /*           << ", lcl: " << (int)lcl << std::endl; */
 
     if (lcl != label.localLevel) [[likely]] {
       profiler.countMetric(DISCARDED_EDGE);
-      reachedIndex.update(label.trip, StopIndex(label.stopEvent),
-                          currentRound + 1);
+      /* reachedIndex.update(label.trip, StopIndex(label.stopEvent), */
+      /*                     currentRound + 1); */
       return;
     }
 
     assert(label.hop < 16);
 
-    if ((int)label.hop + (int)currentRound < 16) {
-      queue.push(currentRound + label.hop,
-                 TripLabel(StopEventId(label.stopEvent + label.firstEvent),
-                           StopEventId(label.firstEvent +
-                                       reachedIndex(label.trip,
-                                                    label.hop + currentRound)),
-                           parent));
+    if ((int)label.hop + (int)currentRound + 1 < 16) {
+      queue.push(
+          currentRound + label.hop,
+          TripLabel(StopEventId(label.stopEvent + label.firstEvent),
+                    StopEventId(
+                        label.firstEvent +
+                        reachedIndex(label.trip, label.hop + currentRound + 1)),
+                    parent));
       reachedIndex.update(label.trip, StopIndex(label.stopEvent),
-                          label.hop + currentRound);
+                          label.hop + currentRound + 1);
     }
   }
 

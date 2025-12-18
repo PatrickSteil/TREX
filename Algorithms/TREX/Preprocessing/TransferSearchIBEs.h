@@ -110,8 +110,8 @@ public:
       : data(data), edgesToInsert(), queue(data.numberOfStopEvents()),
         edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.numberOfRoutes()),
-        toBeUnpacked(data.numberOfStopEvents()),
+        routeLabels(data.numberOfRoutes()), toBeUnpacked(),
+        /* toBeUnpacked(data.numberOfStopEvents()), */
         fromStopEventId(data.stopEventGraph.numEdges()),
         /* lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
          */
@@ -169,7 +169,10 @@ public:
 
     enqueue(trip, stopIndex);
     scanTrips(16);
-    unpack();
+
+    // pass starting event to the method
+    const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
+    unpack(StopEventId(firstEvent + stopIndex));
     profiler.done();
   }
 
@@ -210,10 +213,14 @@ private:
           StopId currentStop = data.getStopOfStopEvent(j);
           /* toBeUnpacked.insert(i, !isStopInCell(currentStop)); */
           if (!isStopInCell(currentStop)) {
-            toBeUnpacked.insert(i);
+            toBeUnpacked.insert(std::uint64_t((i << 8) | currentRoundNumber));
+            break;
           }
         }
       }
+
+      if (currentRoundNumber == 15)
+        break;
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
@@ -291,24 +298,27 @@ private:
   }
 
   // all marked events which we want to marks as local for the next level
-  inline void unpack() {
-    // we need to loop over the collected queue elements,
-    // and for each element, we stored the latest ('das hinterste') event which
-    // we want to mark as local
-    auto &indexToLoopOver = toBeUnpacked.getValues();
+  inline void unpack(const StopEventId from) {
+    /* auto &indexToLoopOver = toBeUnpacked.getValues(); */
 
-    for (size_t i(0); i < indexToLoopOver.size(); ++i) {
-#ifdef ENABLE_PREFETCH
-      if (i + 4 < indexToLoopOver.size()) {
-        __builtin_prefetch(&queue[indexToLoopOver[i + 4]]);
-      }
-#endif
-      unpackStopEvent(indexToLoopOver[i]);
+    /* for (size_t i(0); i < indexToLoopOver.size(); ++i) { */
+    /* #ifdef ENABLE_PREFETCH */
+    /*       if (i + 4 < indexToLoopOver.size()) { */
+    /*         __builtin_prefetch(&queue[std::uint64_t(indexToLoopOver[i + 4] >>
+     * 8)]); */
+    /*       } */
+    /* #endif */
+    for (std::uint64_t value : toBeUnpacked) {
+      if (std::uint8_t(value & ((1 << 9) - 1)) >= 16)
+        continue;
+      unpackStopEvent(from, std::uint64_t(value >> 8),
+                      std::uint8_t(value & ((1 << 9) - 1)));
     }
   }
 
   // unpacks a reached stop event
-  inline void unpackStopEvent(size_t index) {
+  inline void unpackStopEvent(const StopEventId from, size_t index,
+                              uint8_t currentHopCounter) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
@@ -321,38 +331,41 @@ private:
 
     // new vertices for the shortcut
     StopEventId toVertex = label.begin;
-    StopEventId fromVertex = noStopEvent; // will be assigned
+    StopEventId fromVertex = from;
 
-    uint8_t currentHopCounter(0);
+    /*     uint8_t currentHopCounter(0); */
 
-    while (currentEdge != noEdge) {
-      // commented this out since I want to create shortcuts, hence i need to
-      // rewind all transfers, even if i have already seen it.
-      /* if (lastExtractedRun[currentEdge] == currentRun) return; */
-      /* lastExtractedRun[currentEdge] = currentRun; */
+    /*     while (currentEdge != noEdge) { */
+    /*       // commented this out since I want to create shortcuts, hence i
+     * need to */
+    /*       // rewind all transfers, even if i have already seen it. */
+    /*       /1* if (lastExtractedRun[currentEdge] == currentRun) return; *1/ */
+    /*       /1* lastExtractedRun[currentEdge] = currentRun; *1/ */
 
-      /* // set the locallevel of the events */
-      fromVertex = fromStopEventId[currentEdge];
-      AssertMsg(currentHopCounter <
-                    256 - data.stopEventGraph.get(Hop, currentEdge),
-                "Current Hop Counter too large!");
-      currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
+    /*       /1* // set the locallevel of the events *1/ */
+    /*       fromVertex = fromStopEventId[currentEdge]; */
+    /*       AssertMsg(currentHopCounter < */
+    /*                     256 - data.stopEventGraph.get(Hop, currentEdge), */
+    /*                 "Current Hop Counter too large!"); */
+    /*       currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
 
-      /* data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1); */
+    /*       /1* data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
+     * *1/ */
 
-      index = label.parent;
-      label = queue[index];
-      currentEdge = label.parentTransfer;
-    }
+    /*       index = label.parent; */
+    /*       label = queue[index]; */
+    /*       currentEdge = label.parentTransfer; */
+    /*     } */
 
     totalLengthOfExtractedPaths += currentHopCounter;
 
     AssertMsg(currentHopCounter > 0,
               "The unrolling did not work as exxpected!");
 
-    AssertMsg(
-        index == 0,
-        "The origin of the journey does not start with the incomming event!");
+    /* AssertMsg( */
+    /*     index == 0, */
+    /*     "The origin of the journey does not start with the incomming
+     * event!"); */
 
     /* // only add a shortcut if we can skip at least 2 transfers */
     /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
@@ -420,7 +433,18 @@ private:
 
   Profiler profiler;
 
-  IndexedSet<false, size_t> toBeUnpacked;
+  /*   union CustomPair { */
+  /*     std::uint64_t value; */
+
+  /*     std::uint64_t getIndex() const { return std::uint64_t(value >> 8); } */
+
+  /*     std::uint8_t getCurrentRound() const { */
+  /*       return std::uint8_t(value & ((1 << 9) - 1)); */
+  /*     } */
+  /*   }; */
+
+  std::set<std::uint64_t> toBeUnpacked;
+  /* IndexedSet<false, std::uint64_t> toBeUnpacked; */
   /* IndexedSetBranchless<size_t> toBeUnpacked; */
 
   // same as FromVertex, but for the stopEventGraph, it is not defined

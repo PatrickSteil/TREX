@@ -73,7 +73,7 @@ static constexpr const __m128i MAX_MASKS[16] = {0x0000000000000000,
 //! This ReachedIndex is used for the TB::ProfileQuery. It uses SIMD intrisics
 //! to allow for fast updates.
 class ProfileReachedIndexSIMD {
- private:
+private:
   //! This union holds the values (aligned to use SIMD intrisics)
   union alignas(16) ReachedElement {
     ReachedElement() {}
@@ -81,10 +81,9 @@ class ProfileReachedIndexSIMD {
     u_int8_t values[16];
   };
 
- public:
-  ProfileReachedIndexSIMD(const Data& data)
-      : data(data),
-        defaultLabels(data.numberOfTrips()),
+public:
+  ProfileReachedIndexSIMD(const Data &data)
+      : data(data), defaultLabels(data.numberOfTrips()),
         labels(data.numberOfTrips()) {
     for (TripId trip(0); trip < data.numberOfTrips(); ++trip) {
       std::fill(std::begin(defaultLabels[trip].values),
@@ -99,7 +98,7 @@ class ProfileReachedIndexSIMD {
                              const uint8_t round = 1) noexcept {
     assert(data.isTrip(trip));
     assert(0 < round);
-    assert(round < 16);
+    assert(round  < 16);
 
     return getPosition(trip, round) <= position;
   }
@@ -123,13 +122,13 @@ class ProfileReachedIndexSIMD {
       labels[tr].mValues = _mm_min_epu8(labels[tr].mValues, FILTER);
   }
 
-  inline u_int8_t& operator()(const TripId trip,
+  inline u_int8_t &operator()(const TripId trip,
                               const uint8_t round = 1) noexcept {
     return getPosition(trip, round);
   }
 
- private:
-  inline u_int8_t& getPosition(const TripId trip,
+private:
+  inline u_int8_t &getPosition(const TripId trip,
                                const uint8_t round = 1) noexcept {
     return labels[trip].values[round - 1];
   }
@@ -142,7 +141,7 @@ class ProfileReachedIndexSIMD {
     return MAX_MASKS[round];
   }
 
-  const Data& data;
+  const Data &data;
 
   std::vector<ReachedElement,
               aligned_allocator<ReachedElement, alignof(ReachedElement)>>
@@ -152,4 +151,4 @@ class ProfileReachedIndexSIMD {
       labels;
 };
 
-}  // namespace TripBased
+} // namespace TripBased

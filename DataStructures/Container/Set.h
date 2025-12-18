@@ -36,24 +36,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Helpers/Vector/Permutation.h"
 #include "../../Helpers/Vector/Vector.h"
 
-template <typename VALUE>
-class Set : public std::set<VALUE> {
- public:
+template <typename VALUE> class Set : public std::set<VALUE> {
+public:
   using Value = VALUE;
   using Type = Set<Value>;
 
- private:
+private:
   using Super = std::set<Value>;
 
- public:
-  inline bool contains(const Value& value) const noexcept {
+public:
+  inline bool contains(const Value &value) const noexcept {
     return Super::count(value) == 1;
   }
 };
 
 template <bool RESIZEABLE = false, typename VALUE_TYPE = size_t>
 class IndexedSet {
- public:
+public:
   static constexpr bool Resizeable = RESIZEABLE;
   using ValueType = VALUE_TYPE;
   using Type = IndexedSet<Resizeable, ValueType>;
@@ -62,30 +61,29 @@ class IndexedSet {
       std::numeric_limits<size_t>::max();
   using Iterator = typename std::vector<ValueType>::const_iterator;
 
- public:
+public:
   IndexedSet(const size_t initialCapacity = 0)
       : indices(initialCapacity, NotContained) {}
 
-  IndexedSet(const size_t initialCapacity, const std::vector<ValueType>& values)
+  IndexedSet(const size_t initialCapacity, const std::vector<ValueType> &values)
       : indices(initialCapacity, NotContained) {
     for (const ValueType value : values) {
       insert(value);
     }
   }
 
-  IndexedSet(const std::vector<ValueType>& values)
+  IndexedSet(const std::vector<ValueType> &values)
       : IndexedSet(ValueType(Vector::max(values) + 1), values) {}
 
   IndexedSet(const Construct::CompleteTag, const size_t size)
-      : indices(Vector::id<size_t>(size)),
-        values(Vector::id<ValueType>(size)) {}
+      : indices(Vector::id<size_t>(size)), values(Vector::id<ValueType>(size)) {
+  }
 
-  IndexedSet(IO::Deserialization& deserialize) {
+  IndexedSet(IO::Deserialization &deserialize) {
     this->deserialize(deserialize);
   }
 
-  template <typename T>
-  inline operator std::vector<T>() const noexcept {
+  template <typename T> inline operator std::vector<T>() const noexcept {
     std::vector<T> result;
     result.reserve(values.size());
     for (const ValueType value : values) {
@@ -94,7 +92,7 @@ class IndexedSet {
     return result;
   }
 
-  inline const std::vector<ValueType>& getValues() const noexcept {
+  inline const std::vector<ValueType> &getValues() const noexcept {
     return values;
   }
 
@@ -132,7 +130,8 @@ class IndexedSet {
 
   inline bool contains(const ValueType value) noexcept {
     if (Resizeable) {
-      if ((size_t)value >= capacity()) indices.resize(value + 1, NotContained);
+      if ((size_t)value >= capacity())
+        indices.resize(value + 1, NotContained);
     } else {
       AssertMsg((size_t)value < capacity(),
                 "Value " << value << " is out of range!");
@@ -141,21 +140,23 @@ class IndexedSet {
   }
 
   inline bool insert(const ValueType value) noexcept {
-    if (contains(value)) return false;
+    if (contains(value))
+      return false;
     indices[value] = values.size();
     values.emplace_back(value);
     return true;
   }
 
   template <typename TYPE>
-  inline void insert(const std::vector<TYPE>& range) noexcept {
+  inline void insert(const std::vector<TYPE> &range) noexcept {
     for (const ValueType id : range) {
       insert(id);
     }
   }
 
   inline bool remove(const ValueType value) noexcept {
-    if (!contains(value)) return false;
+    if (!contains(value))
+      return false;
     values[indices[value]] = values.back();
     indices[values.back()] = indices[value];
     indices[value] = NotContained;
@@ -177,24 +178,26 @@ class IndexedSet {
     values.clear();
   }
 
-  inline void applyPermutation(const Permutation& permutation) noexcept {
+  inline void applyPermutation(const Permutation &permutation) noexcept {
     permutation.permutate(indices);
     permutation.mapPermutation(values);
   }
 
-  inline bool operator==(const Type& other) const noexcept {
-    if (size() != other.size()) return false;
+  inline bool operator==(const Type &other) const noexcept {
+    if (size() != other.size())
+      return false;
     for (const ValueType id : other) {
-      if (!contains(id)) return false;
+      if (!contains(id))
+        return false;
     }
     return true;
   }
 
-  inline void serialize(IO::Serialization& serialize) const noexcept {
+  inline void serialize(IO::Serialization &serialize) const noexcept {
     serialize(indices, values);
   }
 
-  inline void deserialize(IO::Deserialization& deserialize) noexcept {
+  inline void deserialize(IO::Deserialization &deserialize) noexcept {
     deserialize(indices, values);
   }
 
@@ -204,34 +207,34 @@ class IndexedSet {
     return result;
   }
 
- private:
+private:
   std::vector<size_t> indices;
   std::vector<ValueType> values;
 };
 
-template <size_t CAPACITY = 32, typename VALUE_TYPE = size_t>
-class SmallSet {
- public:
+template <size_t CAPACITY = 32, typename VALUE_TYPE = size_t> class SmallSet {
+public:
   inline constexpr static size_t Capacity = CAPACITY;
   using ValueType = VALUE_TYPE;
   using Type = SmallSet<Capacity, ValueType>;
 
   class Iterator {
-   public:
-    Iterator(const std::bitset<Capacity>* data, const size_t i)
+  public:
+    Iterator(const std::bitset<Capacity> *data, const size_t i)
         : data(data), i(i) {}
-    inline bool operator!=(const Iterator& other) const noexcept {
+    inline bool operator!=(const Iterator &other) const noexcept {
       return i != other.i;
     }
     inline ValueType operator*() const noexcept { return ValueType(i); }
-    inline Iterator& operator++() noexcept {
+    inline Iterator &operator++() noexcept {
       do {
         ++i;
       } while (i < Capacity && !(*data)[i]);
       return *this;
     }
-    inline Iterator& operator+=(const size_t n) noexcept {
-      for (size_t j = 0; j < n; j++) ++(*this);
+    inline Iterator &operator+=(const size_t n) noexcept {
+      for (size_t j = 0; j < n; j++)
+        ++(*this);
       return *this;
     }
     inline Iterator operator+(const size_t n) const noexcept {
@@ -241,14 +244,14 @@ class SmallSet {
       return *(*this + n);
     }
 
-   private:
-    const std::bitset<Capacity>* data;
+  private:
+    const std::bitset<Capacity> *data;
     size_t i;
   };
 
- public:
+public:
   SmallSet() {}
-  SmallSet(const std::vector<ValueType>& values) {
+  SmallSet(const std::vector<ValueType> &values) {
     for (const ValueType value : values) {
       insert(value);
     }
@@ -283,19 +286,21 @@ class SmallSet {
   }
 
   inline bool insert(const ValueType value) noexcept {
-    if (contains(value)) return false;
+    if (contains(value))
+      return false;
     data[value] = true;
     return true;
   }
 
   inline bool remove(const ValueType value) noexcept {
-    if (!contains(value)) return false;
+    if (!contains(value))
+      return false;
     data[value] = false;
     return true;
   }
 
   inline void clear() noexcept { data.reset(); }
 
- private:
+private:
   std::bitset<Capacity> data;
 };
