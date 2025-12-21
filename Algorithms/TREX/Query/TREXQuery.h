@@ -430,7 +430,8 @@ private:
                        StopEventId(label.firstEvent + label.stopEvent))
                 << ", lcl: " << (int)lcl << std::endl;
     }
-    if (lcl < label.localLevel) [[likely]] {
+    if (0 < std::min(lclSource, lclTarget) && lcl != label.localLevel)
+        [[likely]] {
       profiler.countMetric(DISCARDED_EDGE);
       reachedIndex.update(label.trip, StopIndex(label.stopEvent),
                           currentRound + label.hop + 1);
