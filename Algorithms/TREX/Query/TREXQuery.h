@@ -36,6 +36,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../TripBased/Query/ProfileReachedIndexSIMD.h"
 #include "../../TripBased/Query/Profiler.h"
 
+#define SHOW_DEBUG false
+
 namespace TripBased {
 
 template <typename PROFILER = NoProfiler> class TREXQuery {
@@ -247,11 +249,11 @@ private:
           data.raptorData.transferGraph.get(TravelTime, edge);
     }
     transferToTarget[targetStop] = 0;
-    if (sourceStop == targetStop)
+    if (sourceStop == targetStop) [[unlikely]]
       addTargetLabel(sourceDepartureTime);
     for (const Edge edge : reverseTransferGraph.edgesFrom(targetStop)) {
       const Vertex stop = reverseTransferGraph.get(ToVertex, edge);
-      if (stop == sourceStop)
+      if (stop == sourceStop) [[unlikely]]
         addTargetLabel(sourceDepartureTime +
                        reverseTransferGraph.get(TravelTime, edge));
       transferToTarget[stop] = reverseTransferGraph.get(TravelTime, edge);
@@ -332,18 +334,21 @@ private:
     u_int8_t currentRound = 0;
     while (currentRound < MAX_ROUNDS &&
            queue.laterQueueHasElement(currentRound)) {
-      std::cout << "CurrenRound " << (int)currentRound << ", "
-                << queue.size(currentRound) << std::endl;
+      if (SHOW_DEBUG)
+        std::cout << "CurrenRound " << (int)currentRound << ", "
+                  << queue.size(currentRound) << std::endl;
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
       while (!queue.empty(currentRound)) {
-        const TripLabel &label = queue.front(currentRound);
+        TripLabel &label = queue.front(currentRound);
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
+          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime) {
+            label.end = j;
             break;
+          }
           const int timeToTarget = transferToTarget[data.arrivalEvents[j].stop];
           if (timeToTarget != INFTY) {
             addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget,
@@ -372,11 +377,18 @@ private:
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
+
+    if (SHOW_DEBUG) {
+      std::cout << "Enqueue trip " << (int)trip << " at index " << (int)index
+                << " to 0 queue!\n";
+      std::cout << "\tReached Index: " << (int)reachedIndex(trip, 1) << "\n";
+    }
+
     if (reachedIndex.alreadyReached(trip, index, 1))
       return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue.push(0, TripLabel(StopEventId(firstEvent + index),
-                            StopEventId(firstEvent + reachedIndex(trip))));
+                            StopEventId(firstEvent + reachedIndex(trip, 1))));
     reachedIndex.update(trip, index, 1);
   }
 
@@ -386,46 +398,72 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
+    if (currentRound + label.hop + 1 >= 16)
+      return;
+
+    if (SHOW_DEBUG) {
+      std::cout << "Enqueue trip " << (int)label.trip << " at index "
+                << (int)label.stopEvent << "\n";
+      std::cout << "\tLabel Stop "
+                << (int)data.getStopOfStopEvent(
+                       StopEventId(label.firstEvent + label.stopEvent))
+                << " and level " << (int)label.localLevel << " and hop "
+                << (int)label.hop << "\n";
+      std::cout << "\tReached Index: "
+                << (int)reachedIndex(label.trip, currentRound + label.hop + 1)
+                << "\n";
+    }
     if (reachedIndex.alreadyReached(label.trip, label.stopEvent,
-                                    currentRound + 1)) [[likely]]
+                                    currentRound + label.hop + 1)) [[likely]]
       return;
 
     int lclSource = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
                                                                 sourceCellId));
     int lclTarget = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
                                                                 targetCellId));
-    auto lcl = std::min(lclSource, lclTarget);
-    /* std::cout << "Query s: " << sourceStop << " -> t: " << targetStop << ",
-     * s: " */
-    /*           << data.getStopOfStopEvent( */
-    /*                  StopEventId(label.firstEvent + label.stopEvent)) */
-    /*           << ", lcl: " << (int)lcl << std::endl; */
+    auto lcl = std::max(lclSource, lclTarget);
 
-    if (lcl != label.localLevel) [[likely]] {
+    if (SHOW_DEBUG) {
+      std::cout << "Query s: " << sourceStop << " -> t: " << targetStop
+                << ", s : "
+                << data.getStopOfStopEvent(
+                       StopEventId(label.firstEvent + label.stopEvent))
+                << ", lcl: " << (int)lcl << std::endl;
+    }
+    if (lcl < label.localLevel) [[likely]] {
       profiler.countMetric(DISCARDED_EDGE);
-      /* reachedIndex.update(label.trip, StopIndex(label.stopEvent), */
-      /*                     currentRound + 1); */
+      reachedIndex.update(label.trip, StopIndex(label.stopEvent),
+                          currentRound + label.hop + 1);
       return;
     }
 
     assert(label.hop < 16);
+    assert(label.hop + currentRound > 0);
 
-    if ((int)label.hop + (int)currentRound + 1 < 16) {
-      queue.push(
-          currentRound + label.hop,
-          TripLabel(StopEventId(label.stopEvent + label.firstEvent),
-                    StopEventId(
-                        label.firstEvent +
-                        reachedIndex(label.trip, label.hop + currentRound + 1)),
-                    parent));
+    if ((int)label.hop + (int)currentRound < 16) {
+      if (SHOW_DEBUG)
+        std::cout << "\t> Enqueue\n";
+      queue.push(currentRound + label.hop,
+                 TripLabel(StopEventId(label.stopEvent + label.firstEvent),
+                           StopEventId(label.firstEvent +
+                                       reachedIndex(label.trip,
+                                                    label.hop + currentRound)),
+                           parent));
       reachedIndex.update(label.trip, StopIndex(label.stopEvent),
-                          label.hop + currentRound + 1);
+                          label.hop + currentRound);
     }
   }
 
   inline void addTargetLabel(const int newArrivalTime,
                              const u_int32_t parent = -1) noexcept {
     profiler.countMetric(METRIC_ADD_JOURNEYS);
+
+    if (SHOW_DEBUG) {
+      std::cout << "Add Arr Time: " << newArrivalTime
+                << ", Nr Trips: " << targetLabels.size() << "\n";
+      std::cout << "\tPrev Arr Time: " << targetLabels.back().arrivalTime
+                << std::endl;
+    }
     if (newArrivalTime < targetLabels.back().arrivalTime) {
       targetLabels.back() = TargetLabel(newArrivalTime, parent);
       minArrivalTime = newArrivalTime;

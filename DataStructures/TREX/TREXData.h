@@ -48,6 +48,12 @@ public:
   TREXData(const std::string &fileName) { deserialize(fileName); }
 
 public:
+  std::uint8_t getLowestCommonLevel(const StopId left,
+                                    const StopId right) const {
+    return (16 - std::countl_zero(
+                     static_cast<uint16_t>(cellIds[left] ^ cellIds[right])));
+  }
+
   inline void addInformationToStopEventGraph() noexcept {
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);
