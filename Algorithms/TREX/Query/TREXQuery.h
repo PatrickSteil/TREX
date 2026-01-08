@@ -357,16 +357,13 @@ private:
 
         // do not relax into a 17'th round or some
         if (currentRound + 1 < MAX_ROUNDS) {
-          // TODO unroll later
-          for (StopEventId j = label.begin; j < label.end; ++j) {
-            const auto edgeRangeBegin =
-                data.stopEventGraph.beginEdgeFrom(Vertex(j));
-            const auto edgeRangeEnd =
-                data.stopEventGraph.beginEdgeFrom(Vertex(j + 1));
-            for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
-              profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-              enqueue(edge, -1, currentRound, j);
-            }
+          const auto edgeRangeBegin =
+              data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
+          const auto edgeRangeEnd =
+              data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
+          for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
+            profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+            enqueue(edge, -1, currentRound);
           }
         }
         queue.pop(currentRound);
@@ -395,7 +392,7 @@ private:
   }
 
   inline void enqueue(const Edge edge, const size_t parent,
-                      const int currentRound, const StopEventId from) noexcept {
+                      const int currentRound) noexcept {
     assert(currentRound + 1 < 16);
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
@@ -413,8 +410,6 @@ private:
 
     if (SHOW_DEBUG) {
       std::cout << "Current Round: " << (int)currentRound << " .. ";
-      std::cout << "Transfer from " << (int)from << " to "
-                << (int)label.stopEvent << std::endl;
       std::cout << "Enqueue trip " << (int)label.trip << " at index "
                 << (int)(label.stopEvent - label.firstEvent) << ", route "
                 << (int)data.routeOfTrip[label.trip] << "\n";

@@ -310,16 +310,16 @@ public:
     TripBased::TREXQuery<TripBased::AggregateProfiler> algorithm(data);
 
     const size_t n = getParameter<size_t>("Number of queries");
-    /* const std::vector<StopQuery> queries = */
-    /*     generateRandomStopQueries(data.numberOfStops(), n); */
+    const std::vector<StopQuery> queries =
+        generateRandomStopQueries(data.numberOfStops(), n);
 
-    const std::vector<StopQuery> queries = {
-        StopQuery(StopId(2766), StopId(3716), 4873),
-        StopQuery(StopId(1683), StopId(97), 9580),
-        StopQuery(StopId(120), StopId(772), 9321),
-        StopQuery(StopId(3562), StopId(3373), 13929),
-        StopQuery(StopId(1293), StopId(1032), 10356),
-        StopQuery(StopId(1547), StopId(2693), 48220)};
+    /* const std::vector<StopQuery> queries = { */
+    /*     StopQuery(StopId(2766), StopId(3716), 4873), */
+    /*     StopQuery(StopId(1683), StopId(97), 9580), */
+    /*     StopQuery(StopId(120), StopId(772), 9321), */
+    /*     StopQuery(StopId(3562), StopId(3373), 13929), */
+    /*     StopQuery(StopId(1293), StopId(1032), 10356), */
+    /*     StopQuery(StopId(1547), StopId(2693), 48220)}; */
 
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});
@@ -356,11 +356,12 @@ public:
       /*                 std::cout << std::endl; */
       /*             } */
 
-      for (auto &arr : algorithm.getArrivals()) {
-        std::cout << "Trips: " << (int)arr.numberOfTrips
-                  << ", time: " << (int)arr.arrivalTime << std::endl;
-        result[i].push_back(std::make_pair(arr.numberOfTrips, arr.arrivalTime));
-      }
+      /* for (auto &arr : algorithm.getArrivals()) { */
+      /*   std::cout << "Trips: " << (int)arr.numberOfTrips */
+      /*             << ", time: " << (int)arr.arrivalTime << std::endl; */
+      /*   result[i].push_back(std::make_pair(arr.numberOfTrips,
+       * arr.arrivalTime)); */
+      /* } */
 
       i += 1;
     }
@@ -385,27 +386,27 @@ public:
       for (const StopQuery &query : queries) {
         tripAlgorithm.run(query.source, query.departureTime, query.target);
         numberOfJourneys += tripAlgorithm.getJourneys().size();
-        std::cout << "TB Query" << std::endl;
-        for (auto &journey : tripAlgorithm.getJourneys()) {
-          std::cout << query << std::endl;
-          for (auto &leg : journey) {
-            std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
-                      << leg.departureTime << " -> " << leg.arrivalTime
-                      << (leg.usesRoute ? ", route: " : ", transfer: ")
-                      << (int)leg.routeId;
-            std::cout << std::endl;
-          }
-          std::cout << std::endl;
-        }
+        /* std::cout << "TB Query" << std::endl; */
+        /* for (auto &journey : tripAlgorithm.getJourneys()) { */
+        /*   std::cout << query << std::endl; */
+        /*   for (auto &leg : journey) { */
+        /*     std::cout << (int)leg.from << " -> " << (int)leg.to << " @ " */
+        /*               << leg.departureTime << " -> " << leg.arrivalTime */
+        /*               << (leg.usesRoute ? ", route: " : ", transfer: ") */
+        /*               << (int)leg.routeId; */
+        /*     std::cout << std::endl; */
+        /*   } */
+        /*   std::cout << std::endl; */
+        /* } */
 
-        tripResult[i].reserve(tripAlgorithm.getArrivals().size());
+        /* tripResult[i].reserve(tripAlgorithm.getArrivals().size()); */
 
-        for (auto &arr : tripAlgorithm.getArrivals()) {
-          std::cout << "Trips: " << (int)arr.numberOfTrips
-                    << ", time: " << (int)arr.arrivalTime << std::endl;
-          tripResult[i].push_back(
-              std::make_pair(arr.numberOfTrips, arr.arrivalTime));
-        }
+        /* for (auto &arr : tripAlgorithm.getArrivals()) { */
+        /*   std::cout << "Trips: " << (int)arr.numberOfTrips */
+        /*             << ", time: " << (int)arr.arrivalTime << std::endl; */
+        /*   tripResult[i].push_back( */
+        /*       std::make_pair(arr.numberOfTrips, arr.arrivalTime)); */
+        /* } */
 
         i += 1;
       }

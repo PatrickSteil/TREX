@@ -448,14 +448,14 @@ private:
 
       parent = label.parent;
 
-      std::cout << "@@ DepStopEvent " << (int)departureStopEvent
-                << ", Trip: " << data.tripOfStopEvent[departureStopEvent]
-                << ", Route: " << route << "@@\n";
-      std::cout << "@@ ArrStopEvent " << (int)arrivalStopEvent
-                << ", Trip: " << data.tripOfStopEvent[arrivalStopEvent]
-                << "@@\n";
+      /* std::cout << "@@ DepStopEvent " << (int)departureStopEvent */
+      /*           << ", Trip: " << data.tripOfStopEvent[departureStopEvent] */
+      /*           << ", Route: " << route << "@@\n"; */
+      /* std::cout << "@@ ArrStopEvent " << (int)arrivalStopEvent */
+      /*           << ", Trip: " << data.tripOfStopEvent[arrivalStopEvent] */
+      /*           << "@@\n"; */
     }
-    std::cout << "@@\n\n";
+    /* std::cout << "@@\n\n"; */
     const int timeFromSource = transferFromSource[departureStop];
     result.emplace_back(sourceStop, departureStop, sourceDepartureTime,
                         sourceDepartureTime + timeFromSource, noEdge);

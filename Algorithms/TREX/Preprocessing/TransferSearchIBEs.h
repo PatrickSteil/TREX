@@ -159,8 +159,6 @@ public:
     AssertMsg((stopIndex + 1) < data.numberOfStopsInTrip(trip),
               "StopIndex " << (int)(stopIndex + 1) << " is not valid!");
 
-    /* bool debug = false; */
-    bool debug = (trip == TripId(30802));
     profiler.start();
     clear();
 
@@ -172,7 +170,7 @@ public:
     scanTrips(16);
 
     // pass starting event to the method
-    unpack(debug);
+    unpack();
     profiler.done();
   }
 
@@ -299,7 +297,7 @@ private:
   }
 
   // all marked events which we want to marks as local for the next level
-  inline void unpack(bool debug = false) {
+  inline void unpack() {
     auto &indexToLoopOver = toBeUnpacked.getValues();
 
     for (size_t i(0); i < indexToLoopOver.size(); ++i) {
@@ -308,15 +306,12 @@ private:
         __builtin_prefetch(&queue[indexToLoopOver[i + 4]]);
       }
 #endif
-      unpackStopEvent(indexToLoopOver[i], debug);
+      unpackStopEvent(indexToLoopOver[i]);
     }
   }
 
   // unpacks a reached stop event
-  inline void unpackStopEvent(size_t index, bool debug = false) {
-    if (debug) {
-      std::cout << "UnpackStopEvent, index: " << (int)index << std::endl;
-    }
+  inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
@@ -351,8 +346,11 @@ private:
                 "Current Hop Counter too large!");
       currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
 
-      data.stopEventGraph.set(LocalLevel, currentEdge,
-                              static_cast<uint16_t>(1 << (minLevel)));
+      /* uint16_t prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
+       */
+      /* data.stopEventGraph.set(LocalLevel, currentEdge, */
+      /*                         prevLevel | static_cast<uint16_t>(1 <<
+       * minLevel)); */
 
       index = label.parent;
       label = queue[index];
@@ -383,12 +381,6 @@ private:
     // STATS
     ++numAddedShortcuts;
     /* } */
-
-    if (debug) {
-      std::cout << "ShortCut from " << (int)fromVertex << " -> "
-                << (int)toVertex << ", hopCounter: " << (int)currentHopCounter
-                << ", level: " << (int)(minLevel + 1) << std::endl;
-    }
   }
 
 public:
