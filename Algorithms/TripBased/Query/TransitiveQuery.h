@@ -434,6 +434,7 @@ private:
           (edge == noEdge)
               ? targetLabel.arrivalTime
               : arrivalTime + data.stopEventGraph.get(TravelTime, edge);
+
       result.emplace_back(arrivalStop, departureStop, arrivalTime,
                           transferArrivalTime, edge);
 
@@ -446,7 +447,15 @@ private:
                           arrivalTime, true, route);
 
       parent = label.parent;
+
+      std::cout << "@@ DepStopEvent " << (int)departureStopEvent
+                << ", Trip: " << data.tripOfStopEvent[departureStopEvent]
+                << ", Route: " << route << "@@\n";
+      std::cout << "@@ ArrStopEvent " << (int)arrivalStopEvent
+                << ", Trip: " << data.tripOfStopEvent[arrivalStopEvent]
+                << "@@\n";
     }
+    std::cout << "@@\n\n";
     const int timeFromSource = transferFromSource[departureStop];
     result.emplace_back(sourceStop, departureStop, sourceDepartureTime,
                         sourceDepartureTime + timeFromSource, noEdge);

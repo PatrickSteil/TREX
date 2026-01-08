@@ -36,6 +36,28 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // NOTE: die Länge der extracted paths stimmt nicht, weil ich beim entpacken
 // aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
 namespace TripBased {
+// Stores the shortcut information, which we insert into the
+// augmentedStopEventGraph we keep track of the number of transfer we hid
+// inside
+struct ShortCutToInsert {
+  StopEventId fromStopEventId;
+  StopEventId toStopEventId;
+  uint16_t level;
+  uint8_t hopCounter;
+
+  ShortCutToInsert(StopEventId fromStopEventId, StopEventId toStopEventId,
+                   uint8_t hopCounter, uint8_t level)
+      : fromStopEventId(fromStopEventId), toStopEventId(toStopEventId),
+        level(level), hopCounter(hopCounter) {}
+
+  bool operator==(const ShortCutToInsert &other) const = default;
+
+  auto operator<=>(const ShortCutToInsert &other) const {
+    return std::tie(fromStopEventId, toStopEventId, level, hopCounter) <=>
+           std::tie(other.fromStopEventId, other.toStopEventId, other.level,
+                    other.hopCounter);
+  }
+};
 
 template <typename PROFILER = NoProfiler> class TransferSearch {
 public:
@@ -80,29 +102,6 @@ private:
     }
     u_int32_t numberOfTrips;
     std::vector<int> departureTimes;
-  };
-
-  // Stores the shortcut information, which we insert into the
-  // augmentedStopEventGraph we keep track of the number of transfer we hid
-  // inside
-  struct ShortCutToInsert {
-    StopEventId fromStopEventId;
-    StopEventId toStopEventId;
-    uint8_t hopCounter;
-    uint8_t level;
-
-    ShortCutToInsert(StopEventId fromStopEventId, StopEventId toStopEventId,
-                     uint8_t hopCounter, uint8_t level)
-        : fromStopEventId(fromStopEventId), toStopEventId(toStopEventId),
-          hopCounter(hopCounter), level(level) {}
-
-    bool operator==(const ShortCutToInsert &other) const = default;
-
-    auto operator<=>(const ShortCutToInsert &other) const {
-      return std::tie(fromStopEventId, toStopEventId, hopCounter) <=>
-             std::tie(other.fromStopEventId, other.toStopEventId,
-                      other.hopCounter);
-    }
   };
 
 public:
@@ -160,6 +159,8 @@ public:
     AssertMsg((stopIndex + 1) < data.numberOfStopsInTrip(trip),
               "StopIndex " << (int)(stopIndex + 1) << " is not valid!");
 
+    /* bool debug = false; */
+    bool debug = (trip == TripId(30802));
     profiler.start();
     clear();
 
@@ -171,7 +172,7 @@ public:
     scanTrips(16);
 
     // pass starting event to the method
-    unpack();
+    unpack(debug);
     profiler.done();
   }
 
@@ -298,7 +299,7 @@ private:
   }
 
   // all marked events which we want to marks as local for the next level
-  inline void unpack() {
+  inline void unpack(bool debug = false) {
     auto &indexToLoopOver = toBeUnpacked.getValues();
 
     for (size_t i(0); i < indexToLoopOver.size(); ++i) {
@@ -307,12 +308,15 @@ private:
         __builtin_prefetch(&queue[indexToLoopOver[i + 4]]);
       }
 #endif
-      unpackStopEvent(indexToLoopOver[i]);
+      unpackStopEvent(indexToLoopOver[i], debug);
     }
   }
 
   // unpacks a reached stop event
-  inline void unpackStopEvent(size_t index) {
+  inline void unpackStopEvent(size_t index, bool debug = false) {
+    if (debug) {
+      std::cout << "UnpackStopEvent, index: " << (int)index << std::endl;
+    }
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
@@ -326,7 +330,12 @@ private:
     ++extractedPaths;
 
     // new vertices for the shortcut
-    StopEventId toVertex = label.begin;
+    AssertMsg(label.begin > 0,
+              "This Tripsegment should have been reached at least at stop 1");
+    AssertMsg(data.tripOfStopEvent[label.begin] ==
+                  data.tripOfStopEvent[label.begin - 1],
+              "Label.begin and label.begin-1 should be on the same trip!");
+    StopEventId toVertex = StopEventId(label.begin - 1);
     StopEventId fromVertex = noStopEvent;
 
     uint8_t currentHopCounter(0);
@@ -342,7 +351,8 @@ private:
                 "Current Hop Counter too large!");
       currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
 
-      data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
+      data.stopEventGraph.set(LocalLevel, currentEdge,
+                              static_cast<uint16_t>(1 << (minLevel)));
 
       index = label.parent;
       label = queue[index];
@@ -359,6 +369,8 @@ private:
         index == 0,
         "The origin of the journey does not start with the incomming event!");
 
+    AssertMsg(fromVertex > 0, "FromVertex cannot be 0, as we start at least "
+                              "from 1 stop into the trip!");
     // only add a shortcut if we can skip at least 2 transfers
     /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
     AssertMsg(fromVertex != noStopEvent,
@@ -366,11 +378,17 @@ private:
     AssertMsg(fromVertex != toVertex,
               "From- and To StopEvent should not be the same");
     edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
-                               minLevel + 1);
+                               static_cast<uint16_t>(1 << (minLevel)));
 
     // STATS
     ++numAddedShortcuts;
     /* } */
+
+    if (debug) {
+      std::cout << "ShortCut from " << (int)fromVertex << " -> "
+                << (int)toVertex << ", hopCounter: " << (int)currentHopCounter
+                << ", level: " << (int)(minLevel + 1) << std::endl;
+    }
   }
 
 public:
@@ -425,18 +443,7 @@ private:
 
   Profiler profiler;
 
-  /*   union CustomPair { */
-  /*     std::uint64_t value; */
-
-  /*     std::uint64_t getIndex() const { return std::uint64_t(value >> 8); } */
-
-  /*     std::uint8_t getCurrentRound() const { */
-  /*       return std::uint8_t(value & ((1 << 9) - 1)); */
-  /*     } */
-  /*   }; */
-
   IndexedSet<false, std::uint64_t> toBeUnpacked;
-  /* IndexedSetBranchless<size_t> toBeUnpacked; */
 
   // same as FromVertex, but for the stopEventGraph, it is not defined
   // we need to extract quickly the event from which the transfer was possible

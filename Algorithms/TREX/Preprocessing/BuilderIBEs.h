@@ -158,6 +158,34 @@ public:
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
   }
 
+  void mergeShortcutsByFromTo(std::vector<ShortCutToInsert> &shortcuts) {
+    if (shortcuts.empty())
+      return;
+
+    std::sort(shortcuts.begin(), shortcuts.end(),
+              [](const ShortCutToInsert &a, const ShortCutToInsert &b) {
+                return std::tie(a.fromStopEventId, a.toStopEventId) <
+                       std::tie(b.fromStopEventId, b.toStopEventId);
+              });
+
+    std::size_t write = 0;
+
+    for (std::size_t read = 1; read < shortcuts.size(); ++read) {
+      auto &cur = shortcuts[write];
+      auto &next = shortcuts[read];
+
+      if (cur.fromStopEventId == next.fromStopEventId &&
+          cur.toStopEventId == next.toStopEventId) {
+        cur.level |= next.level; // bitmask merge
+      } else {
+        ++write;
+        shortcuts[write] = next;
+      }
+    }
+
+    shortcuts.erase(shortcuts.begin() + write + 1, shortcuts.end());
+  }
+
   template <bool SORT_IBES = true, bool VERBOSE = true>
   inline void run() noexcept {
     profiler.start();
@@ -226,17 +254,28 @@ public:
     }
 
     profiler.startPhase();
-    DynamicTransferGraphWithLocalLevelAndHop dynamicGraph;
+    EdgeListTransferGraphWithLocalLevelAndHop dynamicGraph;
     Graph::copy(data.stopEventGraph, dynamicGraph);
 
+    std::vector<ShortCutToInsert> allShortCuts;
     for (auto &seeker : seekers) {
-      seeker.sortShortcuts();
-      for (const auto &shortcut : seeker.getShortcuts()) {
-        auto edge = dynamicGraph.addEdge(Vertex(shortcut.fromStopEventId),
-                                         Vertex(shortcut.toStopEventId));
-        dynamicGraph.set(Hop, edge, shortcut.hopCounter);
-        dynamicGraph.set(LocalLevel, edge, shortcut.level);
-      }
+      const auto &newShortCuts = seeker.getShortcuts();
+      allShortCuts.insert(allShortCuts.end(), newShortCuts.begin(),
+                          newShortCuts.end());
+    }
+
+    mergeShortcutsByFromTo(allShortCuts);
+
+    for (const auto &shortcut : allShortCuts) {
+      AssertMsg(dynamicGraph.isVertex(Vertex(shortcut.fromStopEventId)),
+                "FromStopEventId is not a valid vertex!");
+      AssertMsg(dynamicGraph.isVertex(Vertex(shortcut.toStopEventId)),
+                "ToStopEventId is not a valid vertex!");
+
+      auto edge = dynamicGraph.addEdge(Vertex(shortcut.fromStopEventId),
+                                       Vertex(shortcut.toStopEventId));
+      dynamicGraph.set(Hop, edge, shortcut.hopCounter);
+      dynamicGraph.set(LocalLevel, edge, shortcut.level);
     }
 
     Graph::move(std::move(dynamicGraph), data.stopEventGraph);
