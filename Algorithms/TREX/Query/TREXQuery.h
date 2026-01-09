@@ -341,6 +341,7 @@ private:
 
       while (!queue.empty(currentRound)) {
         TripLabel &label = queue.front(currentRound);
+
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
@@ -355,15 +356,17 @@ private:
           }
         }
 
-        // do not relax into a 17'th round or some
         if (currentRound + 1 < MAX_ROUNDS) {
-          const auto edgeRangeBegin =
-              data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
-          const auto edgeRangeEnd =
-              data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
-          for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
-            profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-            enqueue(edge, -1, currentRound);
+          // TODO reflatten
+          for (StopEventId j = label.begin; j < label.end; j++) {
+            const auto edgeRangeBegin =
+                data.stopEventGraph.beginEdgeFrom(Vertex(j));
+            const auto edgeRangeEnd =
+                data.stopEventGraph.beginEdgeFrom(Vertex(j + 1));
+            for (Edge edge = edgeRangeBegin; edge < edgeRangeEnd; edge++) {
+              profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+              enqueue(edge, -1, currentRound, j);
+            }
           }
         }
         queue.pop(currentRound);
@@ -385,6 +388,7 @@ private:
 
     if (reachedIndex.alreadyReached(trip, index, 1))
       return;
+
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue.push(0, TripLabel(StopEventId(firstEvent + index),
                             StopEventId(firstEvent + reachedIndex(trip, 1))));
@@ -392,24 +396,43 @@ private:
   }
 
   inline void enqueue(const Edge edge, const size_t parent,
-                      const int currentRound) noexcept {
+                      const int currentRound, const StopEventId from) noexcept {
     assert(currentRound + 1 < 16);
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    if (currentRound + label.hop >= 16)
+    if (currentRound + label.hop >= 16) {
+      /* if (SHOW_DEBUG) */
+      /*   std::cout << "-- round out of bounds, " << (int)(currentRound +
+       * label.hop) */
+      /*             << "\n"; */
       return;
+    }
 
-    if (data.arrivalEvents[label.stopEvent].arrivalTime >= minArrivalTime)
+    if (data.arrivalEvents[label.stopEvent].arrivalTime >= minArrivalTime) {
+      /* if (SHOW_DEBUG) */
+      /*   std::cout << "-- pruned due to arrival time " */
+      /*             << (int)(data.arrivalEvents[label.stopEvent].arrivalTime)
+       */
+      /*             << "\n"; */
       return;
+    }
 
     if (reachedIndex.alreadyReached(label.trip,
                                     label.stopEvent - label.firstEvent,
-                                    currentRound + label.hop)) [[likely]]
+                                    currentRound + label.hop)) {
+      /* if (SHOW_DEBUG) */
+      /*   std::cout << "-- trip already reached, " */
+      /*             << (int)(reachedIndex(label.trip, currentRound +
+       * label.hop)) */
+      /*             << "\n"; */
       return;
+    }
 
     if (SHOW_DEBUG) {
       std::cout << "Current Round: " << (int)currentRound << " .. ";
+      std::cout << "From " << (int)from << " to " << (int)label.stopEvent
+                << " | ";
       std::cout << "Enqueue trip " << (int)label.trip << " at index "
                 << (int)(label.stopEvent - label.firstEvent) << ", route "
                 << (int)data.routeOfTrip[label.trip] << "\n";
@@ -442,9 +465,9 @@ private:
 
     if (lcl > 0 && !(label.localLevel & (1 << (lcl - 1)))) {
       profiler.countMetric(DISCARDED_EDGE);
-      reachedIndex.update(label.trip,
-                          StopIndex(label.stopEvent - label.firstEvent),
-                          currentRound + label.hop);
+      /* reachedIndex.update(label.trip, */
+      /*                     StopIndex(label.stopEvent - label.firstEvent), */
+      /*                     currentRound + label.hop); */
       return;
     }
 

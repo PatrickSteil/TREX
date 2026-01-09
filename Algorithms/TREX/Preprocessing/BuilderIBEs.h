@@ -170,9 +170,26 @@ public:
 
     std::size_t write = 0;
 
+    AssertMsg(shortcuts[write].fromStopEventId <
+                  data.stopEventGraph.numVertices(),
+              "From Vertex " << (int)shortcuts[write].fromStopEventId
+                             << " is out of bounds! (Shortcut merging)");
+    AssertMsg(shortcuts[write].toStopEventId <
+                  data.stopEventGraph.numVertices(),
+              "To Vertex " << (int)shortcuts[write].toStopEventId
+                           << " is out of bounds! (Shortcut merging)");
     for (std::size_t read = 1; read < shortcuts.size(); ++read) {
       auto &cur = shortcuts[write];
       auto &next = shortcuts[read];
+
+      AssertMsg(shortcuts[read].fromStopEventId <
+                    data.stopEventGraph.numVertices(),
+                "From Vertex " << (int)shortcuts[read].fromStopEventId
+                               << " is out of bounds! (Shortcut merging)");
+      AssertMsg(shortcuts[read].toStopEventId <
+                    data.stopEventGraph.numVertices(),
+                "To Vertex " << (int)shortcuts[read].toStopEventId
+                             << " is out of bounds! (Shortcut merging)");
 
       if (cur.fromStopEventId == next.fromStopEventId &&
           cur.toStopEventId == next.toStopEventId) {
@@ -254,19 +271,51 @@ public:
     }
 
     profiler.startPhase();
-    EdgeListTransferGraphWithLocalLevelAndHop dynamicGraph;
-    Graph::copy(data.stopEventGraph, dynamicGraph);
+    std::vector<ShortCutToInsert> allTransfers;
 
-    std::vector<ShortCutToInsert> allShortCuts;
+    std::size_t totalNumShortcuts = data.stopEventGraph.numEdges();
+    for (auto &seeker : seekers) {
+      totalNumShortcuts += seeker.getShortcuts().size();
+    }
+
+    allTransfers.reserve(totalNumShortcuts);
+
+    std::size_t numEvents = data.stopEventGraph.numVertices();
+
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      Vertex to = data.stopEventGraph.get(ToVertex, edge);
+
+      AssertMsg(data.stopEventGraph.isVertex(Vertex(from)),
+                "From Vertex "
+                    << (int)from
+                    << "is out of bounds! (Loading from stopEventGraph)");
+      AssertMsg(data.stopEventGraph.isVertex(Vertex(to)),
+                "To Vertex "
+                    << (int)to
+                    << "is out of bounds! (Loading from stopEventGraph)");
+      allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, 0);
+    }
+
     for (auto &seeker : seekers) {
       const auto &newShortCuts = seeker.getShortcuts();
-      allShortCuts.insert(allShortCuts.end(), newShortCuts.begin(),
+      allTransfers.insert(allTransfers.end(), newShortCuts.begin(),
                           newShortCuts.end());
     }
 
-    mergeShortcutsByFromTo(allShortCuts);
+    mergeShortcutsByFromTo(allTransfers);
 
-    for (const auto &shortcut : allShortCuts) {
+    EdgeListTransferGraphWithLocalLevelAndHop dynamicGraph;
+    dynamicGraph.addVertices(numEvents);
+    dynamicGraph.reserveEdges(allTransfers.size());
+    /* Graph::copy(data.stopEventGraph, dynamicGraph); */
+
+    for (const auto &shortcut : allTransfers) {
+      AssertMsg(data.stopEventGraph.isVertex(Vertex(shortcut.fromStopEventId)),
+                "From Vertex " << (int)shortcut.fromStopEventId
+                               << " is out of bounds! (Inserting)");
+      AssertMsg(data.stopEventGraph.isVertex(Vertex(shortcut.toStopEventId)),
+                "To Vertex " << (int)shortcut.toStopEventId
+                             << " is out of bounds! (Inserting)");
       AssertMsg(dynamicGraph.isVertex(Vertex(shortcut.fromStopEventId)),
                 "FromStopEventId is not a valid vertex!");
       AssertMsg(dynamicGraph.isVertex(Vertex(shortcut.toStopEventId)),

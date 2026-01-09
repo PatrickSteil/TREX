@@ -375,6 +375,10 @@ private:
               "From StopEvent has not been assigned properly");
     AssertMsg(fromVertex != toVertex,
               "From- and To StopEvent should not be the same");
+    AssertMsg(data.stopEventGraph.isVertex(Vertex(fromVertex)),
+              "From StopEvent " << (int)fromVertex << " is not a valid vertex");
+    AssertMsg(data.stopEventGraph.isVertex(Vertex(toVertex)),
+              "To StopEvent " << (int)toVertex << " is not a valid vertex");
     edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
                                static_cast<uint16_t>(1 << (minLevel)));
 

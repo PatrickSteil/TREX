@@ -314,12 +314,24 @@ public:
         generateRandomStopQueries(data.numberOfStops(), n);
 
     /* const std::vector<StopQuery> queries = { */
-    /*     StopQuery(StopId(2766), StopId(3716), 4873), */
-    /*     StopQuery(StopId(1683), StopId(97), 9580), */
-    /*     StopQuery(StopId(120), StopId(772), 9321), */
-    /*     StopQuery(StopId(3562), StopId(3373), 13929), */
-    /*     StopQuery(StopId(1293), StopId(1032), 10356), */
-    /*     StopQuery(StopId(1547), StopId(2693), 48220)}; */
+    /*     StopQuery(StopId(597), StopId(2287), 51724), */
+    /*     StopQuery(StopId(2270), StopId(3767), 44429), */
+    /*     StopQuery(StopId(374), StopId(61), 26318), */
+    /*     StopQuery(StopId(923), StopId(2621), 19949), */
+    /*     StopQuery(StopId(3227), StopId(3715), 2705), */
+    /*     StopQuery(StopId(1076), StopId(3698), 30823), */
+    /*     StopQuery(StopId(3074), StopId(1135), 12175), */
+    /*     StopQuery(StopId(59), StopId(285), 14279), */
+    /*     StopQuery(StopId(2959), StopId(1622), 85267), */
+    /*     StopQuery(StopId(3399), StopId(1052), 55084), */
+    /*     StopQuery(StopId(1638), StopId(2723), 45164), */
+    /*     StopQuery(StopId(2662), StopId(1110), 51741), */
+    /*     StopQuery(StopId(3339), StopId(404), 54726), */
+    /*     StopQuery(StopId(1), StopId(1636), 55960), */
+    /*     StopQuery(StopId(630), StopId(26), 26333), */
+    /*     StopQuery(StopId(3723), StopId(248), 31417), */
+    /*     StopQuery(StopId(1905), StopId(2668), 21753), */
+    /*     StopQuery(StopId(1322), StopId(1067), 2855)}; */
 
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});
@@ -356,12 +368,11 @@ public:
       /*                 std::cout << std::endl; */
       /*             } */
 
-      /* for (auto &arr : algorithm.getArrivals()) { */
-      /*   std::cout << "Trips: " << (int)arr.numberOfTrips */
-      /*             << ", time: " << (int)arr.arrivalTime << std::endl; */
-      /*   result[i].push_back(std::make_pair(arr.numberOfTrips,
-       * arr.arrivalTime)); */
-      /* } */
+      for (auto &arr : algorithm.getArrivals()) {
+        /* std::cout << "Trips: " << (int)arr.numberOfTrips */
+        /*           << ", time: " << (int)arr.arrivalTime << std::endl; */
+        result[i].push_back(std::make_pair(arr.numberOfTrips, arr.arrivalTime));
+      }
 
       i += 1;
     }
@@ -399,14 +410,14 @@ public:
         /*   std::cout << std::endl; */
         /* } */
 
-        /* tripResult[i].reserve(tripAlgorithm.getArrivals().size()); */
+        tripResult[i].reserve(tripAlgorithm.getArrivals().size());
 
-        /* for (auto &arr : tripAlgorithm.getArrivals()) { */
-        /*   std::cout << "Trips: " << (int)arr.numberOfTrips */
-        /*             << ", time: " << (int)arr.arrivalTime << std::endl; */
-        /*   tripResult[i].push_back( */
-        /*       std::make_pair(arr.numberOfTrips, arr.arrivalTime)); */
-        /* } */
+        for (auto &arr : tripAlgorithm.getArrivals()) {
+          /* std::cout << "Trips: " << (int)arr.numberOfTrips */
+          /*           << ", time: " << (int)arr.arrivalTime << std::endl; */
+          tripResult[i].push_back(
+              std::make_pair(arr.numberOfTrips, arr.arrivalTime));
+        }
 
         i += 1;
       }
