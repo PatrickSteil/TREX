@@ -24,6 +24,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
+#include <unordered_set>
+
 #include "../../../DataStructures/Container/Set.h"
 /* #include "../../../DataStructures/Container/IndexedSetBranchless.h" */
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
@@ -36,6 +38,29 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // NOTE: die Länge der extracted paths stimmt nicht, weil ich beim entpacken
 // aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
 namespace TripBased {
+
+struct EventAndRound {
+  std::uint64_t index : 56;
+  std::uint8_t round : 8;
+
+  EventAndRound(std::uint64_t index, std::uint8_t round)
+      : index(index), round(round) {}
+
+  bool operator==(const EventAndRound &other) const {
+    return index == other.index && round == other.round;
+  }
+
+  // Get the raw 64-bit representation
+  std::uint64_t raw() const noexcept { return (index << 8) | round; }
+};
+
+// Hash function using the raw 64-bit value
+struct EventAndRoundHash {
+  std::size_t operator()(const EventAndRound &e) const noexcept {
+    return static_cast<std::size_t>(e.raw());
+  }
+};
+
 // Stores the shortcut information, which we insert into the
 // augmentedStopEventGraph we keep track of the number of transfer we hid
 // inside
@@ -109,8 +134,8 @@ public:
       : data(data), edgesToInsert(), queue(data.numberOfStopEvents()),
         edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.numberOfRoutes()),
-        toBeUnpacked(data.numberOfStopEvents()),
+        routeLabels(data.numberOfRoutes()), toBeUnpacked(),
+        /* toBeUnpacked(data.numberOfStopEvents()), */
         fromStopEventId(data.stopEventGraph.numEdges()),
         /* lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
          */
@@ -170,7 +195,7 @@ public:
     scanTrips(16);
 
     // pass starting event to the method
-    unpack();
+    unpack(trip);
     profiler.done();
   }
 
@@ -208,9 +233,8 @@ private:
           profiler.countMetric(METRIC_SCANNED_STOPS);
           // check if stop of j is outside this cell => add to 'toBeUnpacked'
           StopId currentStop = data.getStopOfStopEvent(j);
-          /* toBeUnpacked.insert(i, !isStopInCell(currentStop)); */
           if (!isStopInCell(currentStop)) {
-            toBeUnpacked.insert(i);
+            toBeUnpacked.emplace(i, currentRoundNumber);
             break;
           }
         }
@@ -297,29 +321,35 @@ private:
   }
 
   // all marked events which we want to marks as local for the next level
-  inline void unpack() {
-    auto &indexToLoopOver = toBeUnpacked.getValues();
+  inline void unpack(const TripId trip) {
+    /* auto &indexToLoopOver = toBeUnpacked.getValues(); */
 
-    for (size_t i(0); i < indexToLoopOver.size(); ++i) {
-#ifdef ENABLE_PREFETCH
-      if (i + 4 < indexToLoopOver.size()) {
-        __builtin_prefetch(&queue[indexToLoopOver[i + 4]]);
-      }
-#endif
-      unpackStopEvent(indexToLoopOver[i]);
+    /* for (size_t i(0); i < indexToLoopOver.size(); ++i) { */
+    /* #ifdef ENABLE_PREFETCH */
+    /*   if (i + 4 < indexToLoopOver.size()) { */
+    /*     __builtin_prefetch(&queue[indexToLoopOver[i + 4]]); */
+    /*   } */
+    /* #endif */
+    /*   unpackStopEvent(indexToLoopOver[i]); */
+    /* } */
+
+    for (const auto &value : toBeUnpacked) {
+      unpackStopEvent(value.index, value.round, trip);
     }
   }
 
   // unpacks a reached stop event
-  inline void unpackStopEvent(size_t index) {
+  inline void unpackStopEvent(size_t index, uint8_t round, const TripId trip) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
 
     if (currentEdge == noEdge) {
-      /* AssertMsg(hopCounter == 0, "Counter is off!"); */
+      AssertMsg(round == 0, "Counter is off!");
       return;
     }
+
+    bool createShortcut = (round > 3);
 
     // STATS
     ++extractedPaths;
@@ -336,21 +366,24 @@ private:
     uint8_t currentHopCounter(0);
 
     while (currentEdge != noEdge) {
-      /* if (lastExtractedRun[currentEdge] == currentRun) return; */
-      /* lastExtractedRun[currentEdge] = currentRun; */
-
-      /* // set the locallevel of the events */
       fromVertex = fromStopEventId[currentEdge];
-      AssertMsg(currentHopCounter <
-                    256 - data.stopEventGraph.get(Hop, currentEdge),
-                "Current Hop Counter too large!");
-      currentHopCounter += data.stopEventGraph.get(Hop, currentEdge);
+      /* AssertMsg(currentHopCounter < */
+      /*               256 - data.stopEventGraph.get(Hop, currentEdge), */
+      /*           "Current Hop Counter too large!"); */
+      /* currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
+      currentHopCounter++;
 
-      /* uint16_t prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
-       */
-      /* data.stopEventGraph.set(LocalLevel, currentEdge, */
-      /*                         prevLevel | static_cast<uint16_t>(1 <<
-       * minLevel)); */
+      if (!createShortcut) {
+        uint16_t &prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
+        prevLevel |= static_cast<uint16_t>(1 << minLevel);
+
+        AssertMsg(data.stopEventGraph.get(LocalLevel, currentEdge) &
+                      (1 << minLevel),
+                  "setting the current level did not work!, see minLevel "
+                      << (int)minLevel << " and "
+                      << std::bitset<16>(
+                             data.stopEventGraph.get(LocalLevel, currentEdge)));
+      }
 
       index = label.parent;
       label = queue[index];
@@ -361,16 +394,14 @@ private:
 
     AssertMsg(currentHopCounter > 0,
               "The unrolling did not work as exxpected!");
-    /* AssertMsg(currentHopCounter == hopCounter, "Hop Counter not the same!");
-     */
+    AssertMsg(currentHopCounter == round, "Hop Counter not the same!");
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
 
     AssertMsg(fromVertex > 0, "FromVertex cannot be 0, as we start at least "
                               "from 1 stop into the trip!");
-    // only add a shortcut if we can skip at least 2 transfers
-    /* if ((currentHopCounter / (minLevel + 1)) >= 2) { */
+
     AssertMsg(fromVertex != noStopEvent,
               "From StopEvent has not been assigned properly");
     AssertMsg(fromVertex != toVertex,
@@ -379,12 +410,13 @@ private:
               "From StopEvent " << (int)fromVertex << " is not a valid vertex");
     AssertMsg(data.stopEventGraph.isVertex(Vertex(toVertex)),
               "To StopEvent " << (int)toVertex << " is not a valid vertex");
+
+    if (!createShortcut)
+      return;
     edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
                                static_cast<uint16_t>(1 << (minLevel)));
 
-    // STATS
     ++numAddedShortcuts;
-    /* } */
   }
 
 public:
@@ -439,7 +471,8 @@ private:
 
   Profiler profiler;
 
-  IndexedSet<false, std::uint64_t> toBeUnpacked;
+  /* IndexedSet<false, std::uint64_t> toBeUnpacked; */
+  std::unordered_set<EventAndRound, EventAndRoundHash> toBeUnpacked;
 
   // same as FromVertex, but for the stopEventGraph, it is not defined
   // we need to extract quickly the event from which the transfer was possible

@@ -162,11 +162,12 @@ public:
     if (shortcuts.empty())
       return;
 
-    std::sort(shortcuts.begin(), shortcuts.end(),
-              [](const ShortCutToInsert &a, const ShortCutToInsert &b) {
-                return std::tie(a.fromStopEventId, a.toStopEventId) <
-                       std::tie(b.fromStopEventId, b.toStopEventId);
-              });
+    std::sort(
+        shortcuts.begin(), shortcuts.end(),
+        [](const ShortCutToInsert &a, const ShortCutToInsert &b) {
+          return std::tie(a.fromStopEventId, a.toStopEventId, a.hopCounter) <
+                 std::tie(b.fromStopEventId, b.toStopEventId, b.hopCounter);
+        });
 
     std::size_t write = 0;
 
@@ -293,7 +294,8 @@ public:
                 "To Vertex "
                     << (int)to
                     << "is out of bounds! (Loading from stopEventGraph)");
-      allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, 0);
+      allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1,
+                                data.stopEventGraph.get(LocalLevel, edge));
     }
 
     for (auto &seeker : seekers) {
