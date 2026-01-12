@@ -98,7 +98,7 @@ public:
                              const uint8_t round = 1) noexcept {
     assert(data.isTrip(trip));
     assert(0 < round);
-    assert(round  < 16);
+    assert(round < 16);
 
     return getPosition(trip, round) <= position;
   }

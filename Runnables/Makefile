@@ -38,4 +38,4 @@ TREXDebug:
 	$(CC) $(FLAGS) $(DEBUG) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH) -g -O1 -march=native
 
 TREXRelease:
-	$(CC) $(FLAGS) $(OPTIMIZATION) $(RELEASE) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH)
+	$(CC) $(FLAGS) $(OPTIMIZATION) $(RELEASE) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH) -g -fno-omit-frame-pointer

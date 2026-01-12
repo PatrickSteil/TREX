@@ -359,6 +359,9 @@ private:
         }
       }
 
+      if (currentRound + 1 >= MaxRounds)
+        break;
+
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
@@ -410,7 +413,6 @@ private:
 
   inline void enqueue(const Edge edge, const size_t parent,
                       const int currentRound) noexcept {
-    assert(currentRound + 1 < 16);
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
@@ -418,41 +420,25 @@ private:
       return;
     }
 
-    if (data.arrivalEvents[label.stopEvent].arrivalTime >= minArrivalTime) {
-      return;
-    }
+    const int lcl =
+        std::min(std::bit_width<uint16_t>(label.cellId ^ sourceCellId),
+                 std::bit_width<uint16_t>(label.cellId ^ targetCellId));
 
-    if (reachedIndex.alreadyReached(label.trip,
-                                    label.stopEvent - label.firstEvent,
-                                    currentRound + label.hop)) {
-      return;
-    }
-
-    int lclSource = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
-                                                                sourceCellId));
-    int lclTarget = 16 - std::countl_zero(static_cast<uint16_t>(label.cellId ^
-                                                                targetCellId));
-
-    auto lcl = std::min(lclSource, lclTarget);
-
-    assert(label.hop < 16);
-    assert(label.hop > 0);
-    assert(label.hop + currentRound > 0);
-
-    if (lcl > 0 && !(label.localLevel & (1 << (lcl - 1)))) {
+    if (lcl > 0 && !(label.localLevel & (uint16_t{1} << (lcl - 1)))) {
       profiler.countMetric(DISCARDED_EDGE);
-      /* reachedIndex.update(label.trip, */
-      /*                     StopIndex(label.stopEvent - label.firstEvent), */
-      /*                     currentRound + label.hop); */
+      return;
+    }
+
+    StopIndex position(reachedIndex(label.trip, currentRound + label.hop));
+
+    if (position <= StopIndex(label.stopEvent - label.firstEvent)) {
       return;
     }
 
     queue.push(currentRound + label.hop,
                TripLabel(StopEventId(label.stopEvent),
-                         StopEventId(label.firstEvent +
-                                     reachedIndex(label.trip,
-                                                  currentRound + label.hop)),
-                         parent, currentRound));
+                         StopEventId(label.firstEvent + position), parent,
+                         currentRound));
     reachedIndex.update(label.trip,
                         StopIndex(label.stopEvent - label.firstEvent),
                         currentRound + label.hop);
@@ -472,6 +458,7 @@ private:
   inline RAPTOR::Journey
   getJourney(const TargetLabel & /* targetLabel */) const noexcept {
     RAPTOR::Journey result;
+    // TODO
     return result;
   }
 
