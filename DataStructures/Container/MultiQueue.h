@@ -2,93 +2,84 @@
 #include <bitset>
 #include <cassert>
 #include <cstddef>
-#include <deque>
-#include <stdexcept>
+#include <vector>
 
-template <typename T, int N = 16> class MultiQueue {
+template <typename T, size_t MaxRounds = 16> class MultiQueue {
 public:
-  using Queue = std::deque<T>;
-
-  MultiQueue() = default;
-
-  Queue &at(std::size_t i) {
-    assert(i < N);
-    return queues_[i];
-  }
-
-  const Queue &at(std::size_t i) const {
-    assert(i < N);
-    return queues_[i];
-  }
-
-  void push(std::size_t i, const T &v) {
-    contains_.set(i, true);
-    at(i).push_back(v);
-  }
-
-  void push(std::size_t i, T &&v) {
-    contains_.set(i, true);
-    at(i).push_back(std::move(v));
-  }
-
-  void pop(std::size_t i) {
-    assert(i < N);
-    auto &q = at(i);
-    assert(!q.empty());
-    q.pop_front();
-  }
-
-  T &front(std::size_t i) {
-    assert(i < N);
-    return at(i).front();
-  }
-
-  const T &front(std::size_t i) const {
-    assert(i < N);
-    return at(i).front();
-  }
-
-  bool empty(std::size_t i) const {
-    assert(i < N);
-    return at(i).empty();
-  }
-
-  std::size_t size(std::size_t i) const {
-    assert(i < N);
-    return at(i).size();
-  }
-
-  Queue &underlying(std::size_t i) {
-    assert(i < N);
-    return at(i);
-  }
-
-  const Queue &underlying(std::size_t i) const {
-    assert(i < N);
-    return at(i);
-  }
-
-  void clear(std::size_t i) {
-    assert(i < N);
-    at(i).clear();
-    contains_.set(i, false);
-  }
-
-  void clear_all() {
-    for (auto &q : queues_) {
-      q.clear();
+  explicit MultiQueue(size_t capacityPerQueue) : capacity(capacityPerQueue) {
+    for (size_t i = 0; i < MaxRounds; ++i) {
+      queues[i].resize(capacity);
+      begin[i] = 0;
+      end[i] = 0;
     }
-
-    contains_.reset();
+    nonEmpty.reset();
   }
 
-  bool laterQueueHasElement(std::size_t i) {
-    assert(i < N);
-    std::bitset<N> shifted = contains_ >> i;
-    return shifted.any();
+  size_t size(int r) const noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    return end[r] - begin[r];
+  }
+
+  size_t &start(int r) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    return begin[r];
+  }
+
+  size_t &finish(int r) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    return end[r];
+  }
+
+  std::vector<T> &queue(int r) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    return queues[r];
+  }
+
+  T &operator()(int r, size_t i) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    assert(i < end[r]);
+    return queues[r][i];
+  }
+
+  const T &operator()(int r, size_t i) const noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    assert(i < end[r]);
+    return queues[r][i];
+  }
+
+  void push(int r, const T &value) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    assert(end[r] < capacity);
+    queues[r][end[r]++] = value;
+    nonEmpty.set(r);
+  }
+
+  void push(int r, T &&value) noexcept {
+    assert(r >= 0 && r < static_cast<int>(MaxRounds));
+    assert(end[r] < capacity);
+    queues[r][end[r]++] = std::move(value);
+    nonEmpty.set(r);
+  }
+
+  void clear_all() noexcept {
+    for (size_t r = 0; r < MaxRounds; ++r) {
+      begin[r] = 0;
+      end[r] = 0;
+    }
+    nonEmpty.reset();
+  }
+
+  bool laterQueueNonEmpty(size_t r) const noexcept {
+    assert(r < MaxRounds);
+    return (nonEmpty >> r).any();
   }
 
 private:
-  std::array<Queue, N> queues_;
-  std::bitset<N> contains_;
+  size_t capacity;
+
+  std::array<std::vector<T>, MaxRounds> queues;
+  std::array<size_t, MaxRounds> begin;
+  std::array<size_t, MaxRounds> end;
+
+  std::bitset<MaxRounds> nonEmpty;
 };

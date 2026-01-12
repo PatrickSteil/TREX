@@ -314,7 +314,7 @@ public:
         generateRandomStopQueries(data.numberOfStops(), n);
 
     /* const std::vector<StopQuery> queries = { */
-    /*     StopQuery(StopId(597), StopId(2287), 51724), */
+    /*     StopQuery(StopId(139715), StopId(65645), 72170)}; */
     /*     StopQuery(StopId(2270), StopId(3767), 44429), */
     /*     StopQuery(StopId(374), StopId(61), 26318), */
     /*     StopQuery(StopId(923), StopId(2621), 19949), */
@@ -331,7 +331,7 @@ public:
     /*     StopQuery(StopId(630), StopId(26), 26333), */
     /*     StopQuery(StopId(3723), StopId(248), 31417), */
     /*     StopQuery(StopId(1905), StopId(2668), 21753), */
-    /*     StopQuery(StopId(1322), StopId(1067), 2855)}; */
+    /* StopQuery(StopId(1322), StopId(1067), 2855)}; */
 
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});
@@ -397,19 +397,21 @@ public:
       for (const StopQuery &query : queries) {
         tripAlgorithm.run(query.source, query.departureTime, query.target);
         numberOfJourneys += tripAlgorithm.getJourneys().size();
-        /* std::cout << "TB Query" << std::endl; */
-        /* for (auto &journey : tripAlgorithm.getJourneys()) { */
-        /*   std::cout << query << std::endl; */
-        /*   for (auto &leg : journey) { */
-        /*     std::cout << (int)leg.from << " -> " << (int)leg.to << " @ " */
-        /*               << leg.departureTime << " -> " << leg.arrivalTime */
-        /*               << (leg.usesRoute ? ", route: " : ", transfer: ") */
-        /*               << (int)leg.routeId; */
-        /*     std::cout << std::endl; */
-        /*   } */
-        /*   std::cout << std::endl; */
-        /* } */
 
+        /*
+        std::cout << "TB Query" << std::endl;
+        for (auto &journey : tripAlgorithm.getJourneys()) {
+          std::cout << query << std::endl;
+          for (auto &leg : journey) {
+            std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
+                      << leg.departureTime << " -> " << leg.arrivalTime
+                      << (leg.usesRoute ? ", route: " : ", transfer: ")
+                      << (int)leg.routeId;
+            std::cout << std::endl;
+          }
+          std::cout << std::endl;
+        }
+        */
         tripResult[i].reserve(tripAlgorithm.getArrivals().size());
 
         for (auto &arr : tripAlgorithm.getArrivals()) {

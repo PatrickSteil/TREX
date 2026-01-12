@@ -195,7 +195,7 @@ public:
     scanTrips(16);
 
     // pass starting event to the method
-    unpack(trip);
+    unpack();
     profiler.done();
   }
 
@@ -305,8 +305,12 @@ private:
         [[likely]]
       return;
 
-    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
-    /*   return; */
+    uint16_t localLevel = data.stopEventGraph.get(LocalLevel, edge);
+
+    // prune if minLevel > 0 and the minLevel - 1 bit is set
+    if (minLevel > 0 && !(localLevel & (1 << (minLevel - 1)))) {
+      return;
+    }
 
     AssertMsg(parent < queueSize, "Given parent is out of bounds!");
     queue[queueSize] = TripLabel(
@@ -321,7 +325,7 @@ private:
   }
 
   // all marked events which we want to marks as local for the next level
-  inline void unpack(const TripId trip) {
+  inline void unpack() {
     /* auto &indexToLoopOver = toBeUnpacked.getValues(); */
 
     /* for (size_t i(0); i < indexToLoopOver.size(); ++i) { */
@@ -334,12 +338,12 @@ private:
     /* } */
 
     for (const auto &value : toBeUnpacked) {
-      unpackStopEvent(value.index, value.round, trip);
+      unpackStopEvent(value.index, value.round);
     }
   }
 
   // unpacks a reached stop event
-  inline void unpackStopEvent(size_t index, uint8_t round, const TripId trip) {
+  inline void unpackStopEvent(size_t index, uint8_t round) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
@@ -349,9 +353,6 @@ private:
       return;
     }
 
-    bool createShortcut = (round > 3);
-
-    // STATS
     ++extractedPaths;
 
     // new vertices for the shortcut
@@ -373,17 +374,15 @@ private:
       /* currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
       currentHopCounter++;
 
-      if (!createShortcut) {
-        uint16_t &prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
-        prevLevel |= static_cast<uint16_t>(1 << minLevel);
+      uint16_t &prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
+      prevLevel |= static_cast<uint16_t>(1 << minLevel);
 
-        AssertMsg(data.stopEventGraph.get(LocalLevel, currentEdge) &
-                      (1 << minLevel),
-                  "setting the current level did not work!, see minLevel "
-                      << (int)minLevel << " and "
-                      << std::bitset<16>(
-                             data.stopEventGraph.get(LocalLevel, currentEdge)));
-      }
+      AssertMsg(data.stopEventGraph.get(LocalLevel, currentEdge) &
+                    (1 << minLevel),
+                "setting the current level did not work!, see minLevel "
+                    << (int)minLevel << " and "
+                    << std::bitset<16>(
+                           data.stopEventGraph.get(LocalLevel, currentEdge)));
 
       index = label.parent;
       label = queue[index];
@@ -411,8 +410,6 @@ private:
     AssertMsg(data.stopEventGraph.isVertex(Vertex(toVertex)),
               "To StopEvent " << (int)toVertex << " is not a valid vertex");
 
-    if (!createShortcut)
-      return;
     edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
                                static_cast<uint16_t>(1 << (minLevel)));
 

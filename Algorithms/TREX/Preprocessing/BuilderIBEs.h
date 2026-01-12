@@ -294,8 +294,10 @@ public:
                 "To Vertex "
                     << (int)to
                     << "is out of bounds! (Loading from stopEventGraph)");
-      allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1,
-                                data.stopEventGraph.get(LocalLevel, edge));
+      allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, 0);
+      /* allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, */
+      /*                           data.stopEventGraph.get(LocalLevel, edge));
+       */
     }
 
     for (auto &seeker : seekers) {
@@ -330,6 +332,8 @@ public:
     }
 
     Graph::move(std::move(dynamicGraph), data.stopEventGraph);
+
+    data.stopEventGraph.sortEdges(Hop);
     profiler.donePhase(PHASE_TREX_UPDATE_STOPEVENTGRAPH);
 
     profiler.done();
