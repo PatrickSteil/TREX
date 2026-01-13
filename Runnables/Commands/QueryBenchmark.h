@@ -76,7 +76,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class RunTransitiveRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveRAPTORQueries",
@@ -111,7 +111,7 @@ class RunTransitiveRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunOneTransitiveRAPTORQuery : public ParameterizedCommand {
- public:
+public:
   RunOneTransitiveRAPTORQuery(BasicShell &shell)
       : ParameterizedCommand(shell, "runOneTransitiveRAPTORQuery",
                              "Runs the given RAPTOR query.") {
@@ -151,7 +151,7 @@ class RunOneTransitiveRAPTORQuery : public ParameterizedCommand {
 };
 
 class RunDijkstraRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunDijkstraRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runDijkstraRAPTORQueries",
@@ -187,7 +187,7 @@ class RunDijkstraRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunULTRARAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunULTRARAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runULTRARAPTORQueries",
@@ -222,7 +222,7 @@ class RunULTRARAPTORQueries : public ParameterizedCommand {
 };
 
 class RunHLRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunHLRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runHLRAPTORQueries",
@@ -259,7 +259,7 @@ class RunHLRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunTransitiveMcRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveMcRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveMcRAPTORQueries",
@@ -292,7 +292,7 @@ class RunTransitiveMcRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunTransitiveBoundedMcRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveBoundedMcRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runTransitiveBoundedMcRAPTORQueries",
                              "Runs the given number of random transitive "
@@ -332,7 +332,7 @@ class RunTransitiveBoundedMcRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunMCRQueries : public ParameterizedCommand {
- public:
+public:
   RunMCRQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runMCRQueries",
                              "Runs the given number of random MCR queries.") {
@@ -365,7 +365,7 @@ class RunMCRQueries : public ParameterizedCommand {
 };
 
 class RunMultimodalMCRQueries : public ParameterizedCommand {
- public:
+public:
   RunMultimodalMCRQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runMultimodalMCRQueries",
@@ -380,19 +380,19 @@ class RunMultimodalMCRQueries : public ParameterizedCommand {
     raptorData.useImplicitDepartureBufferTimes();
     raptorData.printInfo();
     switch (raptorData.modes.size()) {
-      case 2:
-        run<2>(raptorData);
-        break;
-      case 3:
-        run<3>(raptorData);
-        break;
-      default:
-        Ensure(false, "Unsupported number of modes!");
-        break;
+    case 2:
+      run<2>(raptorData);
+      break;
+    case 3:
+      run<3>(raptorData);
+      break;
+    default:
+      Ensure(false, "Unsupported number of modes!");
+      break;
     }
   }
 
- private:
+private:
   template <size_t NUM_MODES>
   inline void run(const RAPTOR::MultimodalData &raptorData) const noexcept {
     const std::string chDirectory(getParameter("CH directory"));
@@ -419,7 +419,7 @@ class RunMultimodalMCRQueries : public ParameterizedCommand {
 };
 
 class RunULTRAMcRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunULTRAMcRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runULTRAMcRAPTORQueries",
@@ -453,7 +453,7 @@ class RunULTRAMcRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunMultimodalULTRAMcRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunMultimodalULTRAMcRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runMultimodalULTRAMcRAPTORQueries",
                              "Runs the given number of random multimodal "
@@ -468,19 +468,19 @@ class RunMultimodalULTRAMcRAPTORQueries : public ParameterizedCommand {
     raptorData.useImplicitDepartureBufferTimes();
     raptorData.printInfo();
     switch (raptorData.modes.size()) {
-      case 2:
-        run<2>(raptorData);
-        break;
-      case 3:
-        run<3>(raptorData);
-        break;
-      default:
-        Ensure(false, "Unsupported number of modes!");
-        break;
+    case 2:
+      run<2>(raptorData);
+      break;
+    case 3:
+      run<3>(raptorData);
+      break;
+    default:
+      Ensure(false, "Unsupported number of modes!");
+      break;
     }
   }
 
- private:
+private:
   template <size_t NUM_MODES>
   inline void run(const RAPTOR::MultimodalData &raptorData) const noexcept {
     const std::string chDirectory(getParameter("CH directory"));
@@ -507,7 +507,7 @@ class RunMultimodalULTRAMcRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunUBMRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunUBMRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runUBMRAPTORQueries",
@@ -549,7 +549,7 @@ class RunUBMRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunUBMHydRAQueries : public ParameterizedCommand {
- public:
+public:
   RunUBMHydRAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runUBMHydRAQueries",
@@ -597,7 +597,7 @@ class RunUBMHydRAQueries : public ParameterizedCommand {
 };
 
 class RunMultimodalUBMRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunMultimodalUBMRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runMultimodalUBMRAPTORQueries",
@@ -614,19 +614,19 @@ class RunMultimodalUBMRAPTORQueries : public ParameterizedCommand {
     raptorData.useImplicitDepartureBufferTimes();
     raptorData.printInfo();
     switch (raptorData.modes.size()) {
-      case 2:
-        run<2>(raptorData);
-        break;
-      case 3:
-        run<3>(raptorData);
-        break;
-      default:
-        Ensure(false, "Unsupported number of modes!");
-        break;
+    case 2:
+      run<2>(raptorData);
+      break;
+    case 3:
+      run<3>(raptorData);
+      break;
+    default:
+      Ensure(false, "Unsupported number of modes!");
+      break;
     }
   }
 
- private:
+private:
   template <size_t NUM_MODES>
   inline void run(const RAPTOR::MultimodalData &raptorData) const noexcept {
     const RAPTOR::Data pruningData = raptorData.getPruningData();
@@ -663,7 +663,7 @@ class RunMultimodalUBMRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunMultimodalUBMHydRAQueries : public ParameterizedCommand {
- public:
+public:
   RunMultimodalUBMHydRAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runMultimodalUBMHydRAQueries",
@@ -682,22 +682,22 @@ class RunMultimodalUBMHydRAQueries : public ParameterizedCommand {
         getParameter("Trip-Based input file"));
     tripBasedData.printInfo();
     switch (tripBasedData.modes.size()) {
-      case 2:
-        run<2>(tripBasedData);
-        break;
-      case 3:
-        run<3>(tripBasedData);
-        break;
-      default:
-        Ensure(false, "Unsupported number of modes!");
-        break;
+    case 2:
+      run<2>(tripBasedData);
+      break;
+    case 3:
+      run<3>(tripBasedData);
+      break;
+    default:
+      Ensure(false, "Unsupported number of modes!");
+      break;
     }
   }
 
- private:
+private:
   template <size_t NUM_MODES>
-  inline void run(
-      const TripBased::MultimodalData &tripBasedData) const noexcept {
+  inline void
+  run(const TripBased::MultimodalData &tripBasedData) const noexcept {
     const TripBased::MultimodalData forwardBoundedData(
         getParameter("Bounded forward Trip-Based input file"));
     forwardBoundedData.printInfo();
@@ -744,7 +744,7 @@ class RunMultimodalUBMHydRAQueries : public ParameterizedCommand {
 };
 
 class RunTransitiveCSAQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveCSAQueries",
@@ -775,7 +775,7 @@ class RunTransitiveCSAQueries : public ParameterizedCommand {
 };
 
 class RunTransitiveProfileCSAQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveProfileCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveProfileCSAQueries",
@@ -806,7 +806,7 @@ class RunTransitiveProfileCSAQueries : public ParameterizedCommand {
 };
 
 class RunDijkstraCSAQueries : public ParameterizedCommand {
- public:
+public:
   RunDijkstraCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runDijkstraCSAQueries",
@@ -837,7 +837,7 @@ class RunDijkstraCSAQueries : public ParameterizedCommand {
 };
 
 class RunULTRACSAQueries : public ParameterizedCommand {
- public:
+public:
   RunULTRACSAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runULTRACSAQueries",
@@ -866,7 +866,7 @@ class RunULTRACSAQueries : public ParameterizedCommand {
 };
 
 class RunHLCSAQueries : public ParameterizedCommand {
- public:
+public:
   RunHLCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runHLCSAQueries",
@@ -897,7 +897,7 @@ class RunHLCSAQueries : public ParameterizedCommand {
 };
 
 class RunTransitiveTripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveTripBasedQueries",
@@ -930,6 +930,81 @@ class RunTransitiveTripBasedQueries : public ParameterizedCommand {
     algorithm.getProfiler().printStatistics();
     std::cout << "Avg. journeys: " << String::prettyDouble(numberOfJourneys / n)
               << std::endl;
+  }
+};
+
+class CompareGeoToLength : public ParameterizedCommand {
+public:
+  CompareGeoToLength(BasicShell &shell)
+      : ParameterizedCommand(
+            shell, "compareGeoToLength",
+            "Runs the given number of random transitive TripBased queries and "
+            "compares geo distance to number of events on path.") {
+    addParameter("Trip-Based input file");
+    addParameter("Number of queries");
+  }
+
+  virtual void execute() noexcept {
+    const std::string tripFile = getParameter("Trip-Based input file");
+    TripBased::Data tbData(tripFile);
+    tbData.printInfo();
+
+    TripBased::TransitiveQuery<TripBased::NoProfiler> algorithm(tbData);
+
+    const std::size_t n = getParameter<std::size_t>("Number of queries");
+
+    // Column-major:
+    // data[0][i]     = geo distance for query i
+    // data[k][i]     = nrEvents for journeys with (k - 1) trips
+    // k in [1, 17]
+    std::array<std::vector<std::size_t>, 18> data;
+    for (auto &col : data) {
+      col.assign(n, 0);
+    }
+
+    const std::vector<StopQuery> queries =
+        generateRandomStopQueries(tbData.numberOfStops(), n);
+
+    for (std::size_t i = 0; i < n; i++) {
+      const StopQuery &query = queries[i];
+
+      const RAPTOR::Stop &fromStop = tbData.raptorData.stopData[query.source];
+      const RAPTOR::Stop &toStop = tbData.raptorData.stopData[query.target];
+
+      // Geo distance (stored in column 0)
+      data[0][i] = static_cast<std::size_t>(
+          geoDistanceInCM(fromStop.coordinates, toStop.coordinates) / 100.0);
+
+      algorithm.run(query.source, query.departureTime, query.target);
+      const auto journeys = algorithm.getJourneys();
+
+      for (const auto &j : journeys) {
+        const std::size_t nrTrips = countTrips(j);
+        AssertMsg(nrTrips < 17, "NrTrips should be smaller than 17!");
+
+        const std::size_t nrEvents = countEvents(j);
+
+        const std::size_t col = nrTrips + 1;
+        AssertMsg(col < data.size(), "NrTrips + 1 does not fit in array!");
+
+        data[col][i] = nrEvents;
+      }
+    }
+
+    // CSV output
+    std::cout << "Index,GeoDistanceMeter";
+    for (int j = 1; j < 18; j++) {
+      std::cout << ",EventWith" << j << "Trips";
+    }
+    std::cout << "\n";
+
+    for (std::size_t i = 0; i < n; i++) {
+      std::cout << i << "," << data[0][i];
+      for (int j = 1; j < 18; j++) {
+        std::cout << "," << data[j][i];
+      }
+      std::cout << "\n";
+    }
   }
 };
 
@@ -971,7 +1046,7 @@ class RunTransitiveTripBasedQueries : public ParameterizedCommand {
 /* }; */
 
 class RunTransitiveProfileTripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunTransitiveProfileTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveProfileTripBasedQueries",
@@ -1004,7 +1079,7 @@ class RunTransitiveProfileTripBasedQueries : public ParameterizedCommand {
 
 class RunTransitiveProfileOneToAllTripBasedQueries
     : public ParameterizedCommand {
- public:
+public:
   RunTransitiveProfileOneToAllTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runTransitiveProfileOneToAllTripBasedQueries",
@@ -1031,7 +1106,7 @@ class RunTransitiveProfileOneToAllTripBasedQueries
 };
 
 class RunULTRATripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunULTRATripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runULTRATripBasedQueries",
@@ -1063,7 +1138,7 @@ class RunULTRATripBasedQueries : public ParameterizedCommand {
 };
 
 class RunULTRAMcTripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunULTRAMcTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runULTRAMcTripBasedQueries",
@@ -1096,7 +1171,7 @@ class RunULTRAMcTripBasedQueries : public ParameterizedCommand {
 };
 
 class RunBoundedULTRAMcTripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunBoundedULTRAMcTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runBoundedULTRAMcTripBasedQueries",
                              "Runs the given number of random Bounded "
@@ -1143,7 +1218,7 @@ class RunBoundedULTRAMcTripBasedQueries : public ParameterizedCommand {
 };
 
 class ComputeTransferTimeSavings : public ParameterizedCommand {
- public:
+public:
   ComputeTransferTimeSavings(BasicShell &shell)
       : ParameterizedCommand(
             shell, "computeTransferTimeSavings",
@@ -1221,9 +1296,11 @@ class ComputeTransferTimeSavings : public ParameterizedCommand {
         for (const double s : transferTimeSavings) {
           while (s < thresholds[j]) {
             j++;
-            if (j == thresholds.size()) break;
+            if (j == thresholds.size())
+              break;
           }
-          if (j == thresholds.size()) break;
+          if (j == thresholds.size())
+            break;
           savingsCount[j]++;
         }
         for (const size_t c : savingsCount) {
@@ -1237,7 +1314,7 @@ class ComputeTransferTimeSavings : public ParameterizedCommand {
     }
   }
 
- private:
+private:
   std::vector<double> thresholds{0.75, 0.5, 0.25};
   std::vector<double> arrivalSlacks{1, 1.1, 1.2, 1.3, 1.4, 1.5};
   std::vector<double> tripSlacks{1, 1.25, 1.5};
@@ -1246,8 +1323,10 @@ class ComputeTransferTimeSavings : public ParameterizedCommand {
       const RAPTOR::WalkingParetoLabel &label,
       const std::vector<RAPTOR::ArrivalLabel> &anchorLabels) const noexcept {
     for (const RAPTOR::ArrivalLabel &anchorLabel : anchorLabels) {
-      if (label.arrivalTime != anchorLabel.arrivalTime) continue;
-      if (label.numberOfTrips != anchorLabel.numberOfTrips) continue;
+      if (label.arrivalTime != anchorLabel.arrivalTime)
+        continue;
+      if (label.numberOfTrips != anchorLabel.numberOfTrips)
+        continue;
       return true;
     }
     return false;
@@ -1255,7 +1334,7 @@ class ComputeTransferTimeSavings : public ParameterizedCommand {
 };
 
 class RunGeoRankedRAPTORQueries : public ParameterizedCommand {
- public:
+public:
   RunGeoRankedRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runGeoRankedRAPTORQueries",
@@ -1280,8 +1359,8 @@ class RunGeoRankedRAPTORQueries : public ParameterizedCommand {
     const int minR = getParameter<int>("Lowest r");
 
     std::mt19937 randomGenerator(42);
-    std::uniform_int_distribution<> stopDistribution(
-        0, raptor.numberOfStops() - 1);
+    std::uniform_int_distribution<> stopDistribution(0, raptor.numberOfStops() -
+                                                            1);
     std::uniform_int_distribution<> timeDistribution(0, (24 * 60 * 60) - 1);
 
     std::vector<StopId> sources;
@@ -1356,7 +1435,7 @@ class RunGeoRankedRAPTORQueries : public ParameterizedCommand {
 };
 
 class RunGeoRankedTripBasedQueries : public ParameterizedCommand {
- public:
+public:
   RunGeoRankedTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
             shell, "runGeoRankedTripBasedQueries",
@@ -1457,7 +1536,7 @@ class RunGeoRankedTripBasedQueries : public ParameterizedCommand {
 };
 
 class RunTDDijkstraQueries : public ParameterizedCommand {
- public:
+public:
   RunTDDijkstraQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runTDDijkstraQueries",
                              "Runs the given number of random TDD queries.") {
@@ -1483,7 +1562,7 @@ class RunTDDijkstraQueries : public ParameterizedCommand {
 };
 
 class RunTEDijkstraQueries : public ParameterizedCommand {
- public:
+public:
   RunTEDijkstraQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runTEDijkstraQueries",
                              "Runs the given number of random TDD queries.") {
@@ -1508,7 +1587,7 @@ class RunTEDijkstraQueries : public ParameterizedCommand {
 };
 
 class RunPTLQueries : public ParameterizedCommand {
- public:
+public:
   RunPTLQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runPTLQueries",
                              "Runs the given number of random PTL queries.") {
@@ -1539,7 +1618,7 @@ class RunPTLQueries : public ParameterizedCommand {
 };
 
 class RunPPTLQueries : public ParameterizedCommand {
- public:
+public:
   RunPPTLQueries(BasicShell &shell)
       : ParameterizedCommand(shell, "runPPTLQueries",
                              "Runs the given number of random PPTL queries.") {

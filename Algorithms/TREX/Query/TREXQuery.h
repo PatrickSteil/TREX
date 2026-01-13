@@ -36,13 +36,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace TripBased {
 
-template <typename PROFILER = NoProfiler>
-class TREXQuery {
- public:
+template <typename PROFILER = NoProfiler> class TREXQuery {
+public:
   using Profiler = PROFILER;
   using Type = TREXQuery<Profiler>;
 
- private:
+private:
   struct TripLabel {
     TripLabel(const StopEventId begin = noStopEvent,
               const StopEventId end = noStopEvent, const u_int32_t parent = -1)
@@ -63,11 +62,8 @@ class TREXQuery {
               const TripId trip = noTripId,
               const StopIndex stopEvent = noStopIndex,
               const uint16_t cellId = 0, const uint8_t localLevel = 0)
-        : firstEvent(firstEvent),
-          trip(trip),
-          stopEvent(stopEvent),
-          cellId(cellId),
-          localLevel(localLevel) {}
+        : firstEvent(firstEvent), trip(trip), stopEvent(stopEvent),
+          cellId(cellId), localLevel(localLevel) {}
     StopEventId firstEvent;
     TripId trip;
     StopIndex stopEvent;
@@ -100,28 +96,18 @@ class TREXQuery {
       0b1111000000000000, 0b1110000000000000, 0b1100000000000000,
       0b1000000000000000};
 
- public:
+public:
   TREXQuery(TREXData &data)
-      : data(data),
-        reverseTransferGraph(data.raptorData.transferGraph),
+      : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
-        transferToTarget(data.numberOfStops(), INFTY),
-        lastSource(StopId(0)),
-        lastTarget(StopId(0)),
-        reachedRoutes(data.numberOfRoutes()),
-        queue(data.numberOfStopEvents()),
-        edgeRanges(data.numberOfStopEvents()),
-        queueSize(0),
-        reachedIndex(data),
-        targetLabels(1),
-        minArrivalTime(INFTY),
-        edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.numberOfRoutes()),
-        sourceStop(noStop),
-        targetStop(noStop),
-        sourceDepartureTime(never),
-        transferPerLevel(data.getNumberOfLevels() + 1, 0),
-        numQueries(0) {
+        transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
+        lastTarget(StopId(0)), reachedRoutes(data.numberOfRoutes()),
+        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
+        queueSize(0), reachedIndex(data), targetLabels(1),
+        minArrivalTime(INFTY), edgeLabels(data.stopEventGraph.numEdges()),
+        routeLabels(data.numberOfRoutes()), sourceStop(noStop),
+        targetStop(noStop), sourceDepartureTime(never),
+        transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
     reverseTransferGraph.revert();
 
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
@@ -191,7 +177,8 @@ class TREXQuery {
   inline int getEarliestArrivalNumberOfTrips() const noexcept {
     const int eat = targetLabels.back().arrivalTime;
     for (size_t i = 0; i < targetLabels.size(); ++i) {
-      if (targetLabels[i].arrivalTime == eat) return i;
+      if (targetLabels[i].arrivalTime == eat)
+        return i;
     }
     return -1;
   }
@@ -200,7 +187,8 @@ class TREXQuery {
     std::vector<RAPTOR::Journey> result;
     int bestArrivalTime = INFTY;
     for (const TargetLabel &label : targetLabels) {
-      if (label.arrivalTime >= bestArrivalTime) continue;
+      if (label.arrivalTime >= bestArrivalTime)
+        continue;
       bestArrivalTime = label.arrivalTime;
       result.emplace_back(getJourney(label));
     }
@@ -210,7 +198,8 @@ class TREXQuery {
   inline std::vector<RAPTOR::ArrivalLabel> getArrivals() const noexcept {
     std::vector<RAPTOR::ArrivalLabel> result;
     for (size_t i = 0; i < targetLabels.size(); ++i) {
-      if (targetLabels[i].arrivalTime >= INFTY) continue;
+      if (targetLabels[i].arrivalTime >= INFTY)
+        continue;
       if ((result.size() >= 1) &&
           (result.back().arrivalTime == targetLabels[i].arrivalTime))
         continue;
@@ -233,7 +222,7 @@ class TREXQuery {
      * (double)numQueries << std::endl; */
   }
 
- private:
+private:
   inline void clear() noexcept {
     queueSize = 0;
     reachedIndex.clear();
@@ -265,7 +254,8 @@ class TREXQuery {
           data.raptorData.transferGraph.get(TravelTime, edge);
     }
     transferToTarget[targetStop] = 0;
-    if (sourceStop == targetStop) addTargetLabel(sourceDepartureTime);
+    if (sourceStop == targetStop)
+      addTargetLabel(sourceDepartureTime);
     for (const Edge edge : reverseTransferGraph.edgesFrom(targetStop)) {
       const Vertex stop = reverseTransferGraph.get(ToVertex, edge);
       if (stop == sourceStop)
@@ -313,7 +303,8 @@ class TREXQuery {
       TripId tripIndex = noTripId;
       for (StopIndex stopIndex(0); stopIndex < endIndex; stopIndex++) {
         const int timeFromSource = transferFromSource[stops[stopIndex]];
-        if (timeFromSource == INFTY) continue;
+        if (timeFromSource == INFTY)
+          continue;
         const int stopDepartureTime = sourceDepartureTime + timeFromSource;
         const u_int32_t labelIndex = stopIndex * label.numberOfTrips;
         if (tripIndex >= label.numberOfTrips) {
@@ -322,7 +313,8 @@ class TREXQuery {
               [&](const TripId trip, const int time) {
                 return label.departureTimes[labelIndex + trip] < time;
               });
-          if (tripIndex >= label.numberOfTrips) continue;
+          if (tripIndex >= label.numberOfTrips)
+            continue;
         } else {
           if (label.departureTimes[labelIndex + tripIndex - 1] <
               stopDepartureTime)
@@ -335,7 +327,8 @@ class TREXQuery {
           }
         }
         enqueue(firstTrip + tripIndex, StopIndex(stopIndex + 1));
-        if (tripIndex == 0) break;
+        if (tripIndex == 0)
+          break;
       }
     }
     profiler.donePhase(PHASE_EVALUATE_INITIAL);
@@ -363,7 +356,8 @@ class TREXQuery {
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime) break;
+          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
+            break;
           const int timeToTarget = transferToTarget[data.arrivalEvents[j].stop];
           if (timeToTarget != INFTY) {
             addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget, i);
@@ -405,7 +399,8 @@ class TREXQuery {
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (reachedIndex.alreadyReached(trip, index)) return;
+    if (reachedIndex.alreadyReached(trip, index))
+      return;
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
     queue[queueSize] = TripLabel(StopEventId(firstEvent + index),
                                  StopEventId(firstEvent + reachedIndex(trip)));
@@ -445,8 +440,8 @@ class TREXQuery {
     }
   }
 
-  inline RAPTOR::Journey getJourney(
-      const TargetLabel &targetLabel) const noexcept {
+  inline RAPTOR::Journey
+  getJourney(const TargetLabel &targetLabel) const noexcept {
     RAPTOR::Journey result;
     u_int32_t parent = targetLabel.parent;
     if (parent == u_int32_t(-1)) {
@@ -495,9 +490,9 @@ class TREXQuery {
     return result;
   }
 
-  inline std::pair<StopEventId, Edge> getParent(
-      const TripLabel &parentLabel,
-      const StopEventId departureStopEvent) const noexcept {
+  inline std::pair<StopEventId, Edge>
+  getParent(const TripLabel &parentLabel,
+            const StopEventId departureStopEvent) const noexcept {
     for (StopEventId i = parentLabel.begin; i < parentLabel.end; ++i) {
       for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(i))) {
         if (edgeLabels[edge].stopEvent + edgeLabels[edge].firstEvent ==
@@ -509,16 +504,17 @@ class TREXQuery {
     return std::make_pair(noStopEvent, noEdge);
   }
 
-  inline std::pair<StopEventId, Edge> getParent(
-      const TripLabel &parentLabel,
-      const TargetLabel &targetLabel) const noexcept {
+  inline std::pair<StopEventId, Edge>
+  getParent(const TripLabel &parentLabel,
+            const TargetLabel &targetLabel) const noexcept {
     // Final transfer to target may start exactly at parentLabel.end if it has
     // length 0
     const TripId trip = data.tripOfStopEvent[parentLabel.begin];
     const StopEventId end = data.firstStopEventOfTrip[trip + 1];
     for (StopEventId i = parentLabel.begin; i < end; ++i) {
       const int timeToTarget = transferToTarget[data.arrivalEvents[i].stop];
-      if (timeToTarget == INFTY) continue;
+      if (timeToTarget == INFTY)
+        continue;
       if (data.arrivalEvents[i].arrivalTime + timeToTarget ==
           targetLabel.arrivalTime)
         return std::make_pair(i, noEdge);
@@ -527,7 +523,7 @@ class TREXQuery {
     return std::make_pair(noStopEvent, noEdge);
   }
 
- private:
+private:
   TREXData &data;
 
   TransferGraph reverseTransferGraph;
@@ -561,4 +557,4 @@ class TREXQuery {
   size_t numQueries;
 };
 
-}  // namespace TripBased
+} // namespace TripBased
