@@ -305,9 +305,8 @@ private:
         [[likely]]
       return;
 
+    // only enable when setting every edge when unpacking
     uint16_t localLevel = data.stopEventGraph.get(LocalLevel, edge);
-
-    // prune if minLevel > 0 and the minLevel - 1 bit is set
     if (minLevel > 0 && !(localLevel & (1 << (minLevel - 1)))) {
       return;
     }
@@ -364,15 +363,8 @@ private:
     StopEventId toVertex = StopEventId(label.begin - 1);
     StopEventId fromVertex = noStopEvent;
 
-    uint8_t currentHopCounter(0);
-
     while (currentEdge != noEdge) {
       fromVertex = fromStopEventId[currentEdge];
-      /* AssertMsg(currentHopCounter < */
-      /*               256 - data.stopEventGraph.get(Hop, currentEdge), */
-      /*           "Current Hop Counter too large!"); */
-      /* currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
-      currentHopCounter++;
 
       uint16_t &prevLevel = data.stopEventGraph.get(LocalLevel, currentEdge);
       prevLevel |= static_cast<uint16_t>(1 << minLevel);
@@ -389,11 +381,11 @@ private:
       currentEdge = label.parentTransfer;
     }
 
-    totalLengthOfExtractedPaths += currentHopCounter;
+    totalLengthOfExtractedPaths += round;
 
-    AssertMsg(currentHopCounter > 0,
-              "The unrolling did not work as exxpected!");
-    AssertMsg(currentHopCounter == round, "Hop Counter not the same!");
+    /* AssertMsg(currentHopCounter > 0, */
+    /*           "The unrolling did not work as exxpected!"); */
+    /* AssertMsg(currentHopCounter == round, "Hop Counter not the same!"); */
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
@@ -410,7 +402,7 @@ private:
     AssertMsg(data.stopEventGraph.isVertex(Vertex(toVertex)),
               "To StopEvent " << (int)toVertex << " is not a valid vertex");
 
-    edgesToInsert.emplace_back(fromVertex, toVertex, currentHopCounter,
+    edgesToInsert.emplace_back(fromVertex, toVertex, round,
                                static_cast<uint16_t>(1 << (minLevel)));
 
     ++numAddedShortcuts;

@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../DataStructures/Graph/Utils/IO.h"
 #include "../../DataStructures/Queries/Queries.h"
 #include "../../DataStructures/RAPTOR/Data.h"
+#include "../../DataStructures/TREX/TBTransferGraph.h"
 #include "../../DataStructures/TREX/TREXData.h"
 #include "../../DataStructures/TripBased/Data.h"
 #include "../../Helpers/Console/Progress.h"
@@ -949,5 +950,23 @@ public:
     TripBased::TREXData data(networkFile);
     data.printInfo();
     data.exportStopFailureDistribution(outputFile);
+  }
+};
+
+class TestTBTransferGraph : public ParameterizedCommand {
+public:
+  TestTBTransferGraph(BasicShell &shell)
+      : ParameterizedCommand(shell, "testTBTransferGraph", "..") {
+    addParameter("TREX Binary");
+  }
+
+  virtual void execute() noexcept {
+    const std::string networkFile = getParameter("TREX Binary");
+
+    TripBased::TREXData data(networkFile);
+    data.printInfo();
+
+    TripBased::TBTransferGraph graph(data);
+    graph.showStats();
   }
 };

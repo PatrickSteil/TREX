@@ -90,6 +90,8 @@ int main(int argc, char **argv) {
   new DistanceNetwork(shell);
   new StopsImportance(shell);
 
+  new TestTBTransferGraph(shell);
+
   shell.run();
   return 0;
 }

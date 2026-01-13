@@ -295,9 +295,7 @@ public:
                     << (int)to
                     << "is out of bounds! (Loading from stopEventGraph)");
       allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, 0);
-      /* allTransfers.emplace_back(StopEventId(from), StopEventId(to), 1, */
-      /*                           data.stopEventGraph.get(LocalLevel, edge));
-       */
+      /* data.stopEventGraph.get(LocalLevel, edge)); */
     }
 
     for (auto &seeker : seekers) {
