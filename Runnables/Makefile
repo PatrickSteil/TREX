@@ -38,4 +38,4 @@ TREXDebug:
 	$(CC) $(FLAGS) $(OPTIMIZATION) $(DEBUG) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH)
 
 TREXRelease:
-	$(CC) $(FLAGS) $(OPTIMIZATION) $(RELEASE) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH)
+	$(CC) $(FLAGS) $(OPTIMIZATION) $(RELEASE) -o TREX TREX.cpp -ltbb -latomic $(PREFETCH) -g

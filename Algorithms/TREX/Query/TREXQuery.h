@@ -101,7 +101,7 @@ public:
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
-        overlayGraphs() {
+        overlayGraphs(), lclsOfTrip(256, 0) {
     reverseTransferGraph.revert();
 
     // fill the overlayGraphs _per level_
@@ -405,6 +405,12 @@ private:
       }
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
+#ifdef ENABLE_PREFETCH
+        if (i + 4 < roundEnd) {
+          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+        }
+#endif
+
         TripLabel &label = queue[i];
         for (StopEventId j = label.begin; j < label.end; j++) {
           if (data.arrivalEvents[j].arrivalTime >= minArrivalTime) {
@@ -415,6 +421,12 @@ private:
       }
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
+#ifdef ENABLE_PREFETCH
+        if (i + 4 < roundEnd) {
+          __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
+        }
+#endif
+
         const TripLabel &label = queue[i];
         for (StopEventId j = label.begin; j < label.end; j++) {
           const uint16_t lcl = static_cast<std::uint16_t>(std::min(
@@ -424,12 +436,22 @@ private:
                     "LCL value ("
                         << lcl
                         << ") cannot be used as index into overlayGraphs!");
+          lclsOfTrip[j - label.begin] = lcl;
+        }
+
+        for (StopEventId j = label.begin; j < label.end; j++) {
+#ifdef ENABLE_PREFETCH
+          if (j + 4 < label.end) {
+            __builtin_prefetch(&overlayGraphs[lclsOfTrip[j + 4 - label.begin]]);
+          }
+#endif
+
+          const uint16_t lcl = lclsOfTrip[j - label.begin];
           const Edge beginEdgeRange =
               overlayGraphs[lcl].beginEdgeFrom(Vertex(j));
           const Edge endEdgeRange = overlayGraphs[lcl].endEdgeFrom(Vertex(j));
           for (Edge edge(beginEdgeRange); edge < endEdgeRange; ++edge) {
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-            // This is not the original edge id!
             enqueue(edge, i, lcl);
           }
         }
@@ -459,14 +481,6 @@ private:
 
     if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
       return;
-
-    /* if (((label.cellId ^ sourceCellId) >> label.localLevel) && */
-    /*     ((label.cellId ^ targetCellId) >> label.localLevel)) [[likely]] {
-     */
-    /*   profiler.countMetric(DISCARDED_EDGE); */
-    /*   reachedIndex.update(label.trip, StopIndex(label.stopEvent)); */
-    /*   return; */
-    /* } */
 
     queue[queueSize] = TripLabel(
         StopEventId(label.stopEvent + label.firstEvent),
@@ -603,6 +617,8 @@ private:
   size_t numQueries;
 
   std::vector<StaticGraph<NoVertexAttributes, NoEdgeAttributes>> overlayGraphs;
+
+  std::vector<uint16_t> lclsOfTrip;
 };
 
 } // namespace TripBased
