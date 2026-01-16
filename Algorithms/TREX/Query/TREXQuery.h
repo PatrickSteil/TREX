@@ -382,8 +382,6 @@ private:
       ++currentRoundNumber;
       profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
-      // Evaluate final transfers in order to check if the target is
-      // reachable
       for (size_t i = roundBegin; i < roundEnd; ++i) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
@@ -439,20 +437,33 @@ private:
           lclsOfTrip[j - label.begin] = lcl;
         }
 
-        for (StopEventId j = label.begin; j < label.end; j++) {
-#ifdef ENABLE_PREFETCH
-          if (j + 4 < label.end) {
-            __builtin_prefetch(&overlayGraphs[lclsOfTrip[j + 4 - label.begin]]);
-          }
-#endif
+        StopEventId j = label.begin;
 
-          const uint16_t lcl = lclsOfTrip[j - label.begin];
-          const Edge beginEdgeRange =
-              overlayGraphs[lcl].beginEdgeFrom(Vertex(j));
-          const Edge endEdgeRange = overlayGraphs[lcl].endEdgeFrom(Vertex(j));
-          for (Edge edge(beginEdgeRange); edge < endEdgeRange; ++edge) {
+        while (j < label.end) {
+          const StopEventId segBegin = j;
+          const uint16_t segLcl = lclsOfTrip[j - label.begin];
+
+          // advance j to the end of this LCL segment
+          do {
+            ++j;
+          } while (j < label.end && lclsOfTrip[j - label.begin] == segLcl);
+
+          const StopEventId segEnd = j;
+
+          const auto &graph = overlayGraphs[segLcl];
+
+          AssertMsg(segBegin < graph.numVertices(),
+                    "Segment Begin (" << segBegin << ") is not valid");
+          AssertMsg(segEnd <= graph.numVertices(),
+                    "Segment End (" << segEnd << ") out of range");
+
+          const Edge beginEdgeRange = graph.beginEdgeFrom(Vertex(segBegin));
+
+          const Edge endEdgeRange = graph.beginEdgeFrom(Vertex(segEnd));
+
+          for (Edge edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-            enqueue(edge, i, lcl);
+            enqueue(edge, i, segLcl);
           }
         }
       }
