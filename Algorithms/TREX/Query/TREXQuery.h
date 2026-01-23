@@ -93,15 +93,19 @@ public:
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
         lastTarget(StopId(0)), reachedRoutes(data.numberOfRoutes()),
-        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
-        queueSize(0), reachedIndex(data), targetLabels(1),
-        minArrivalTime(INFTY),
+        queue(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
+        targetLabels(1), minArrivalTime(INFTY),
         edgeLabels(data.numberOfLevels + 1, std::vector<EdgeLabel>()),
         routeLabels(data.numberOfRoutes()),
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
-        overlayGraphs(), lclsOfTrip(256, 0) {
+        overlayGraphs(), lclsOfTrip(256, 0),
+        cellIdOfTripIfInside(data.numberOfTrips(),
+                             static_cast<std::uint16_t>(~0)),
+        edgeRangeLookup(
+            data.numberOfLevels + 1,
+            std::vector<std::vector<std::uint8_t>>(data.numberOfTrips())) {
     reverseTransferGraph.revert();
 
     // fill the overlayGraphs _per level_
@@ -152,6 +156,64 @@ public:
         edgeLabels[i][edge].stopEvent =
             StopIndex(StopEventId(overlayGraphs[i].get(ToVertex, edge) + 1) -
                       edgeLabels[i][edge].firstEvent);
+      }
+    }
+
+    auto inSameCell = [&](const StopId a, const StopId b,
+                          const int level) -> bool {
+      assert(level >= 0 && level < 16);
+      return (data.getCellIdOfStop(a) >> level) ==
+             (data.getCellIdOfStop(b) >> level);
+    };
+
+    // fill the edge range lookup
+    for (const RouteId route : data.routes()) {
+      const StopId *stopsOfRoute = data.raptorData.stopArrayOfRoute(route);
+      const std::size_t nrStopsInRoute = data.numberOfStopsInRoute(route);
+
+      for (int level = 0; level < data.numberOfLevels + 1; ++level) {
+        std::vector<std::uint8_t> lengths(nrStopsInRoute, 1);
+
+        if (nrStopsInRoute > 1) {
+          std::size_t segmentEnd = nrStopsInRoute;
+
+          for (std::size_t i = nrStopsInRoute - 1; i-- > 0;) {
+            if (!inSameCell(stopsOfRoute[i], stopsOfRoute[i + 1], level)) {
+              segmentEnd = i + 1;
+            }
+
+            const std::size_t len = segmentEnd - i;
+
+            AssertMsg(len > 0, "Length must be >= 1");
+            AssertMsg(len <= nrStopsInRoute - i, "Length exceeds trip suffix");
+            AssertMsg(len < 256, "The length in a subtrip is larger than 255!");
+
+            lengths[i] = static_cast<std::uint8_t>(len);
+          }
+        }
+
+        AssertMsg(static_cast<std::size_t>(level) < edgeRangeLookup.size(),
+                  "Level " << level
+                           << " is not a valid index into edgeRangeLookup!");
+
+        for (const TripId trip : data.tripsOfRoute(route)) {
+          AssertMsg(static_cast<std::size_t>(trip) <
+                        edgeRangeLookup[level].size(),
+                    "Trip " << (int)trip << " (for level " << level
+                            << ") is not a valid index into edgeRangeLookup!");
+
+          edgeRangeLookup[level][trip].assign(lengths.begin(), lengths.end());
+        }
+      }
+    }
+
+    std::size_t counter = 0;
+    for (const TripId trip : data.trips()) {
+      if (static_cast<std::size_t>(edgeRangeLookup[0][trip][0]) ==
+          data.numberOfStopsInTrip(trip)) {
+        const StopId firstStop = data.getStop(trip, StopIndex(0));
+        std::uint16_t cellId = data.getCellIdOfStop(firstStop);
+        cellIdOfTripIfInside[trip] = cellId;
       }
     }
 
@@ -386,10 +448,18 @@ private:
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
           __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+          __builtin_prefetch(&data.tripOfStopEvent[queue[i + 4].begin]);
         }
 #endif
 
         const TripLabel &label = queue[i];
+        const TripId trip = data.tripOfStopEvent[label.begin];
+
+        if (cellIdOfTripIfInside[trip] != static_cast<std::uint16_t>(~0) &&
+            cellIdOfTripIfInside[trip] != targetCellId) [[unlikely]] {
+          continue;
+        }
+
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
@@ -422,49 +492,58 @@ private:
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
           __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
+          __builtin_prefetch(&data.tripOfStopEvent[queue[i + 4].begin]);
         }
 #endif
 
         const TripLabel &label = queue[i];
-        for (StopEventId j = label.begin; j < label.end; j++) {
-          const uint16_t lcl = static_cast<std::uint16_t>(std::min(
+        const TripId trip = data.tripOfStopEvent[label.begin];
+        const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
+
+        for (StopEventId j = label.begin; j < label.end;) {
+          uint16_t lcl = static_cast<std::uint16_t>(std::min(
               std::bit_width<uint16_t>(cellIdOfEvent[j] ^ sourceCellId),
               std::bit_width<uint16_t>(cellIdOfEvent[j] ^ targetCellId)));
           AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
                     "LCL value ("
                         << lcl
                         << ") cannot be used as index into overlayGraphs!");
-          lclsOfTrip[j - label.begin] = lcl;
-        }
+          int lowerLcl = lcl;
+          if (lcl > 0)
+            lowerLcl--;
 
-        StopEventId j = label.begin;
+          const std::uint8_t lengthIntoTrip =
+              edgeRangeLookup[lowerLcl][trip][j - firstEvent];
+          const auto &graph = overlayGraphs[lcl];
 
-        while (j < label.end) {
-          const StopEventId segBegin = j;
-          const uint16_t segLcl = lclsOfTrip[j - label.begin];
+          const StopEventId endOfConsecutiveLCL =
+              std::min(static_cast<StopEventId>(j + lengthIntoTrip), label.end);
 
-          // advance j to the end of this LCL segment
-          do {
-            ++j;
-          } while (j < label.end && lclsOfTrip[j - label.begin] == segLcl);
+          /* for (StopEventId o(j + 1); o < endOfConsecutiveLCL; ++o) { */
+          /*   const uint16_t thisLcl = static_cast<std::uint16_t>(std::min( */
+          /*       std::bit_width<uint16_t>(cellIdOfEvent[o] ^ sourceCellId), */
+          /*       std::bit_width<uint16_t>(cellIdOfEvent[o] ^ targetCellId)));
+           */
+          /*   AssertMsg(thisLcl == lcl, */
+          /*             "LCL is off, should be " */
+          /*                 << (int)lcl << ", but is " << (int)thisLcl */
+          /*                 << "! Trip " << (int)trip << ", j: " << (int)j */
+          /*                 << ", o: " << (int)o */
+          /*                 << ", lengthIntoTrip: " << (int)lengthIntoTrip */
+          /*                 << ". Source " << (int)sourceStop << ", Target " */
+          /*                 << (int)targetStop << "."); */
+          /* } */
 
-          const StopEventId segEnd = j;
-
-          const auto &graph = overlayGraphs[segLcl];
-
-          AssertMsg(segBegin < graph.numVertices(),
-                    "Segment Begin (" << segBegin << ") is not valid");
-          AssertMsg(segEnd <= graph.numVertices(),
-                    "Segment End (" << segEnd << ") out of range");
-
-          const Edge beginEdgeRange = graph.beginEdgeFrom(Vertex(segBegin));
-
-          const Edge endEdgeRange = graph.beginEdgeFrom(Vertex(segEnd));
+          const Edge beginEdgeRange = graph.beginEdgeFrom(Vertex(j));
+          const Edge endEdgeRange =
+              graph.beginEdgeFrom(Vertex(endOfConsecutiveLCL));
 
           for (Edge edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-            enqueue(edge, i, segLcl);
+            enqueue(edge, i, lcl);
           }
+
+          j += lengthIntoTrip;
         }
       }
       roundBegin = roundEnd;
@@ -608,7 +687,6 @@ private:
   IndexedSet<false, RouteId> reachedRoutes;
 
   std::vector<TripLabel> queue;
-  std::vector<EdgeRange> edgeRanges;
   size_t queueSize;
   ReachedIndex reachedIndex;
 
@@ -630,6 +708,9 @@ private:
   std::vector<StaticGraph<NoVertexAttributes, NoEdgeAttributes>> overlayGraphs;
 
   std::vector<uint16_t> lclsOfTrip;
+
+  std::vector<std::uint16_t> cellIdOfTripIfInside;
+  std::vector<std::vector<std::vector<std::uint8_t>>> edgeRangeLookup;
 };
 
 } // namespace TripBased
