@@ -101,12 +101,9 @@ public:
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
-        overlayGraphs(), lclsOfTrip(256, 0),
-        cellIdOfTripIfInside(data.numberOfTrips(),
-                             static_cast<std::uint16_t>(~0)),
-        edgeRangeLookup(
-            data.numberOfLevels + 1,
-            std::vector<std::vector<std::uint8_t>>(data.numberOfTrips())) {
+        overlayGraphs(),
+        edgeRangeLookup(data.numberOfLevels + 1,
+                        std::vector<StopEventId>(data.numberOfStopEvents())) {
     reverseTransferGraph.revert();
 
     // fill the overlayGraphs _per level_
@@ -205,23 +202,22 @@ public:
                   "Level " << level
                            << " is not a valid index into edgeRangeLookup!");
 
-        for (const TripId trip : data.tripsOfRoute(route)) {
-          AssertMsg(static_cast<std::size_t>(trip) <
-                        edgeRangeLookup[level].size(),
-                    "Trip " << (int)trip << " (for level " << level
-                            << ") is not a valid index into edgeRangeLookup!");
+        for (std::size_t tripOffset = 0;
+             tripOffset < data.raptorData.numberOfTripsInRoute(route);
+             ++tripOffset) {
+          const std::size_t startIndex =
+              data.raptorData.firstStopEventOfRoute[route] +
+              tripOffset * nrStopsInRoute;
+          AssertMsg(startIndex < edgeRangeLookup[level].size(),
+                    "Start Index out of bounds!");
 
-          edgeRangeLookup[level][trip].assign(lengths.begin(), lengths.end());
+          for (std::size_t i = 0; i < nrStopsInRoute; ++i) {
+            const StopEventId eventId(startIndex + i);
+            AssertMsg(eventId < edgeRangeLookup[level].size(),
+                      "EventId is out of range!");
+            edgeRangeLookup[level][eventId] = StopEventId(eventId + lengths[i]);
+          }
         }
-      }
-    }
-
-    for (const TripId trip : data.trips()) {
-      if (static_cast<std::size_t>(edgeRangeLookup[0][trip][0]) ==
-          data.numberOfStopsInTrip(trip)) {
-        const StopId firstStop = data.getStop(trip, StopIndex(0));
-        std::uint16_t cellId = data.getCellIdOfStop(firstStop);
-        cellIdOfTripIfInside[trip] = cellId;
       }
     }
 
@@ -457,18 +453,10 @@ private:
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
           __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
-          /* __builtin_prefetch(&data.tripOfStopEvent[queue[i + 4].begin]); */
         }
 #endif
 
         const TripLabel &label = queue[i];
-        /* const TripId trip = data.tripOfStopEvent[label.begin]; */
-
-        /* if (cellIdOfTripIfInside[trip] != static_cast<std::uint16_t>(~0) &&
-         */
-        /*     cellIdOfTripIfInside[trip] != targetCellId) [[unlikely]] { */
-        /*   continue; */
-        /* } */
 
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
@@ -534,16 +522,13 @@ private:
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
           __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
-          __builtin_prefetch(&data.tripOfStopEvent[queue[i + 4].begin]);
         }
 #endif
 
         const TripLabel &label = queue[i];
-        const TripId trip = data.tripOfStopEvent[label.begin];
-        const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
 
         for (StopEventId j = label.begin; j < label.end;) {
-          uint16_t lcl = static_cast<std::uint16_t>(std::min(
+          int lcl = static_cast<int>(std::min(
               std::bit_width<uint16_t>(cellIdOfEvent[j] ^ sourceCellId),
               std::bit_width<uint16_t>(cellIdOfEvent[j] ^ targetCellId)));
 
@@ -551,20 +536,17 @@ private:
                     "LCL value ("
                         << lcl
                         << ") cannot be used as index into overlayGraphs!");
-          int lowerLcl = lcl;
-          if (lcl > 0)
-            lowerLcl--;
-
-          const std::uint8_t lengthIntoTrip =
-              edgeRangeLookup[lowerLcl][trip][j - firstEvent];
-          const auto &graph = overlayGraphs[lcl];
+          int lowerLcl = std::max(lcl - 1, 0);
+          const StopEventId nextStopEventOutside = edgeRangeLookup[lowerLcl][j];
 
           const StopEventId endOfConsecutiveLCL =
-              std::min(static_cast<StopEventId>(j + lengthIntoTrip), label.end);
+              std::min(nextStopEventOutside, label.end);
 
-          const std::size_t beginEdgeRange = graph.beginEdge(Vertex(j));
+          const auto &curGraph = overlayGraphs[lcl];
+
+          const std::size_t beginEdgeRange = curGraph.beginEdge(Vertex(j));
           const std::size_t endEdgeRange =
-              graph.beginEdge((Vertex)endOfConsecutiveLCL);
+              curGraph.beginEdge(Vertex(endOfConsecutiveLCL));
 
           for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
@@ -735,10 +717,8 @@ private:
 
   std::vector<SimpleGraph<std::uint32_t>> overlayGraphs;
 
-  std::vector<uint16_t> lclsOfTrip;
-
-  std::vector<std::uint16_t> cellIdOfTripIfInside;
-  std::vector<std::vector<std::vector<std::uint8_t>>> edgeRangeLookup;
+  std::vector<std::vector<StopEventId>> edgeRangeLookup;
+  /* std::vector<std::vector<std::vector<std::uint8_t>>> edgeRangeLookup; */
 };
 
 } // namespace TripBased
