@@ -162,7 +162,6 @@ public:
     for (int i = 0; i < numOverlayGraphs; ++i) {
       std::cout << "Overlay Graph " << i << ": " << overlayGraphs[i].numEdges()
                 << "\n";
-      /* overlayGraphs[i].showStats(); */
     }
 
     auto inSameCell = [&](const StopId a, const StopId b,
@@ -453,22 +452,38 @@ private:
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
           __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+          __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
         }
 #endif
 
         const TripLabel &label = queue[i];
 
         profiler.countMetric(METRIC_SCANNED_TRIPS);
-        for (StopEventId j = label.begin; j < label.end; j++) {
+        for (StopEventId j = label.begin; j < label.end;) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
-            break;
-          const int timeToTarget = transferToTarget[data.arrivalEvents[j].stop];
-          if (timeToTarget != INFTY) {
-            addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget, i);
+
+          // if the stop (of event j) is not in the target cell => jump to next
+          // cell that is crossed by trip
+          const auto thisCellId = cellIdOfEvent[j];
+          if (thisCellId == targetCellId) {
+            if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
+              break;
+            const int timeToTarget =
+                transferToTarget[data.arrivalEvents[j].stop];
+            if (timeToTarget != INFTY) {
+              addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget,
+                             i);
+            }
+
+            j++;
+          } else {
+            j = edgeRangeLookup[0][j];
           }
         }
       }
+
+      if (currentRoundNumber == MAX_ROUNDS)
+        break;
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
@@ -485,38 +500,6 @@ private:
           }
         }
       }
-
-      /*
-     for (size_t i = roundBegin; i < roundEnd; i++) {
-#ifdef ENABLE_PREFETCH
-       if (i + 4 < roundEnd) {
-         __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
-       }
-#endif
-
-       const TripLabel &label = queue[i];
-
-       for (StopEventId j = label.begin; j < label.end; j++) {
-         uint16_t lcl = static_cast<std::uint16_t>(std::min(
-             std::bit_width<uint16_t>(cellIdOfEvent[j] ^ sourceCellId),
-             std::bit_width<uint16_t>(cellIdOfEvent[j] ^ targetCellId)));
-         AssertMsg(0 <= lcl && lcl < 16,
-                   "LCL (" << (int)lcl << ") is invalid!\n");
-         AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
-                   "LCL value ("
-                       << lcl
-                       << ") cannot be used as index into overlayGraphs!");
-         const auto &curGraph = overlayGraphs[lcl];
-
-         const std::size_t beginEdgeRange = curGraph.beginEdge(Vertex(j));
-         const std::size_t endEdgeRange = curGraph.endEdge(Vertex(j));
-         for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
-           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-           enqueue(edge, i, lcl);
-         }
-       }
-     }
-     */
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
@@ -549,6 +532,11 @@ private:
               curGraph.beginEdge(Vertex(endOfConsecutiveLCL));
 
           for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
+#ifdef ENABLE_PREFETCH
+            if (edge + 4 < endEdgeRange) {
+              __builtin_prefetch(&edgeLabels[lcl][edge + 4]);
+            }
+#endif
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
             enqueue(edge, i, lcl);
           }
