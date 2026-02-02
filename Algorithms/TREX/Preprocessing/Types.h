@@ -27,16 +27,73 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../Helpers/Types.h"
 
 namespace TripBased {
-struct EdgeLabel {
-  EdgeLabel(const StopEventId stopEvent = noStopEvent,
-            const TripId trip = noTripId,
-            const StopEventId firstEvent = noStopEvent)
-      : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent) {}
+/* struct EdgeLabel { */
+/*   EdgeLabel(const StopEventId stopEvent = noStopEvent, */
+/*             const TripId trip = noTripId, */
+/*             const StopEventId firstEvent = noStopEvent, */
+/*             const uint16_t cellId = 0) */
+/*       : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent), */
+/*         cellId(cellId) {} */
 
-  StopEventId stopEvent;
-  TripId trip;
-  StopEventId firstEvent;
+/*   StopEventId stopEvent; */
+/*   TripId trip; */
+/*   StopEventId firstEvent; */
+/*   uint16_t cellId; */
+/* }; */
+
+#pragma pack(push, 1)
+struct alignas(4) EdgeLabel {
+  uint64_t lo; // 64-bit lower part
+  uint32_t hi; // 32-bit upper part
+
+  EdgeLabel(StopEventId stopEvent = noStopEvent, TripId trip = noTripId,
+            StopEventId firstEvent = noStopEvent, uint16_t cellId = 0) {
+    setStopEvent(stopEvent);
+    setTrip(trip);
+    setCellId(cellId);
+    setFirstEvent(firstEvent);
+  }
+
+  StopEventId stopEvent() const {
+    return static_cast<StopEventId>(lo & 0x7FFFFFF); // mask 27 bits
+  }
+  void setStopEvent(StopEventId id) {
+    assert(id < (1u << 27));
+    lo = (lo & ~0x7FFFFFFULL) | (id & 0x7FFFFFFULL);
+  }
+
+  TripId trip() const {
+    return static_cast<TripId>((lo >> 27) & 0x7FFFFF); // mask 23 bits
+  }
+  void setTrip(TripId id) {
+    assert(id < (1u << 23));
+    lo = (lo & ~(0x7FFFFFULL << 27)) |
+         (static_cast<uint64_t>(id & 0x7FFFFF) << 27);
+  }
+
+  uint16_t cellId() const {
+    uint16_t lower = static_cast<uint16_t>((lo >> 50) & 0x3FFF); // 14 bits
+    uint16_t upper = static_cast<uint16_t>(hi & 0x3);            // 2 bits
+    return (upper << 14) | lower;
+  }
+  void setCellId(uint16_t id) {
+    lo = (lo & ~(0x3FFFULL << 50)) | (static_cast<uint64_t>(id & 0x3FFF) << 50);
+    hi = (hi & ~0x3) | ((id >> 14) & 0x3);
+  }
+
+  StopEventId firstEvent() const {
+    return static_cast<StopEventId>((hi >> 2) & 0x7FFFFFF); // mask 27 bits
+  }
+  void setFirstEvent(StopEventId id) {
+    assert(id < (1u << 27));
+    hi = (hi & ~0x7FFFFFFC) | ((id & 0x7FFFFFF) << 2);
+  }
 };
+#pragma pack(pop)
+
+// Ensure exact size
+static_assert(sizeof(EdgeLabel) == 12, "EdgeLabel should be 12 bytes");
+static_assert(alignof(EdgeLabel) == 4, "Alignment should be 4 bytes");
 
 struct RouteLabel {
   RouteLabel() : numberOfTrips(0) {}

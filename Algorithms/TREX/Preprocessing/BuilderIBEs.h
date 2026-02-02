@@ -61,19 +61,28 @@ public:
         pinMultiplier(pinMultiplier),
         fromStopEventId(data.stopEventGraph.numEdges()),
         edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.raptorData.numberOfRoutes()), seekers(), IBEs() {
+        routeLabels(data.raptorData.numberOfRoutes()),
+        cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs() {
     // set number of threads
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
 
+    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
+      const StopId stop = data.getStopOfStopEvent(StopEventId(event));
+      AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
+      cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
+    }
+
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      edgeLabels[edge].stopEvent =
-          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
-      edgeLabels[edge].trip =
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
-      edgeLabels[edge].firstEvent =
-          data.firstStopEventOfTrip[edgeLabels[edge].trip];
+      edgeLabels[edge].setStopEvent(
+          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1));
+      edgeLabels[edge].setTrip(
+          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
+      edgeLabels[edge].setFirstEvent(
+          data.firstStopEventOfTrip[edgeLabels[edge].trip()]);
+      edgeLabels[edge].setCellId(
+          cellIdOfEvent[edgeLabels[edge].stopEvent() - 1]);
 
       fromStopEventId[edge] = StopEventId(from);
     }
@@ -97,7 +106,8 @@ public:
 
     seekers.reserve(numberOfThreads);
     for (int i = 0; i < numberOfThreads; ++i)
-      seekers.emplace_back(data, fromStopEventId, edgeLabels, routeLabels);
+      seekers.emplace_back(data, fromStopEventId, edgeLabels, routeLabels,
+                           cellIdOfEvent);
 
     profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
     profiler.registerPhases({
@@ -252,6 +262,7 @@ public:
 
   std::vector<EdgeLabel> edgeLabels;
   std::vector<RouteLabel> routeLabels;
+  std::vector<uint16_t> cellIdOfEvent;
 
   std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
   std::vector<PackedIBE> IBEs;

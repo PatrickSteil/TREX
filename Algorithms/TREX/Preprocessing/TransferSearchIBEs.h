@@ -87,9 +87,10 @@ public:
   TransferSearch(TREXData &data,
                  const std::vector<StopEventId> &fromStopEventId,
                  const std::vector<EdgeLabel> &edgeLabels,
-                 const std::vector<RouteLabel> &routeLabels)
+                 const std::vector<RouteLabel> &routeLabels,
+                 const std::vector<uint16_t> &cellIdOfEvent)
       : data(data), fromStopEventId(fromStopEventId), edgeLabels(edgeLabels),
-        routeLabels(routeLabels),
+        routeLabels(routeLabels), cellIdOfEvent(cellIdOfEvent),
         /* edgesToInsert(), */
         queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
         queueSize(0), reachedIndex(data),
@@ -152,19 +153,18 @@ private:
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+          __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
         }
 #endif
         const TripLabel &label = queue[i];
         profiler.countMetric(METRIC_SCANNED_TRIPS);
+        bool isInSameCell = true;
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-          // check if stop of j is outside this cell => add to 'toBeUnpacked'
-          StopId currentStop = data.getStopOfStopEvent(j);
-          /* toBeUnpacked.insert(i, !isStopInCell(currentStop)); */
-          if (!isStopInCell(currentStop)) {
-            toBeUnpacked.insert(i);
-          }
+          isInSameCell &= isEventInCell(cellIdOfEvent[j]);
+        }
+        if (!isInSameCell) {
+          toBeUnpacked.insert(i);
         }
       }
 
@@ -175,7 +175,7 @@ private:
           __builtin_prefetch(&edgeRanges[i + 4]);
         }
 #endif
-        TripLabel &label = queue[i];
+        const TripLabel &label = queue[i];
         edgeRanges[i].begin =
             data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
         edgeRanges[i].end =
@@ -183,6 +183,11 @@ private:
       }
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
+#ifdef ENABLE_PREFETCH
+        if (i + 4 < roundEnd) {
+          __builtin_prefetch(&edgeLabels[edgeRanges[i + 4].begin]);
+        }
+#endif
         const EdgeRange &label = edgeRanges[i];
         for (Edge edge = label.begin; edge < label.end; edge++) {
           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
@@ -198,6 +203,10 @@ private:
   inline bool isStopInCell(StopId stop) const {
     AssertMsg(data.isStop(stop), "Stop is not a valid stop!");
     return !((data.getCellIdOfStop(stop) ^ currentCellId) >> minLevel);
+  }
+
+  inline bool isEventInCell(const uint16_t cellId) const {
+    return !((cellId ^ currentCellId) >> minLevel);
   }
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
@@ -216,26 +225,25 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    // break if a) already reached OR b) the stop if this transfer is not in the
-    // same cell
-    if (reachedIndex.alreadyReached(label.trip,
-                                    label.stopEvent - label.firstEvent) ||
-        !isStopInCell(data.getStop(
-            label.trip, StopIndex(label.stopEvent - label.firstEvent - 1))))
-        [[likely]]
+    if (!isEventInCell(label.cellId())) [[likely]]
       return;
 
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 
-    queue[queueSize] = TripLabel(
-        label.stopEvent,
-        StopEventId(label.firstEvent + reachedIndex(label.trip)), parent, edge);
+    if (reachedIndex.alreadyReached(
+            label.trip(), label.stopEvent() - label.firstEvent())) [[likely]]
+      return;
+
+    queue[queueSize] =
+        TripLabel(label.stopEvent(),
+                  StopEventId(label.firstEvent() + reachedIndex(label.trip())),
+                  parent, edge);
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip,
-                        StopIndex(label.stopEvent - label.firstEvent));
+    reachedIndex.update(label.trip(),
+                        StopIndex(label.stopEvent() - label.firstEvent()));
   }
 
   // all marked events which we want to marks as local for the next level
@@ -347,6 +355,7 @@ private:
 
   const std::vector<EdgeLabel> &edgeLabels;
   const std::vector<RouteLabel> &routeLabels;
+  const std::vector<uint16_t> &cellIdOfEvent;
 
   /* std::vector<ShortCutToInsert> edgesToInsert; */
 
