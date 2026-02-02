@@ -40,6 +40,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../Helpers/String/String.h"
 #include "../../TripBased/Query/Profiler.h"
 #include "TransferSearchIBEs.h"
+#include "Types.h"
 
 namespace TripBased {
 // IBE <=> Incomming Border Event
@@ -53,21 +54,50 @@ constexpr uint32_t TRIPOFFSET = 8;
 constexpr uint32_t STOPINDEX_MASK = ((1 << 8) - 1);
 
 class Builder {
- public:
-  Builder(TREXData& data, const int numberOfThreads = 1,
+public:
+  Builder(TREXData &data, const int numberOfThreads = 1,
           const int pinMultiplier = 1)
-      : data(data),
-        numberOfThreads(numberOfThreads),
+      : data(data), numberOfThreads(numberOfThreads),
         pinMultiplier(pinMultiplier),
-        seekers(),
-        IBEs() {
+        fromStopEventId(data.stopEventGraph.numEdges()),
+        edgeLabels(data.stopEventGraph.numEdges()),
+        routeLabels(data.raptorData.numberOfRoutes()), seekers(), IBEs() {
     // set number of threads
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
 
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      edgeLabels[edge].stopEvent =
+          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
+      edgeLabels[edge].trip =
+          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
+      edgeLabels[edge].firstEvent =
+          data.firstStopEventOfTrip[edgeLabels[edge].trip];
+
+      fromStopEventId[edge] = StopEventId(from);
+    }
+
+    for (const RouteId route : data.raptorData.routes()) {
+      const size_t numberOfStops = data.numberOfStopsInRoute(route);
+      const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
+      const RAPTOR::StopEvent *stopEvents =
+          data.raptorData.firstTripOfRoute(route);
+      routeLabels[route].numberOfTrips = numberOfTrips;
+      routeLabels[route].departureTimes.resize((numberOfStops - 1) *
+                                               numberOfTrips);
+      for (size_t trip = 0; trip < numberOfTrips; trip++) {
+        for (size_t stopIndex = 0; stopIndex + 1 < numberOfStops; stopIndex++) {
+          routeLabels[route]
+              .departureTimes[(stopIndex * numberOfTrips) + trip] =
+              stopEvents[(trip * numberOfStops) + stopIndex].departureTime;
+        }
+      }
+    }
+
     seekers.reserve(numberOfThreads);
-    for (int i = 0; i < numberOfThreads; ++i) seekers.emplace_back(data);
+    for (int i = 0; i < numberOfThreads; ++i)
+      seekers.emplace_back(data, fromStopEventId, edgeLabels, routeLabels);
 
     profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
     profiler.registerPhases({
@@ -104,11 +134,12 @@ class Builder {
     };
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
-      for (const RAPTOR::RouteSegment& route :
+      for (const RAPTOR::RouteSegment &route :
            data.routesContainingStop(stop)) {
         // EDGE CASE: a stop is not a border stop (of a route) if it's at either
         // end (start or end)
-        if (route.stopIndex == 0) continue;
+        if (route.stopIndex == 0)
+          continue;
 
         // check if the next / previous stop in stop array of route is in
         // another cell
@@ -120,8 +151,10 @@ class Builder {
                         data.raptorData.stopOfRouteSegment(neighbourSeg))) {
           // add all stop events of this route
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1))) continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1))) break;
+            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
+              continue;
+            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
+              break;
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
             IBEs.push_back((trip << TRIPOFFSET) | (route.stopIndex - 1));
           }
@@ -189,7 +222,7 @@ class Builder {
                                             << ", but should be "
                                             << numberOfThreads << "!");
 
-          auto& values = IBEs[i];
+          auto &values = IBEs[i];
           seekers[threadId].run(TripId(values >> TRIPOFFSET),
                                 StopIndex(values & STOPINDEX_MASK), level);
           ++progress;
@@ -198,21 +231,30 @@ class Builder {
 
       progress.finished();
 
-      if (level < data.getNumberOfLevels() - 1) filterIrrelevantIBEs(level + 1);
+      if (level < data.getNumberOfLevels() - 1)
+        filterIrrelevantIBEs(level + 1);
 
-      if (VERBOSE) std::cout << "done!\n";
+      if (VERBOSE)
+        std::cout << "done!\n";
     }
     profiler.done();
   }
 
-  inline AggregateProfiler& getProfiler() noexcept { return profiler; }
+  inline AggregateProfiler &getProfiler() noexcept { return profiler; }
 
-  TREXData& data;
+  TREXData &data;
   const int numberOfThreads;
   const int pinMultiplier;
+
+  // same as FromVertex, but for the stopEventGraph, it is not defined
+  // we need to extract quickly the event from which the transfer was possible
+  std::vector<StopEventId> fromStopEventId;
+
+  std::vector<EdgeLabel> edgeLabels;
+  std::vector<RouteLabel> routeLabels;
 
   std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
   std::vector<PackedIBE> IBEs;
   AggregateProfiler profiler;
 };
-}  // namespace TripBased
+} // namespace TripBased

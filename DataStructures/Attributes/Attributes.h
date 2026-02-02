@@ -304,6 +304,7 @@ public:
           getOldAttributeName(ThisAttribute, nameChanges...));
       Vector::assign(values,
                      other[getOldAttributeName(ThisAttribute, nameChanges...)]);
+      values.resize(this->attributesSize, defaultValue);
     } else {
       defaultValue = ValueType();
       std::vector<ValueType>(other.size(), ValueType()).swap(values);

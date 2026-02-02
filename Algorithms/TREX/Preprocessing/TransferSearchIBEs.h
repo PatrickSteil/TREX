@@ -32,6 +32,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/TripBased/Data.h"
 #include "../../TripBased/Query/Profiler.h"
 #include "../../TripBased/Query/TimestampedReachedIndex.h"
+#include "Types.h"
 
 // NOTE: die Länge der extracted paths stimmt nicht, weil ich beim entpacken
 // aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
@@ -62,26 +63,6 @@ private:
     Edge end;
   };
 
-  struct EdgeLabel {
-    EdgeLabel(const StopEventId stopEvent = noStopEvent,
-              const TripId trip = noTripId,
-              const StopEventId firstEvent = noStopEvent)
-        : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent) {}
-
-    StopEventId stopEvent;
-    TripId trip;
-    StopEventId firstEvent;
-  };
-
-  struct RouteLabel {
-    RouteLabel() : numberOfTrips(0) {}
-    inline StopIndex end() const noexcept {
-      return StopIndex(departureTimes.size() / numberOfTrips);
-    }
-    u_int32_t numberOfTrips;
-    std::vector<int> departureTimes;
-  };
-
   // Stores the shortcut information, which we insert into the
   // augmentedStopEventGraph we keep track of the number of transfer we hid
   // inside
@@ -103,47 +84,21 @@ private:
   };
 
 public:
-  TransferSearch(TREXData &data)
-      : data(data),
+  TransferSearch(TREXData &data,
+                 const std::vector<StopEventId> &fromStopEventId,
+                 const std::vector<EdgeLabel> &edgeLabels,
+                 const std::vector<RouteLabel> &routeLabels)
+      : data(data), fromStopEventId(fromStopEventId), edgeLabels(edgeLabels),
+        routeLabels(routeLabels),
         /* edgesToInsert(), */
         queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
         queueSize(0), reachedIndex(data),
-        edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.numberOfRoutes()),
         toBeUnpacked(data.numberOfStopEvents()),
-        fromStopEventId(data.stopEventGraph.numEdges()),
         lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0)
   /* , extractedPaths(0) */
   /* , totalLengthPfExtractedPaths(0) */
   /* , numAddedShortcuts(0) */
   {
-    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      edgeLabels[edge].stopEvent =
-          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
-      edgeLabels[edge].trip =
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
-      edgeLabels[edge].firstEvent =
-          data.firstStopEventOfTrip[edgeLabels[edge].trip];
-
-      fromStopEventId[edge] = StopEventId(from);
-    }
-
-    for (const RouteId route : data.raptorData.routes()) {
-      const size_t numberOfStops = data.numberOfStopsInRoute(route);
-      const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
-      const RAPTOR::StopEvent *stopEvents =
-          data.raptorData.firstTripOfRoute(route);
-      routeLabels[route].numberOfTrips = numberOfTrips;
-      routeLabels[route].departureTimes.resize((numberOfStops - 1) *
-                                               numberOfTrips);
-      for (size_t trip = 0; trip < numberOfTrips; trip++) {
-        for (size_t stopIndex = 0; stopIndex + 1 < numberOfStops; stopIndex++) {
-          routeLabels[route]
-              .departureTimes[(stopIndex * numberOfTrips) + trip] =
-              stopEvents[(trip * numberOfStops) + stopIndex].departureTime;
-        }
-      }
-    }
     profiler.registerPhases({PHASE_SCAN_TRIPS});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
@@ -388,6 +343,11 @@ public:
 
 private:
   TREXData &data;
+  const std::vector<StopEventId> &fromStopEventId;
+
+  const std::vector<EdgeLabel> &edgeLabels;
+  const std::vector<RouteLabel> &routeLabels;
+
   /* std::vector<ShortCutToInsert> edgesToInsert; */
 
   std::vector<TripLabel> queue;
@@ -396,9 +356,6 @@ private:
   size_t queueSize;
   TimestampedReachedIndex reachedIndex;
 
-  std::vector<EdgeLabel> edgeLabels;
-  std::vector<RouteLabel> routeLabels;
-
   uint8_t minLevel;
   uint16_t currentCellId;
 
@@ -406,10 +363,6 @@ private:
 
   IndexedSet<false, size_t> toBeUnpacked;
   /* IndexedSetBranchless<size_t> toBeUnpacked; */
-
-  // same as FromVertex, but for the stopEventGraph, it is not defined
-  // we need to extract quickly the event from which the transfer was possible
-  std::vector<StopEventId> fromStopEventId;
 
   // like a timestamp, used to check in which run the stop event has already
   // been extracted
