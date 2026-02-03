@@ -25,7 +25,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
 #include "../../../DataStructures/Container/Set.h"
-/* #include "../../../DataStructures/Container/IndexedSetBranchless.h" */
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
 #include "../../../DataStructures/TREX/TREXData.h"
@@ -34,8 +33,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../TripBased/Query/TimestampedReachedIndex.h"
 #include "Types.h"
 
-// NOTE: die Länge der extracted paths stimmt nicht, weil ich beim entpacken
-// aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
 namespace TripBased {
 
 template <typename PROFILER = NoProfiler> class TransferSearch {
@@ -63,9 +60,6 @@ private:
     Edge end;
   };
 
-  // Stores the shortcut information, which we insert into the
-  // augmentedStopEventGraph we keep track of the number of transfer we hid
-  // inside
   struct ShortCutToInsert {
     StopEventId fromStopEventId;
     StopEventId toStopEventId;
@@ -84,22 +78,14 @@ private:
   };
 
 public:
-  TransferSearch(TREXData &data,
-                 const std::vector<StopEventId> &fromStopEventId,
-                 const std::vector<EdgeLabel> &edgeLabels,
+  TransferSearch(TREXData &data, const std::vector<EdgeLabel> &edgeLabels,
                  const std::vector<RouteLabel> &routeLabels,
                  const std::vector<uint16_t> &cellIdOfEvent)
-      : data(data), fromStopEventId(fromStopEventId), edgeLabels(edgeLabels),
-        routeLabels(routeLabels), cellIdOfEvent(cellIdOfEvent),
-        /* edgesToInsert(), */
-        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
-        queueSize(0), reachedIndex(data),
+      : data(data), edgeLabels(edgeLabels), routeLabels(routeLabels),
+        cellIdOfEvent(cellIdOfEvent), queue(data.numberOfStopEvents()),
+        edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         toBeUnpacked(data.numberOfStopEvents()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0)
-  /* , extractedPaths(0) */
-  /* , totalLengthPfExtractedPaths(0) */
-  /* , numAddedShortcuts(0) */
-  {
+        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0) {
     profiler.registerPhases({PHASE_SCAN_TRIPS});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
@@ -225,20 +211,20 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    if (!isEventInCell(label.cellId())) [[likely]]
+    if (!isEventInCell(label.cellId()))
       return;
 
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 
-    if (reachedIndex.alreadyReached(
-            label.trip(), label.stopEvent() - label.firstEvent())) [[likely]]
+    const uint8_t reachedTrip = reachedIndex(label.trip());
+    if (reachedTrip <= uint8_t(label.stopEvent() - label.firstEvent())) {
       return;
+    }
 
     queue[queueSize] =
         TripLabel(label.stopEvent(),
-                  StopEventId(label.firstEvent() + reachedIndex(label.trip())),
-                  parent, edge);
+                  StopEventId(label.firstEvent() + reachedTrip), parent, edge);
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
@@ -246,21 +232,8 @@ private:
                         StopIndex(label.stopEvent() - label.firstEvent()));
   }
 
-  // all marked events which we want to marks as local for the next level
   inline void unpack() {
-    /* for (auto start = toBeUnpacked.begin(), end = toBeUnpacked.end(); */
-    /*      start < end; ++start) { */
-    /* #ifdef ENABLE_PREFETCH */
-    /*   if (start + 4 < end) { */
-    /*     __builtin_prefetch(&queue[*(start + 4)]); */
-    /*   } */
-    /* #endif */
-    /*   unpackStopEvent(*start); */
-    /* } */
-    // we need to loop over the collected queue elements,
-    // and for each element, we stored the latest ('das hinterste') event which
-    // we want to mark as local
-    auto &indexToLoopOver = toBeUnpacked.getValues();
+    const auto &indexToLoopOver = toBeUnpacked.getValues();
 
     for (size_t i(0); i < indexToLoopOver.size(); ++i) {
 #ifdef ENABLE_PREFETCH
@@ -269,95 +242,39 @@ private:
       }
 #endif
       unpackStopEvent(indexToLoopOver[i]);
-
-      // STATS
-      // ++extractedPaths;
     }
   }
 
-  // unpacks a reached stop event
   inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
 
-    // new vertices for the shortcut
-    /* StopEventId toVertex = label.begin; */
-    /* StopEventId fromVertex = noStopEvent; // will be assigned */
-
-    /* uint8_t currentHopCounter(0); */
+    auto &levelPerEdge = data.stopEventGraph[LocalLevel];
 
     while (currentEdge != noEdge) {
-      // commented this out since I want to create shortcuts, hence i need to
-      // rewind all transfers, even if i have already seen it.
       if (lastExtractedRun[currentEdge] == currentRun)
         return;
       lastExtractedRun[currentEdge] = currentRun;
 
-      /* // set the locallevel of the events */
-      /* fromVertex = fromStopEventId[currentEdge]; */
-      /* currentHopCounter += data.stopEventGraph.get(Hop, currentEdge); */
-
-      data.stopEventGraph.set(LocalLevel, currentEdge, minLevel + 1);
-
-      // set the locallevel of the events
-      StopEventId e = fromStopEventId[currentEdge];
-      data.getLocalLevelOfEvent(e) = minLevel + 1;
+      levelPerEdge[currentEdge] = minLevel + 1;
 
       index = label.parent;
       label = queue[index];
       currentEdge = label.parentTransfer;
-
-      // STATS
-      /* ++totalLengthPfExtractedPaths; */
     }
 
     AssertMsg(
         index == 0,
         "The origin of the journey does not start with the incomming event!");
-
-    /* // only add a shortcut if we can skip at least 2 transfers */
-    /* if ((currentHopCounter / (minLevel+1)) >= 2) { */
-    /*     /1* AssertMsg(fromVertex != noStopEvent, "From StopEvent has not been
-     * assigned properly"); *1/ */
-    /*     /1* AssertMsg(fromVertex != toVertex, "From- and To StopEvent should
-     * not be the same"); *1/ */
-    /*     /1* edgesToInsert.emplace_back(fromVertex, toVertex,
-     * currentHopCounter); *1/ */
-
-    /*     // STATS */
-    /*     ++numAddedShortcuts; */
-    /* } */
   }
-
-public:
-  /* inline double getAvgPathLengthPerLevel() noexcept */
-  /* { */
-  /*     return (double)totalLengthPfExtractedPaths / (double)extractedPaths; */
-  /* } */
-
-  /* inline uint64_t getNumberOfAddedShortcuts() noexcept */
-  /* { */
-  /*     return numAddedShortcuts; */
-  /* } */
-
-  /* inline void resetStats() noexcept */
-  /* { */
-  /*     // STATS */
-  /*     totalLengthPfExtractedPaths = 0; */
-  /*     extractedPaths = 0; */
-  /*     numAddedShortcuts = 0; */
-  /* } */
 
 private:
   TREXData &data;
-  const std::vector<StopEventId> &fromStopEventId;
 
   const std::vector<EdgeLabel> &edgeLabels;
   const std::vector<RouteLabel> &routeLabels;
   const std::vector<uint16_t> &cellIdOfEvent;
-
-  /* std::vector<ShortCutToInsert> edgesToInsert; */
 
   std::vector<TripLabel> queue;
   std::vector<EdgeRange> edgeRanges;
@@ -371,17 +288,9 @@ private:
   Profiler profiler;
 
   IndexedSet<false, size_t> toBeUnpacked;
-  /* IndexedSetBranchless<size_t> toBeUnpacked; */
 
-  // like a timestamp, used to check in which run the stop event has already
-  // been extracted
   std::vector<uint32_t> lastExtractedRun;
   uint32_t currentRun;
-
-  // stats
-  /* uint64_t extractedPaths; */
-  /* uint64_t totalLengthPfExtractedPaths; */
-  /* uint64_t numAddedShortcuts; */
 };
 
 } // namespace TripBased

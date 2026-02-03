@@ -59,7 +59,6 @@ public:
           const int pinMultiplier = 1)
       : data(data), numberOfThreads(numberOfThreads),
         pinMultiplier(pinMultiplier),
-        fromStopEventId(data.stopEventGraph.numEdges()),
         edgeLabels(data.stopEventGraph.numEdges()),
         routeLabels(data.raptorData.numberOfRoutes()),
         cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs() {
@@ -83,8 +82,6 @@ public:
           data.firstStopEventOfTrip[edgeLabels[edge].trip()]);
       edgeLabels[edge].setCellId(
           cellIdOfEvent[edgeLabels[edge].stopEvent() - 1]);
-
-      fromStopEventId[edge] = StopEventId(from);
     }
 
     for (const RouteId route : data.raptorData.routes()) {
@@ -106,8 +103,7 @@ public:
 
     seekers.reserve(numberOfThreads);
     for (int i = 0; i < numberOfThreads; ++i)
-      seekers.emplace_back(data, fromStopEventId, edgeLabels, routeLabels,
-                           cellIdOfEvent);
+      seekers.emplace_back(data, edgeLabels, routeLabels, cellIdOfEvent);
 
     profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
     profiler.registerPhases({
@@ -255,11 +251,6 @@ public:
   TREXData &data;
   const int numberOfThreads;
   const int pinMultiplier;
-
-  // same as FromVertex, but for the stopEventGraph, it is not defined
-  // we need to extract quickly the event from which the transfer was possible
-  std::vector<StopEventId> fromStopEventId;
-
   std::vector<EdgeLabel> edgeLabels;
   std::vector<RouteLabel> routeLabels;
   std::vector<uint16_t> cellIdOfEvent;
