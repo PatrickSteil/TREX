@@ -174,9 +174,11 @@ private:
           __builtin_prefetch(&edgeLabels[edgeRanges[i + 4].begin]);
         }
 #endif
+
         const EdgeRange &label = edgeRanges[i];
         for (Edge edge = label.begin; edge < label.end; edge++) {
           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+
           enqueue(edge, i);
         }
       }
@@ -211,16 +213,16 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    if (!isEventInCell(label.cellId()))
+    if (!isEventInCell(label.cellId())) [[likely]]
       return;
 
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 
     const uint8_t reachedTrip = reachedIndex(label.trip());
-    if (reachedTrip <= uint8_t(label.stopEvent() - label.firstEvent())) {
+    if (reachedTrip <= uint8_t(label.stopEvent() - label.firstEvent()))
+        [[likely]]
       return;
-    }
 
     queue[queueSize] =
         TripLabel(label.stopEvent(),

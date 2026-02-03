@@ -106,6 +106,10 @@ public:
     }
   }
 
+  void prefetch(const TripId trip) const noexcept {
+      __builtin_prefetch(&entries[trip]);
+  }
+
 private:
   inline uint8_t getLabel(const TripId trip) noexcept {
     PackedEntry v = entries[trip];
