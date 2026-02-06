@@ -31,10 +31,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../Helpers/IO/Serialization.h"
 
 class UnionFind {
- public:
+public:
   UnionFind(const int n = 0) : parent(n, n), n(n) {}
 
   inline void clear() noexcept { parent.assign(n, n); }
+  inline void reset(const int newN) noexcept {
+    n = newN;
+    clear();
+  }
 
   inline int find(const int i) noexcept {
     if (parent[i] >= n) {
@@ -63,7 +67,7 @@ class UnionFind {
     deserialize(n, parent);
   }
 
- protected:
+protected:
   inline void link(const int i, const int j) noexcept {
     Assert(parent[i] >= n);
     Assert(parent[j] >= n);

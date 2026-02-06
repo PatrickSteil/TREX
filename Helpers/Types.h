@@ -44,6 +44,9 @@ constexpr LinkId noLink(LinkId::InvalidValue);
 using PackedTransfer = TaggedInteger<10, u_int32_t, -u_int32_t(1)>;
 constexpr PackedTransfer noPackedTransfer(PackedTransfer::InvalidValue);
 
+using Time = TaggedInteger<11, u_int32_t, -u_int32_t(1)>;
+constexpr Time noTime(Time::InvalidValue);
+
 inline constexpr int intMax = std::numeric_limits<int>::max();
 inline constexpr double doubleMax = std::numeric_limits<double>::max();
 

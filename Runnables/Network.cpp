@@ -28,10 +28,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../Shell/Shell.h"
 #include "Commands/NetworkIO.h"
 #include "Commands/NetworkTools.h"
+#include "Commands/TimeTable.h"
 
 using namespace Shell;
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   CommandLineParser clp(argc, argv);
   pinThreadToCoreId(clp.value<int>("core", 1));
   checkAsserts();
@@ -63,6 +64,9 @@ int main(int argc, char** argv) {
   new WriteRAPTORToCSV(shell);
   new WriteTripBasedToCSV(shell);
   new WriteRAPTORLayoutGraphToMetis(shell);
+
+  new RAPTORToTimeTable(shell);
+  new LoadAndApplyPartition(shell);
   shell.run();
   return 0;
 }

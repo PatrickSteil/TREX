@@ -204,5 +204,8 @@ using DynamicTBTEGraph =
     DynamicGraph<WithCellId, WithTransferCostAndOriginalEdge>;
 using EdgeListTBTEGraph = EdgeList<WithCellId, WithTransferCostAndOriginalEdge>;
 
+using EdgeListFlatStopEventGraph = EdgeList<NoVertexAttributes, WithLocalLevel>;
+using FlatStopEventGraph = StaticGraph<NoVertexAttributes, WithLocalLevel>;
+
 #include "Utils/Conversion.h"
 #include "Utils/IO.h"
