@@ -34,6 +34,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../TripBased/Query/Profiler.h"
+/* #include "../../TripBased/Query/TimestampedReachedIndex.h" */
 #include "../../TripBased/Query/ReachedIndex.h"
 
 namespace TripBased {
@@ -44,6 +45,19 @@ public:
   using Type = TREXQuery<Profiler>;
 
 private:
+  struct EventLookup {
+    StopId stop;
+    uint32_t arrTime;
+    StopEventId nextEventOutside;
+    uint16_t cellId;
+
+    EventLookup(const StopId stop = noStop, uint32_t arrTime = 0,
+                const StopEventId nextEventOutside = noStopEvent,
+                const uint16_t cellId = 0)
+        : stop(stop), arrTime(arrTime), nextEventOutside(nextEventOutside),
+          cellId(cellId) {}
+  };
+
   struct TripLabel {
     TripLabel(const StopEventId begin = noStopEvent,
               const StopEventId end = noStopEvent, const uint32_t parent = -1,
@@ -98,6 +112,7 @@ public:
         targetLabels(1), minArrivalTime(INFTY),
         edgeLabels(data.numberOfLevels + 1, std::vector<EdgeLabel>()),
         routeLabels(data.numberOfRoutes()),
+        eventLookup(data.numberOfStopEvents()),
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
@@ -220,10 +235,18 @@ public:
       }
     }
 
+#pragma omp parallel for
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       const StopId stop = data.getStopOfStopEvent(StopEventId(event));
       AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
       cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
+    }
+
+#pragma omp parallel for
+    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
+      eventLookup[event] = EventLookup(
+          data.arrivalEvents[event].stop, data.arrivalEvents[event].arrivalTime,
+          edgeRangeLookup[0][event], cellIdOfEvent[event]);
     }
 
     for (const RouteId route : data.raptorData.routes()) {
@@ -451,8 +474,7 @@ private:
       for (size_t i = roundBegin; i < roundEnd; ++i) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
-          __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
+          __builtin_prefetch(&eventLookup[queue[i + 4].begin]);
         }
 #endif
 
@@ -461,23 +483,19 @@ private:
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end;) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-
           // if the stop (of event j) is not in the target cell => jump to next
           // cell that is crossed by trip
-          const auto thisCellId = cellIdOfEvent[j];
-          if (thisCellId == targetCellId) {
-            if (data.arrivalEvents[j].arrivalTime >= minArrivalTime)
+          if (eventLookup[j].cellId == targetCellId) [[likely]] {
+            if (eventLookup[j].arrTime >= minArrivalTime)
               break;
-            const int timeToTarget =
-                transferToTarget[data.arrivalEvents[j].stop];
+            const int timeToTarget = transferToTarget[eventLookup[j].stop];
             if (timeToTarget != INFTY) {
-              addTargetLabel(data.arrivalEvents[j].arrivalTime + timeToTarget,
-                             i);
+              addTargetLabel(eventLookup[j].arrTime + timeToTarget, i);
             }
 
             j++;
           } else {
-            j = edgeRangeLookup[0][j];
+            j = eventLookup[j].nextEventOutside;
           }
         }
       }
@@ -531,12 +549,11 @@ private:
           const std::size_t endEdgeRange =
               curGraph.beginEdge(Vertex(endOfConsecutiveLCL));
 
-          for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
 #ifdef ENABLE_PREFETCH
-            if (edge + 4 < endEdgeRange) {
-              __builtin_prefetch(&edgeLabels[lcl][edge + 4]);
-            }
+          __builtin_prefetch(&edgeLabels[lcl][beginEdgeRange]);
 #endif
+
+          for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
             profiler.countMetric(METRIC_RELAXED_TRANSFERS);
             enqueue(edge, i, lcl);
           }
@@ -693,6 +710,8 @@ private:
 
   std::vector<std::vector<EdgeLabel>> edgeLabels;
   std::vector<RouteLabel> routeLabels;
+
+  std::vector<EventLookup> eventLookup;
   std::vector<uint16_t> cellIdOfEvent;
 
   StopId sourceStop;
