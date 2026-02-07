@@ -31,6 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <execution>
 #include <omp.h>
 #include <tbb/global_control.h>
+#include <unordered_set>
 #include <vector>
 
 #include "../../../DataStructures/TREX/TREXData.h"
@@ -78,7 +79,7 @@ public:
   Builder(TREXData &data, const int numberOfThreads = 1,
           const int pinMultiplier = 1)
       : data(data), numberOfThreads(numberOfThreads),
-        pinMultiplier(pinMultiplier), seekers(), IBEs() {
+        pinMultiplier(pinMultiplier), seekers(), IBEs(), allowedCells() {
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
@@ -92,33 +93,64 @@ public:
         PHASE_TREX_COLLECT_IBES,
         PHASE_TREX_SORT_IBES,
         PHASE_TREX_FILTER_IBES,
+        PHASE_FILTER_SELECTED,
     });
+  }
+
+  inline void prepareCellLookup(
+      const std::unordered_set<uint16_t> &selectedCells) noexcept {
+    profiler.startPhase();
+    allowedCells.clear();
+    allowedCells.resize(data.getNumberOfLevels());
+
+    for (auto cellId : selectedCells) {
+      for (int l = 0; l < data.getNumberOfLevels(); ++l) {
+        allowedCells[l].insert((uint16_t)(cellId >> l));
+      }
+    }
+    profiler.donePhase(PHASE_PREPARE_CELID_LOOKUP);
+
+    for (int l = 0; l < data.getNumberOfLevels(); ++l) {
+      std::cout << "Level " << l
+                << ", # allowedCells: " << (int)allowedCells[l].size()
+                << std::endl;
+    }
+  }
+
+  inline std::vector<PackedIBE> copyIBEsBySelectedCells(int level) {
+    profiler.startPhase();
+    std::vector<PackedIBE> result;
+    result.reserve(IBEs.size()); // upper bound
+
+    for (const PackedIBE &ibe : IBEs) {
+      auto trip = ibe.getTripId();
+      auto stopIndex = ibe.getStopIndex();
+
+      auto fromStop = data.getStop(trip, stopIndex);
+      auto toStop = data.getStop(trip, StopIndex(stopIndex + 1));
+
+      uint16_t cu = data.getCellIdOfStop(fromStop);
+      uint16_t cv = data.getCellIdOfStop(toStop);
+
+      if (((cu ^ cv) >> level) == 0)
+        continue;
+
+      if (allowedCells[level].contains((cv >> level))) {
+        result.push_back(ibe);
+      }
+    }
+
+    result.shrink_to_fit();
+    profiler.donePhase(PHASE_FILTER_SELECTED);
+    return result;
   }
 
   inline void collectAllIBEsOnLowestLevel() noexcept {
     profiler.startPhase();
     IBEs.reserve(data.numberOfStopEvents());
 
-    // TODO to only allow 'time range based' IBE
-    /* int minTime = 7 * 60 * 60; */
-    /* int maxTime = 8 * 60 * 60; */
-
     auto inSameCell = [&](auto a, auto b) {
       return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b));
-    };
-
-    auto tripTooEarly = [&]([[maybe_unused]] auto trip,
-                            [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return minTime > event.departureTime; */
-      return false;
-    };
-
-    auto tripTooLate = [&]([[maybe_unused]] auto trip,
-                           [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return event.departureTime > maxTime; */
-      return false;
     };
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
@@ -139,10 +171,6 @@ public:
                         data.raptorData.stopOfRouteSegment(neighbourSeg))) {
           // add all stop events of this route
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
-              continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
-              break;
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
             IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
           }
@@ -178,6 +206,7 @@ public:
   template <bool SORT_IBES = true, bool VERBOSE = true>
   inline void run() noexcept {
     profiler.start();
+
     collectAllIBEsOnLowestLevel();
 
     assert(!IBEs.empty());
@@ -222,8 +251,71 @@ public:
 
       progress.finished();
 
-      if (level < data.getNumberOfLevels() - 1)
+      if (level < data.getNumberOfLevels() - 1) {
         filterIrrelevantIBEs(level + 1);
+      }
+
+      if (VERBOSE)
+        std::cout << "done!\n";
+    }
+    profiler.done();
+  }
+
+  template <bool SORT_IBES = true, bool VERBOSE = true>
+  inline void run(const std::unordered_set<uint16_t> &selectedCells) noexcept {
+    profiler.start();
+
+    prepareCellLookup(selectedCells);
+    collectAllIBEsOnLowestLevel();
+
+    assert(!IBEs.empty());
+
+    if (SORT_IBES) {
+      profiler.startPhase();
+      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
+       * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
+      ips4o::parallel::sort(
+          IBEs.begin(), IBEs.end(),
+          [](const PackedIBE &a, const PackedIBE &b) { return a < b; });
+      profiler.donePhase(PHASE_TREX_SORT_IBES);
+    }
+
+    const int numCores = numberOfCores();
+
+    std::vector<PackedIBE> ibesToWorkOn;
+    ibesToWorkOn.reserve(IBEs.size());
+    // now for every level, we have an invariant: IBEs contains exactly the IBEs
+    // we need on this level
+    for (uint8_t level(0); level < data.getNumberOfLevels(); ++level) {
+      ibesToWorkOn = copyIBEsBySelectedCells(level);
+      if (VERBOSE)
+        std::cout << "Starting Level " << (int)level
+                  << " [IBEs: " << ibesToWorkOn.size() << "]... " << std::endl;
+
+      Progress progress(ibesToWorkOn.size());
+
+#pragma omp parallel
+      {
+#pragma omp for schedule(dynamic)
+        for (size_t i = 0; i < ibesToWorkOn.size(); ++i) {
+          int threadId = omp_get_thread_num();
+          pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+          AssertMsg(omp_get_num_threads() == numberOfThreads,
+                    "Number of threads is " << omp_get_num_threads()
+                                            << ", but should be "
+                                            << numberOfThreads << "!");
+
+          const auto &ibe = ibesToWorkOn[i];
+          seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
+          ++progress;
+        }
+      }
+
+      progress.finished();
+
+      if (level < data.getNumberOfLevels() - 1) {
+        filterIrrelevantIBEs(level + 1);
+      }
 
       if (VERBOSE)
         std::cout << "done!\n";
@@ -239,6 +331,7 @@ public:
 
   std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
   std::vector<PackedIBE> IBEs;
+  std::vector<std::unordered_set<uint16_t>> allowedCells;
   AggregateProfiler profiler;
 };
 } // namespace TripBased

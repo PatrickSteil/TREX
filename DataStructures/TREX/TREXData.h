@@ -48,7 +48,7 @@ public:
   TREXData(const std::string &fileName) { deserialize(fileName); }
 
 public:
-  inline void addInformationToStopEventGraph() noexcept {
+  inline void resetInformationToStopEventGraph() noexcept {
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);
 

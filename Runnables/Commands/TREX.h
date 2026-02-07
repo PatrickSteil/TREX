@@ -124,7 +124,7 @@ public:
       }
     }
 
-    data.addInformationToStopEventGraph();
+    data.resetInformationToStopEventGraph();
     /* data.convertStopEventGraphToDynamicEventGraph(); */
     data.printInfo();
     data.serialize(mltbFile);
@@ -200,7 +200,6 @@ public:
                              "Computes the customization of TREX") {
     addParameter("Input file (TREX Data)");
     addParameter("Output file (TREX Data)");
-    /* addParameter("Verbose?", "true"); */
     addParameter("Number of threads", "max");
     addParameter("Pin multiplier", "1");
   }
@@ -208,18 +207,60 @@ public:
   virtual void execute() noexcept {
     const std::string mltbFile = getParameter("Input file (TREX Data)");
     const std::string output = getParameter("Output file (TREX Data)");
-    /* const bool verbose = getParameter<bool>("Verbose?"); */
     const int numberOfThreads = getNumberOfThreads();
     const int pinMultiplier = getParameter<int>("Pin multiplier");
 
     TripBased::TREXData data(mltbFile);
     // reset
-    data.addInformationToStopEventGraph();
+    data.resetInformationToStopEventGraph();
     data.printInfo();
 
     TripBased::Builder bobTheBuilder(data, numberOfThreads, pinMultiplier);
 
     bobTheBuilder.run();
+
+    std::cout << "******* Stats *******\n";
+    bobTheBuilder.getProfiler().printStatistics();
+    data.serialize(output);
+  }
+
+private:
+  inline int getNumberOfThreads() const noexcept {
+    if (getParameter("Number of threads") == "max") {
+      return numberOfCores();
+    } else {
+      return getParameter<int>("Number of threads");
+    }
+  }
+};
+
+class PartialCustomization : public ParameterizedCommand {
+public:
+  PartialCustomization(BasicShell &shell)
+      : ParameterizedCommand(shell, "partialCustomize",
+                             "Computes a partial customization of TREX") {
+    addParameter("Input file (TREX Data)");
+    addParameter("Output file (TREX Data)");
+    addParameter("Number of threads", "max");
+    addParameter("Pin multiplier", "1");
+  }
+
+  virtual void execute() noexcept {
+    const std::string mltbFile = getParameter("Input file (TREX Data)");
+    const std::string output = getParameter("Output file (TREX Data)");
+    const int numberOfThreads = getNumberOfThreads();
+    const int pinMultiplier = getParameter<int>("Pin multiplier");
+
+    TripBased::TREXData data(mltbFile);
+    // reset
+    data.resetInformationToStopEventGraph();
+    data.printInfo();
+
+    TripBased::Builder bobTheBuilder(data, numberOfThreads, pinMultiplier);
+
+    std::unordered_set<uint16_t> selectedCells;
+    selectedCells.insert(0);
+    bobTheBuilder.run(selectedCells);
 
     std::cout << "******* Stats *******\n";
     bobTheBuilder.getProfiler().printStatistics();

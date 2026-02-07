@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
   new RAPTORToTREX(shell);
   new CreateCompactLayoutGraph(shell);
   new Customization(shell);
+  new PartialCustomization(shell);
   new ShowInfoOfTREX(shell);
   new WriteTREXToCSV(shell);
   new EventDistributionOverTime(shell);
