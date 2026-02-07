@@ -11,28 +11,32 @@ namespace TimeTable {
 
 class StopEvent {
 public:
+  StopEventId stopEventId;
   StopId stop;
   Time arrivalTime;
   Time departureTime;
   int arrivalDelay;
   int departureDelay;
 
-  StopEvent(const StopId stop = noStop, const Time arrivalTime = noTime,
-            const Time departureTime = noTime, const int arrivalDelay = 0,
-            const int departureDelay = 0)
-      : stop(stop), arrivalTime(arrivalTime), departureTime(departureTime),
-        arrivalDelay(arrivalDelay), departureDelay(departureDelay){};
+  StopEvent(const StopEventId eventId = noStopEvent, const StopId stop = noStop,
+            const Time arrivalTime = noTime, const Time departureTime = noTime,
+            const int arrivalDelay = 0, const int departureDelay = 0)
+      : stopEventId(eventId), stop(stop), arrivalTime(arrivalTime),
+        departureTime(departureTime), arrivalDelay(arrivalDelay),
+        departureDelay(departureDelay){};
 
   StopEvent(IO::Deserialization &deserialize) {
     this->deserialize(deserialize);
   }
 
   inline void serialize(IO::Serialization &serialize) const noexcept {
-    serialize(stop, arrivalTime, departureTime, arrivalDelay, departureDelay);
+    serialize(stopEventId, stop, arrivalTime, departureTime, arrivalDelay,
+              departureDelay);
   }
 
   inline void deserialize(IO::Deserialization &deserialize) noexcept {
-    deserialize(stop, arrivalTime, departureTime, arrivalDelay, departureDelay);
+    deserialize(stopEventId, stop, arrivalTime, departureTime, arrivalDelay,
+                departureDelay);
   }
 
   void applyDelay(int newArrivalDelay, int newDepartureDelay) {

@@ -25,7 +25,7 @@ public:
   StaticGraphWithWeightsAndCoordinates layoutGraph;
 
   StaticGraphWithReverseEdge fullStopEventGraph;
-  FlatStopEventGraph flatStopEventGraph;
+  EdgeListFlatStopEventGraph edgeListStopEventGraph;
 
   void buildFromRAPTOR() noexcept {
     cellIds.clear();
@@ -37,6 +37,7 @@ public:
     unionFind.reset(raptorData.numberOfStops());
 
     TripId globalTripId(0);
+    StopEventId stopEventIdBaseline(0);
 
     for (RouteId route : raptorData.routes()) {
       const std::size_t nrTrips = raptorData.numberOfTripsInRoute(route);
@@ -54,9 +55,11 @@ public:
         std::size_t stopIdx = 0;
         for (const RAPTOR::StopEvent &stopE :
              raptorData.stopEventsOfTrip(route, tId)) {
-          curTrip.emplace_back(stopsOfRoute[stopIdx], Time(stopE.arrivalTime),
+          curTrip.emplace_back(stopEventIdBaseline, stopsOfRoute[stopIdx],
+                               Time(stopE.arrivalTime),
                                Time(stopE.departureTime));
           ++stopIdx;
+          ++stopEventIdBaseline;
         }
 
         routes[route].emplace_back(globalTripId, curTrip);
@@ -229,6 +232,9 @@ public:
 
   std::size_t numberOfStops() const { return raptorData.numberOfStops(); }
   std::size_t numberOfRoutes() const { return raptorData.numberOfRoutes(); }
+  std::size_t numberOfStopEventsBaseline() const {
+    return raptorData.numberOfStopEvents();
+  }
 
   // Constructors
   Data() {}
@@ -245,14 +251,14 @@ public:
     raptorData.serialize(fileName + ".raptor");
     IO::serialize(fileName, cellIds, routes, unionFind, layoutGraph);
     fullStopEventGraph.writeBinary(fileName + ".full.graph");
-    flatStopEventGraph.writeBinary(fileName + ".flat.graph");
+    edgeListStopEventGraph.writeBinary(fileName + ".flat.graph");
   }
 
   inline void deserialize(const std::string &fileName) noexcept {
     raptorData.deserialize(fileName + ".raptor");
     IO::deserialize(fileName, cellIds, routes, unionFind, layoutGraph);
     fullStopEventGraph.readBinary(fileName + ".full.graph");
-    flatStopEventGraph.readBinary(fileName + ".flat.graph");
+    edgeListStopEventGraph.readBinary(fileName + ".flat.graph");
   }
 };
 
