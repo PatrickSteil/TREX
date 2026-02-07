@@ -26,11 +26,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // Builder for Number Of Cells = 2 on all levels
 
+#include <cmath>
+#include <compare>
+#include <execution>
 #include <omp.h>
 #include <tbb/global_control.h>
-
-#include <cmath>
-#include <execution>
 #include <vector>
 
 #include "../../../DataStructures/TREX/TREXData.h"
@@ -42,32 +42,50 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "TransferSearchIBEs.h"
 
 namespace TripBased {
-// IBE <=> Incomming Border Event
-// Idea: use the lowest 8 bit for the stopindex, then the rest for the tripid
-typedef uint32_t PackedIBE;
 
-// Bit mask for the PackedIBE
-constexpr uint32_t TRIPOFFSET = 8;
+struct PackedIBE {
+  uint32_t tripId : 24;
+  uint32_t stopIndex : 8;
 
-// Bit mask for the PackedIBE
-constexpr uint32_t STOPINDEX_MASK = ((1 << 8) - 1);
+  constexpr PackedIBE(const TripId trip = noTripId,
+                      const StopIndex stop = noStopIndex)
+      : tripId(static_cast<uint32_t>(trip)),
+        stopIndex(static_cast<uint32_t>(stop)) {}
+
+  constexpr TripId getTripId() const noexcept { return TripId(tripId); }
+
+  constexpr StopIndex getStopIndex() const noexcept {
+    return StopIndex(stopIndex);
+  }
+
+  friend constexpr bool operator<(const PackedIBE &a,
+                                  const PackedIBE &b) noexcept {
+    return (static_cast<uint32_t>(a.tripId) << 8 | a.stopIndex) <
+           (static_cast<uint32_t>(b.tripId) << 8 | b.stopIndex);
+  }
+
+  friend constexpr bool operator==(const PackedIBE &a,
+                                   const PackedIBE &b) noexcept {
+    return a.tripId == b.tripId && a.stopIndex == b.stopIndex;
+  }
+};
+
+static_assert(sizeof(PackedIBE) == 4);
+static_assert(std::is_trivially_copyable_v<PackedIBE>);
 
 class Builder {
- public:
-  Builder(TREXData& data, const int numberOfThreads = 1,
+public:
+  Builder(TREXData &data, const int numberOfThreads = 1,
           const int pinMultiplier = 1)
-      : data(data),
-        numberOfThreads(numberOfThreads),
-        pinMultiplier(pinMultiplier),
-        seekers(),
-        IBEs() {
-    // set number of threads
+      : data(data), numberOfThreads(numberOfThreads),
+        pinMultiplier(pinMultiplier), seekers(), IBEs() {
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
 
     seekers.reserve(numberOfThreads);
-    for (int i = 0; i < numberOfThreads; ++i) seekers.emplace_back(data);
+    for (int i = 0; i < numberOfThreads; ++i)
+      seekers.emplace_back(data);
 
     profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
     profiler.registerPhases({
@@ -104,11 +122,12 @@ class Builder {
     };
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
-      for (const RAPTOR::RouteSegment& route :
+      for (const RAPTOR::RouteSegment &route :
            data.routesContainingStop(stop)) {
         // EDGE CASE: a stop is not a border stop (of a route) if it's at either
         // end (start or end)
-        if (route.stopIndex == 0) continue;
+        if (route.stopIndex == 0)
+          continue;
 
         // check if the next / previous stop in stop array of route is in
         // another cell
@@ -120,10 +139,12 @@ class Builder {
                         data.raptorData.stopOfRouteSegment(neighbourSeg))) {
           // add all stop events of this route
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1))) continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1))) break;
+            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
+              continue;
+            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
+              break;
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
-            IBEs.push_back((trip << TRIPOFFSET) | (route.stopIndex - 1));
+            IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
           }
         }
       }
@@ -137,18 +158,19 @@ class Builder {
     // cross at this level, not lower levels
 
     profiler.startPhase();
-    IBEs.erase(std::remove_if(
-                   std::execution::par, IBEs.begin(), IBEs.end(),
-                   [&](PackedIBE ibe) {
-                     auto trip = TripId(ibe >> TRIPOFFSET);
-                     auto stopIndex = StopIndex(ibe & STOPINDEX_MASK);
+    IBEs.erase(std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
+                              [&](const PackedIBE &ibe) {
+                                auto trip = ibe.getTripId();
+                                auto stopIndex = ibe.getStopIndex();
 
-                     auto fromStop = data.getStop(trip, stopIndex);
-                     auto toStop = data.getStop(trip, StopIndex(stopIndex + 1));
-                     return !((data.getCellIdOfStop(fromStop) ^
-                               data.getCellIdOfStop(toStop)) >>
-                              level);
-                   }),
+                                auto fromStop = data.getStop(trip, stopIndex);
+                                auto toStop = data.getStop(
+                                    trip, StopIndex(stopIndex + 1));
+
+                                return !((data.getCellIdOfStop(fromStop) ^
+                                          data.getCellIdOfStop(toStop)) >>
+                                         level);
+                              }),
                IBEs.end());
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
   }
@@ -162,8 +184,11 @@ class Builder {
 
     if (SORT_IBES) {
       profiler.startPhase();
-      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end()); */
-      ips4o::parallel::sort(IBEs.begin(), IBEs.end());
+      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
+       * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
+      ips4o::parallel::sort(
+          IBEs.begin(), IBEs.end(),
+          [](const PackedIBE &a, const PackedIBE &b) { return a < b; });
       profiler.donePhase(PHASE_TREX_SORT_IBES);
     }
 
@@ -189,25 +214,26 @@ class Builder {
                                             << ", but should be "
                                             << numberOfThreads << "!");
 
-          auto& values = IBEs[i];
-          seekers[threadId].run(TripId(values >> TRIPOFFSET),
-                                StopIndex(values & STOPINDEX_MASK), level);
+          const auto &ibe = IBEs[i];
+          seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
           ++progress;
         }
       }
 
       progress.finished();
 
-      if (level < data.getNumberOfLevels() - 1) filterIrrelevantIBEs(level + 1);
+      if (level < data.getNumberOfLevels() - 1)
+        filterIrrelevantIBEs(level + 1);
 
-      if (VERBOSE) std::cout << "done!\n";
+      if (VERBOSE)
+        std::cout << "done!\n";
     }
     profiler.done();
   }
 
-  inline AggregateProfiler& getProfiler() noexcept { return profiler; }
+  inline AggregateProfiler &getProfiler() noexcept { return profiler; }
 
-  TREXData& data;
+  TREXData &data;
   const int numberOfThreads;
   const int pinMultiplier;
 
@@ -215,4 +241,4 @@ class Builder {
   std::vector<PackedIBE> IBEs;
   AggregateProfiler profiler;
 };
-}  // namespace TripBased
+} // namespace TripBased
