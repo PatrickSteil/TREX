@@ -74,14 +74,16 @@ public:
     }
 
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      edgeLabels[edge].setStopEvent(
-          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1));
+      const StopEventId toStopEvent =
+          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
+      AssertMsg(toStopEvent < data.numberOfStopEvents(),
+                "StopEventId is out of bounds?");
+      edgeLabels[edge].setStopEvent(toStopEvent);
       edgeLabels[edge].setTrip(
           data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
       edgeLabels[edge].setFirstEvent(
           data.firstStopEventOfTrip[edgeLabels[edge].trip()]);
-      edgeLabels[edge].setCellId(
-          cellIdOfEvent[edgeLabels[edge].stopEvent() - 1]);
+      edgeLabels[edge].setCellId(cellIdOfEvent[toStopEvent - 1]);
     }
 
     for (const RouteId route : data.raptorData.routes()) {

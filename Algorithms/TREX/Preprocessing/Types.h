@@ -58,7 +58,8 @@ struct alignas(4) EdgeLabel {
     return static_cast<StopEventId>(lo & 0x7FFFFFF); // mask 27 bits
   }
   void setStopEvent(StopEventId id) {
-    assert(id < (1u << 27));
+    assert(id < (1u << 27) || id == noStopEvent);
+
     lo = (lo & ~0x7FFFFFFULL) | (id & 0x7FFFFFFULL);
   }
 
@@ -66,7 +67,7 @@ struct alignas(4) EdgeLabel {
     return static_cast<TripId>((lo >> 27) & 0x7FFFFF); // mask 23 bits
   }
   void setTrip(TripId id) {
-    assert(id < (1u << 23));
+    assert(id < (1u << 23) || id == noTripId);
     lo = (lo & ~(0x7FFFFFULL << 27)) |
          (static_cast<uint64_t>(id & 0x7FFFFF) << 27);
   }
@@ -85,7 +86,7 @@ struct alignas(4) EdgeLabel {
     return static_cast<StopEventId>((hi >> 2) & 0x7FFFFFF); // mask 27 bits
   }
   void setFirstEvent(StopEventId id) {
-    assert(id < (1u << 27));
+    assert(id < (1u << 27) || id == noStopEvent);
     hi = (hi & ~0x7FFFFFFC) | ((id & 0x7FFFFFF) << 2);
   }
 };
