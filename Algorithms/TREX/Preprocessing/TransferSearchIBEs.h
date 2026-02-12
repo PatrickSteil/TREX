@@ -31,7 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/TripBased/Data.h"
 #include "../../TripBased/Query/Profiler.h"
 #include "../../TripBased/Query/TimestampedReachedIndex.h"
-#include "Types.h"
+#include "../../TripBased/Query/Types.h"
 
 namespace TripBased {
 

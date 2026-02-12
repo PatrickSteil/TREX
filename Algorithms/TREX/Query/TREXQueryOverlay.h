@@ -34,15 +34,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../TripBased/Query/Profiler.h"
+#include "../../TripBased/Query/Types.h"
 /* #include "../../TripBased/Query/TimestampedReachedIndex.h" */
 #include "../../TripBased/Query/ReachedIndex.h"
 
 namespace TripBased {
 
-template <typename PROFILER = NoProfiler> class TREXQuery {
+template <typename PROFILER = NoProfiler> class TREXQueryOverlay {
 public:
   using Profiler = PROFILER;
-  using Type = TREXQuery<Profiler>;
+  using Type = TREXQueryOverlay<Profiler>;
 
 private:
   struct EventLookup {
@@ -75,16 +76,6 @@ private:
     Edge end;
   };
 
-  struct EdgeLabel {
-    EdgeLabel(const StopEventId firstEvent = noStopEvent,
-              const TripId trip = noTripId,
-              const StopIndex stopEvent = noStopIndex)
-        : firstEvent(firstEvent), trip(trip), stopEvent(stopEvent) {}
-    StopEventId firstEvent;
-    TripId trip;
-    StopIndex stopEvent;
-  };
-
   struct RouteLabel {
     RouteLabel() : numberOfTrips(0) {}
     inline StopIndex end() const noexcept {
@@ -103,7 +94,7 @@ private:
   };
 
 public:
-  TREXQuery(TREXData &data)
+  TREXQueryOverlay(TREXData &data)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
@@ -157,11 +148,11 @@ public:
                   "From StopEventId is invalid!");
         AssertMsg(rank < 16, "Rank is invalid!");
 
-        edgeLabels[i][edge].trip = data.tripOfStopEvent[to];
-        edgeLabels[i][edge].firstEvent =
-            data.firstStopEventOfTrip[edgeLabels[i][edge].trip];
-        edgeLabels[i][edge].stopEvent =
-            StopIndex(to - edgeLabels[i][edge].firstEvent + 1);
+        edgeLabels[i][edge].setTrip(data.tripOfStopEvent[to]);
+        edgeLabels[i][edge].setFirstEvent(
+            data.firstStopEventOfTrip[edgeLabels[i][edge].getTrip()]);
+        edgeLabels[i][edge].setStopIndex(
+            StopIndex(to - edgeLabels[i][edge].getFirstEvent() + 1));
       }
 
       edgesToInsert.erase(std::remove_if(edgesToInsert.begin(),
@@ -586,15 +577,17 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[lcl][edge];
 
-    if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
+    const uint8_t reachedTrip = reachedIndex(label.getTrip());
+    if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
     queue[queueSize] = TripLabel(
-        StopEventId(label.stopEvent + label.firstEvent),
-        StopEventId(label.firstEvent + reachedIndex(label.trip)), parent, lcl);
-    ++queueSize;
+        label.getStopEvent(), StopEventId(label.getFirstEvent() + reachedTrip),
+        parent, edge);
+
+    queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+    reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -604,89 +597,6 @@ private:
       targetLabels.back() = TargetLabel(newArrivalTime, parent);
       minArrivalTime = newArrivalTime;
     }
-  }
-
-  inline RAPTOR::Journey
-  getJourney(const TargetLabel &targetLabel) const noexcept {
-    RAPTOR::Journey result;
-    uint32_t parent = targetLabel.parent;
-    if (parent == uint32_t(-1)) {
-      result.emplace_back(sourceStop, targetStop, sourceDepartureTime,
-                          targetLabel.arrivalTime, false);
-      return result;
-    }
-    StopEventId departureStopEvent = noStopEvent;
-    Vertex departureStop = targetStop;
-    int lastTime(sourceDepartureTime);
-    while (parent != uint32_t(-1)) {
-      AssertMsg(parent < queueSize, "Parent " << parent << " is out of range!");
-      const TripLabel &label = queue[parent];
-      StopEventId arrivalStopEvent;
-      Edge edge;
-      std::tie(arrivalStopEvent, edge) =
-          (departureStopEvent == noStopEvent)
-              ? getParent(label, targetLabel)
-              : getParent(label, StopEventId(departureStopEvent + 1));
-
-      const StopId arrivalStop = data.getStopOfStopEvent(arrivalStopEvent);
-      const int arrivalTime =
-          data.raptorData.stopEvents[arrivalStopEvent].arrivalTime;
-      const int transferArrivalTime =
-          (edge == noEdge)
-              ? targetLabel.arrivalTime
-              : arrivalTime + data.stopEventGraph.get(TravelTime, edge);
-      result.emplace_back(arrivalStop, departureStop, arrivalTime,
-                          transferArrivalTime, edge);
-
-      departureStopEvent = StopEventId(label.begin - 1);
-      departureStop = data.getStopOfStopEvent(departureStopEvent);
-      const RouteId route = data.getRouteOfStopEvent(departureStopEvent);
-      const int departureTime =
-          data.raptorData.stopEvents[departureStopEvent].departureTime;
-      lastTime = departureTime;
-      result.emplace_back(departureStop, arrivalStop, departureTime,
-                          arrivalTime, true, route);
-
-      parent = label.parent;
-    }
-    const int timeFromSource = transferFromSource[departureStop];
-    result.emplace_back(sourceStop, departureStop,
-                        sourceDepartureTime + timeFromSource, lastTime, noEdge);
-    Vector::reverse(result);
-    return result;
-  }
-
-  inline std::pair<StopEventId, Edge>
-  getParent(const TripLabel &parentLabel,
-            const StopEventId departureStopEvent) const noexcept {
-    for (StopEventId i = parentLabel.begin; i < parentLabel.end; ++i) {
-      for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(i))) {
-        if (edgeLabels[edge].stopEvent + edgeLabels[edge].firstEvent ==
-            departureStopEvent)
-          return std::make_pair(i, edge);
-      }
-    }
-    Ensure(false, "Could not find parent stop event!");
-    return std::make_pair(noStopEvent, noEdge);
-  }
-
-  inline std::pair<StopEventId, Edge>
-  getParent(const TripLabel &parentLabel,
-            const TargetLabel &targetLabel) const noexcept {
-    // Final transfer to target may start exactly at parentLabel.end if it has
-    // length 0
-    const TripId trip = data.tripOfStopEvent[parentLabel.begin];
-    const StopEventId end = data.firstStopEventOfTrip[trip + 1];
-    for (StopEventId i = parentLabel.begin; i < end; ++i) {
-      const int timeToTarget = transferToTarget[data.arrivalEvents[i].stop];
-      if (timeToTarget == INFTY)
-        continue;
-      if (data.arrivalEvents[i].arrivalTime + timeToTarget ==
-          targetLabel.arrivalTime)
-        return std::make_pair(i, noEdge);
-    }
-    Ensure(false, "Could not find parent stop event!");
-    return std::make_pair(noStopEvent, noEdge);
   }
 
 private:

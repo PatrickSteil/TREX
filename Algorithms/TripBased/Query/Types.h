@@ -99,8 +99,67 @@ struct EdgeLabel {
   }
 };
 
+/*
+struct EdgeLabel {
+
+  uint64_t stopIndex : 8;   // delta within trip
+  uint64_t trip : 23;       // TripId
+  uint64_t firstEvent : 27; // StopEventId
+  uint64_t rank : 5;        // value in [0,16]
+  uint64_t unused : 1;      // spare bit
+
+  EdgeLabel(StopIndex stopIndex_ = noStopIndex, TripId trip_ = noTripId,
+            StopEventId firstEvent_ = noStopEvent, uint8_t rank_ = 0)
+      : stopIndex(0), trip(0), firstEvent(0), rank(0), unused(0) {
+    setTrip(trip_);
+    setFirstEvent(firstEvent_);
+    setStopIndex(stopIndex_);
+    setRank(rank_);
+  }
+
+  // ---- stopIndex ----
+  StopIndex getStopIndex() const { return static_cast<StopIndex>(stopIndex); }
+
+  void setStopIndex(StopIndex d) {
+    assert(d <= 255);
+    stopIndex = d;
+  }
+
+  // ---- trip ----
+  TripId getTrip() const { return static_cast<TripId>(trip); }
+
+  void setTrip(TripId id) {
+    assert(id < (1u << 23) || id == noTripId);
+    trip = id;
+  }
+
+  // ---- firstEvent ----
+  StopEventId getFirstEvent() const {
+    return static_cast<StopEventId>(firstEvent);
+  }
+
+  void setFirstEvent(StopEventId id) {
+    assert(id < (1u << 27) || id == noStopEvent);
+    firstEvent = id;
+  }
+
+  // ---- derived stopEvent ----
+  StopEventId getStopEvent() const {
+    return StopEventId(firstEvent + stopIndex);
+  }
+
+  // ---- rank ----
+  uint8_t getRank() const { return static_cast<uint8_t>(rank); }
+
+  void setRank(uint8_t value) {
+    assert(value <= 16);
+    rank = value;
+  }
+};
+
+*/
 static_assert(sizeof(EdgeLabel) == 8, "EdgeLabel must be 8 bytes");
-static_assert(alignof(EdgeLabel) == 8, "Naturally aligned");
+static_assert(alignof(EdgeLabel) == alignof(uint64_t), "Unexpected alignment");
 
 struct RouteLabel {
   RouteLabel() : numberOfTrips(0) {}

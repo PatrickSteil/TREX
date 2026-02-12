@@ -35,7 +35,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Algorithms/TREX/Preprocessing/BuilderIBEs.h"
 #include "../../Algorithms/TREX/Preprocessing/TBTEGraph.h"
 #include "../../Algorithms/TREX/Query/TREXProfileQuery.h"
-/* #include "../../Algorithms/TREX/Query/TREXQuery.h" */
+#include "../../Algorithms/TREX/Query/TREXQuery.h"
 #include "../../Algorithms/TREX/Query/TREXQueryOverlay.h"
 #include "../../Algorithms/TripBased/Preprocessing/StopEventGraphBuilder.h"
 #include "../../Algorithms/TripBased/Preprocessing/ULTRABuilderTransitive.h"
@@ -296,18 +296,19 @@ public:
             "Runs the given number of random MultiLevel TB queries.") {
     addParameter("Input file (TREX Data)");
     addParameter("Number of queries");
-    addParameter("Compare to TB?");
-    addParameter("TB Input for eval");
+    addParameter("Use overlay graphs?");
+    addParameter("Compare to TB?", "false");
+    addParameter("TB Input for eval", ".");
   }
 
   virtual void execute() noexcept {
     const std::string tripFile = getParameter("Input file (TREX Data)");
     const bool eval = getParameter<bool>("Compare to TB?");
+    const bool overlay = getParameter<bool>("Use overlay graphs?");
     const std::string evalFile = getParameter("TB Input for eval");
 
     TripBased::TREXData data(tripFile);
     data.printInfo();
-    TripBased::TREXQuery<TripBased::AggregateProfiler> algorithm(data);
 
     const size_t n = getParameter<size_t>("Number of queries");
     const std::vector<StopQuery> queries =
@@ -318,50 +319,32 @@ public:
 
     size_t numberOfJourneys = 0;
 
-    size_t i(0);
-    for (const StopQuery &query : queries) {
-      algorithm.run(query.source, query.departureTime, query.target);
-      numberOfJourneys += algorithm.getJourneys().size();
-      result[i].reserve(algorithm.getArrivals().size());
+    auto run = [&](auto &algo) {
+      size_t i(0);
+      for (const StopQuery &query : queries) {
+        algo.run(query.source, query.departureTime, query.target);
+        numberOfJourneys += algo.getJourneys().size();
+        result[i].reserve(algo.getArrivals().size());
+        for (auto &arr : algo.getArrivals()) {
+          result[i].push_back(
+              std::make_pair(arr.numberOfTrips, arr.arrivalTime));
+        }
 
-      /*             std::cout << "TREX Query" << std::endl; */
-      /*             for (auto& journey : algorithm.getJourneys()) { */
-      /*                 std::cout << query << std::endl; */
-      /*                 for (auto& leg : journey) { */
-      /*                     std::cout << (int)leg.from << " -> " << (int)leg.to
-       * << " @ " << leg.departureTime << " -> " << leg.arrivalTime <<
-       * (leg.usesRoute ? ", route: " : ", transfer: ") << (int)leg.routeId; */
-      /*                     if (!leg.usesRoute && Edge(leg.routeId) != noEdge)
-       * { */
-      /*                         uint8_t lcl = std::min( */
-      /*                             data.getLowestCommonLevel(StopId(leg.from),
-       * query.source), */
-      /*                             data.getLowestCommonLevel(StopId(leg.from),
-       * query.target)); */
-      /*                         std::cout << " LocalLevel: " <<
-       * (int)data.stopEventGraph.get(LocalLevel, Edge(leg.routeId)) << " and
-       * lcl: " << (int)lcl; */
-      /*                     } */
-
-      /*                     std::cout << std::endl; */
-      /*                 } */
-      /*                 std::cout << std::endl; */
-      /*             } */
-
-      for (auto &arr : algorithm.getArrivals()) {
-        result[i].push_back(std::make_pair(arr.numberOfTrips, arr.arrivalTime));
-        /* std::cout << "Nr Trips: " << (int)arr.numberOfTrips */
-        /*           << ", Arrival Time; " << (int)arr.arrivalTime << std::endl;
-         */
+        i += 1;
       }
-
-      i += 1;
+      algo.getProfiler().printStatistics();
+      std::cout << "Avg. Journeys: "
+                << String::prettyDouble(numberOfJourneys /
+                                        (float)queries.size())
+                << std::endl;
+    };
+    if (overlay) {
+      TripBased::TREXQueryOverlay<TripBased::AggregateProfiler> algorithm(data);
+      run(algorithm);
+    } else {
+      TripBased::TREXQuery<TripBased::AggregateProfiler> algorithm(data);
+      run(algorithm);
     }
-    algorithm.getProfiler().printStatistics();
-    std::cout << "Avg. Journeys: "
-              << String::prettyDouble(numberOfJourneys / (float)queries.size())
-              << std::endl;
-    /* algorithm.showTransferLevels(); */
 
     if (eval) {
       size_t wrongQueries = 0;
@@ -374,12 +357,12 @@ public:
       tripResult.assign(n, {});
 
       numberOfJourneys = 0;
-      i = 0;
+      std::size_t i = 0;
       for (const StopQuery &query : queries) {
         tripAlgorithm.run(query.source, query.departureTime, query.target);
         numberOfJourneys += tripAlgorithm.getJourneys().size();
-        /*
 
+        /*
         std::cout << "TB Query" << std::endl;
         for (auto &journey : tripAlgorithm.getJourneys()) {
           std::cout << query << std::endl;

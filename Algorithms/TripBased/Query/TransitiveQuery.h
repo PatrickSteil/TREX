@@ -31,6 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/TripBased/Data.h"
 #include "Profiler.h"
 #include "ReachedIndex.h"
+#include "Types.h"
 
 namespace TripBased {
 
@@ -54,16 +55,6 @@ private:
 
     Edge begin;
     Edge end;
-  };
-
-  struct EdgeLabel {
-    EdgeLabel(const StopEventId stopEvent = noStopEvent,
-              const TripId trip = noTripId,
-              const StopEventId firstEvent = noStopEvent)
-        : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent) {}
-    StopEventId stopEvent;
-    TripId trip;
-    StopEventId firstEvent;
   };
 
   struct RouteLabel {
@@ -96,13 +87,15 @@ public:
         targetStop(noStop), sourceDepartureTime(never) {
     reverseTransferGraph.revert();
     for (const Edge edge : data.stopEventGraph.edges()) {
-      edgeLabels[edge].stopEvent =
-          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
-      edgeLabels[edge].trip =
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
-      edgeLabels[edge].firstEvent =
-          data.firstStopEventOfTrip[edgeLabels[edge].trip];
+      edgeLabels[edge].setTrip(
+          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
+      edgeLabels[edge].setFirstEvent(
+          data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
+      edgeLabels[edge].setStopIndex(
+          StopIndex(data.stopEventGraph.get(ToVertex, edge) -
+                    edgeLabels[edge].getFirstEvent() + 1));
     }
+
     for (const RouteId route : data.raptorData.routes()) {
       const size_t numberOfStops = data.numberOfStopsInRoute(route);
       const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
@@ -376,21 +369,21 @@ private:
     reachedIndex.update(trip, index);
   }
 
-  inline void enqueue(const Edge edge, const size_t parent) noexcept {
+  inline void enqueue(const std::size_t edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
     const EdgeLabel &label = edgeLabels[edge];
 
-    if (reachedIndex.alreadyReached(
-            label.trip, label.stopEvent - label.firstEvent)) [[likely]]
+    const uint8_t reachedTrip = reachedIndex(label.getTrip());
+    if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
-    queue[queueSize] = TripLabel(
-        label.stopEvent,
-        StopEventId(label.firstEvent + reachedIndex(label.trip)), parent);
+    queue[queueSize] =
+        TripLabel(label.getStopEvent(),
+                  StopEventId(label.getFirstEvent() + reachedTrip), parent);
+
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip,
-                        StopIndex(label.stopEvent - label.firstEvent));
+    reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -457,7 +450,7 @@ private:
             const StopEventId departureStopEvent) const noexcept {
     for (StopEventId i = parentLabel.begin; i < parentLabel.end; i++) {
       for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(i))) {
-        if (edgeLabels[edge].stopEvent == departureStopEvent)
+        if (edgeLabels[edge].getStopEvent() == departureStopEvent)
           return std::make_pair(i, edge);
       }
     }

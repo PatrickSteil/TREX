@@ -57,11 +57,11 @@ private:
     Edge end;
   };
 
-  struct EdgeLabel {
-    EdgeLabel(const StopEventId firstEvent = noStopEvent,
-              const TripId trip = noTripId,
-              const StopIndex stopEvent = noStopIndex,
-              const uint16_t cellId = 0, const uint8_t localLevel = 0)
+  struct CustomEdgeLabel {
+    CustomEdgeLabel(const StopEventId firstEvent = noStopEvent,
+                    const TripId trip = noTripId,
+                    const StopIndex stopEvent = noStopIndex,
+                    const uint16_t cellId = 0, const uint8_t localLevel = 0)
         : firstEvent(firstEvent), trip(trip), stopEvent(stopEvent),
           cellId(cellId), localLevel(localLevel) {}
     StopEventId firstEvent;
@@ -411,7 +411,7 @@ private:
 
   inline void enqueue(const Edge edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    const EdgeLabel &label = edgeLabels[edge];
+    const CustomEdgeLabel &label = edgeLabels[edge];
 
     if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
       return;
@@ -545,7 +545,7 @@ private:
   std::vector<TargetLabel> targetLabels;
   int minArrivalTime;
 
-  std::vector<EdgeLabel> edgeLabels;
+  std::vector<CustomEdgeLabel> edgeLabels;
   std::vector<RouteLabel> routeLabels;
 
   StopId sourceStop;

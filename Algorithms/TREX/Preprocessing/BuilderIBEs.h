@@ -39,8 +39,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../Helpers/MultiThreading.h"
 #include "../../../Helpers/String/String.h"
 #include "../../TripBased/Query/Profiler.h"
+#include "../../TripBased/Query/Types.h"
 #include "TransferSearchIBEs.h"
-#include "Types.h"
 
 namespace TripBased {
 // IBE <=> Incomming Border Event
