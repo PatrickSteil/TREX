@@ -78,12 +78,12 @@ public:
           StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
       AssertMsg(toStopEvent < data.numberOfStopEvents(),
                 "StopEventId is out of bounds?");
-      edgeLabels[edge].setStopEvent(toStopEvent);
       edgeLabels[edge].setTrip(
           data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
       edgeLabels[edge].setFirstEvent(
           data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
-      edgeLabels[edge].setCellId(cellIdOfEvent[toStopEvent - 1]);
+      edgeLabels[edge].setStopIndex(
+          StopIndex(toStopEvent - edgeLabels[edge].getFirstEvent()));
 
       AssertMsg(cellIdOfEvent[from] == cellIdOfEvent[toStopEvent - 1],
                 "CellIDs should change during transfer!");
@@ -247,10 +247,6 @@ public:
 
       if (VERBOSE) {
         std::cout << "done!\n";
-
-        /*         for (auto &seeker : seekers) { */
-        /*           seeker.getProfiler().printStatistics(); */
-        /*         } */
       }
     }
     profiler.done();

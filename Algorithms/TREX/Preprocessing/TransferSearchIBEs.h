@@ -167,15 +167,13 @@ private:
           __builtin_prefetch(&edgeRanges[i + 4]);
         }
 #endif
-        TripLabel &label = queue[i];
+        const TripLabel &label = queue[i];
 
-        // skip the first event that was enqueue in the first trip segment
         for (StopEventId j = label.begin; j < label.end; j++) {
-          if (!isEventInCell(cellIdOfEvent[j])) {
+          if (!isEventInCell(cellIdOfEvent[j])) [[unlikely]] {
             label.end = j;
           }
         }
-
         edgeRanges[i].begin =
             data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
         edgeRanges[i].end =
@@ -226,14 +224,11 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
 
     const EdgeLabel &label = edgeLabels[edge];
-    AssertMsg(isEventInCell(label.getCellId()),
-              "Only relax edge in the current cell id");
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
-    if (reachedTrip <= uint8_t(label.getStopEvent() - label.getFirstEvent()))
-        [[likely]]
+    if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
     queue[queueSize] = TripLabel(
@@ -242,8 +237,7 @@ private:
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.getTrip(), StopIndex(label.getStopEvent() -
-                                                   label.getFirstEvent()));
+    reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
   }
 
   inline void unpack() {

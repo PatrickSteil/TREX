@@ -31,81 +31,66 @@ namespace TripBased {
 struct EdgeLabel {
 EdgeLabel(const StopEventId stopEvent = noStopEvent,
         const TripId trip = noTripId,
-        const StopEventId firstEvent = noStopEvent,
-        const uint16_t cellId = 0)
-  : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent),
-    cellId(cellId) {}
+        const StopEventId firstEvent = noStopEvent)
+  : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent) {}
 
 StopEventId stopEvent;
 TripId trip;
 StopEventId firstEvent;
-uint16_t cellId;
 
 StopEventId getStopEvent() const { return stopEvent; }
 TripId getTrip() const { return trip; }
 StopEventId getFirstEvent() const { return firstEvent; }
-uint16_t getCellId() const { return cellId; }
 
 void setStopEvent(StopEventId id) { stopEvent = id; }
 void setTrip(TripId id) { trip = id; }
-void setCellId(uint16_t id) { cellId = id; }
 void setFirstEvent(StopEventId id) { firstEvent = id; }
 };
-
 */
-#pragma pack(push, 1)
-struct alignas(4) EdgeLabel {
-  uint64_t lo; // 64-bit lower part
-  uint32_t hi; // 32-bit upper part
 
-  EdgeLabel(StopEventId stopEvent = noStopEvent, TripId trip = noTripId,
-            StopEventId firstEvent = noStopEvent, uint16_t cellId = 0) {
-    setStopEvent(stopEvent);
+struct EdgeLabel {
+  uint64_t data;
+
+  EdgeLabel(StopIndex stopIndex = noStopIndex, TripId trip = noTripId,
+            StopEventId firstEvent = noStopEvent)
+      : data(0) {
     setTrip(trip);
-    setCellId(cellId);
     setFirstEvent(firstEvent);
+    setStopIndex(stopIndex);
   }
 
-  StopEventId getStopEvent() const {
-    return static_cast<StopEventId>(lo & 0x7FFFFFF); // mask 27 bits
+  StopIndex getStopIndex() const {
+    return static_cast<StopIndex>(data & 0xFFULL);
   }
-  void setStopEvent(StopEventId id) {
-    assert(id < (1u << 27) || id == noStopEvent);
-
-    lo = (lo & ~0x7FFFFFFULL) | (id & 0x7FFFFFFULL);
-  }
+  void setStopIndex(StopIndex d) { data = (data & ~0xFFULL) | d; }
 
   TripId getTrip() const {
-    return static_cast<TripId>((lo >> 27) & 0x7FFFFF); // mask 23 bits
-  }
-  void setTrip(TripId id) {
-    assert(id < (1u << 23) || id == noTripId);
-    lo = (lo & ~(0x7FFFFFULL << 27)) |
-         (static_cast<uint64_t>(id & 0x7FFFFF) << 27);
+    return static_cast<TripId>((data >> 8) & 0x7FFFFFULL);
   }
 
-  uint16_t getCellId() const {
-    uint16_t lower = static_cast<uint16_t>((lo >> 50) & 0x3FFF); // 14 bits
-    uint16_t upper = static_cast<uint16_t>(hi & 0x3);            // 2 bits
-    return (upper << 14) | lower;
-  }
-  void setCellId(uint16_t id) {
-    lo = (lo & ~(0x3FFFULL << 50)) | (static_cast<uint64_t>(id & 0x3FFF) << 50);
-    hi = (hi & ~0x3) | ((id >> 14) & 0x3);
+  void setTrip(TripId id) {
+    assert(id < (1u << 23) || id == noTripId);
+    data = (data & ~(0x7FFFFFULL << 8)) |
+           (static_cast<uint64_t>(id & 0x7FFFFF) << 8);
   }
 
   StopEventId getFirstEvent() const {
-    return static_cast<StopEventId>((hi >> 2) & 0x7FFFFFF); // mask 27 bits
+    return static_cast<StopEventId>((data >> 31) & 0x7FFFFFFULL);
   }
+
   void setFirstEvent(StopEventId id) {
     assert(id < (1u << 27) || id == noStopEvent);
-    hi = (hi & ~0x7FFFFFFC) | ((id & 0x7FFFFFF) << 2);
+    data = (data & ~(0x7FFFFFFULL << 31)) |
+           (static_cast<uint64_t>(id & 0x7FFFFFFULL) << 31);
+  }
+
+  StopEventId getStopEvent() const {
+    return StopEventId(getFirstEvent() + getStopIndex());
   }
 };
-#pragma pack(pop)
 
-static_assert(sizeof(EdgeLabel) == 12, "EdgeLabel should be 12 bytes");
-static_assert(alignof(EdgeLabel) == 4, "Alignment should be 4 bytes");
+static_assert(sizeof(EdgeLabel) == 8, "EdgeLabel must be 8 bytes");
+static_assert(alignof(EdgeLabel) == 8, "Naturally aligned");
 
 struct RouteLabel {
   RouteLabel() : numberOfTrips(0) {}
