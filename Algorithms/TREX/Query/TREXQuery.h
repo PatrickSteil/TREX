@@ -33,6 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../TripBased/Query/Profiler.h"
 #include "../../TripBased/Query/ReachedIndex.h"
+#include "../../TripBased/Query/Types.h"
 
 namespace TripBased {
 
@@ -57,20 +58,6 @@ private:
     Edge end;
   };
 
-  struct CustomEdgeLabel {
-    CustomEdgeLabel(const StopEventId firstEvent = noStopEvent,
-                    const TripId trip = noTripId,
-                    const StopIndex stopEvent = noStopIndex,
-                    const uint16_t cellId = 0, const uint8_t localLevel = 0)
-        : firstEvent(firstEvent), trip(trip), stopEvent(stopEvent),
-          cellId(cellId), localLevel(localLevel) {}
-    StopEventId firstEvent;
-    TripId trip;
-    StopIndex stopEvent;
-    uint16_t cellId;
-    uint8_t localLevel;
-  };
-
   struct RouteLabel {
     RouteLabel() : numberOfTrips(0) {}
     inline StopIndex end() const noexcept {
@@ -88,14 +75,6 @@ private:
     u_int32_t parent;
   };
 
-  static constexpr auto BITMASK = std::array<uint16_t, 16>{
-      0b1111111111111111, 0b1111111111111110, 0b1111111111111100,
-      0b1111111111111000, 0b1111111111110000, 0b1111111111100000,
-      0b1111111111000000, 0b1111111110000000, 0b1111111100000000,
-      0b1111111000000000, 0b1111110000000000, 0b1111100000000000,
-      0b1111000000000000, 0b1110000000000000, 0b1100000000000000,
-      0b1000000000000000};
-
 public:
   TREXQuery(TREXData &data)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
@@ -105,24 +84,28 @@ public:
         queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
         queueSize(0), reachedIndex(data), targetLabels(1),
         minArrivalTime(INFTY), edgeLabels(data.stopEventGraph.numEdges()),
+        cellIdOfEvent(data.numberOfStopEvents()),
         routeLabels(data.numberOfRoutes()), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
     reverseTransferGraph.revert();
 
-    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      edgeLabels[edge].trip =
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)];
-      edgeLabels[edge].firstEvent =
-          data.firstStopEventOfTrip[edgeLabels[edge].trip];
-      edgeLabels[edge].stopEvent =
-          StopIndex(StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1) -
-                    edgeLabels[edge].firstEvent);
-      edgeLabels[edge].localLevel = data.stopEventGraph.get(LocalLevel, edge);
-      edgeLabels[edge].cellId = ((uint16_t)data.getCellIdOfStop(
-          data.getStopOfStopEvent(StopEventId(from))));
+    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
+      const StopId stop = data.getStopOfStopEvent(StopEventId(event));
+      AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
+      cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
     }
 
+    for (const Edge edge : data.stopEventGraph.edges()) {
+      edgeLabels[edge].setTrip(
+          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
+      edgeLabels[edge].setFirstEvent(
+          data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
+      edgeLabels[edge].setStopIndex(
+          StopIndex(data.stopEventGraph.get(ToVertex, edge) -
+                    edgeLabels[edge].getFirstEvent() + 1));
+      edgeLabels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge));
+    }
     for (const RouteId route : data.raptorData.routes()) {
       const size_t numberOfStops = data.numberOfStopsInRoute(route);
       const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
@@ -409,26 +392,32 @@ private:
     reachedIndex.update(trip, index);
   }
 
-  inline void enqueue(const Edge edge, const size_t parent) noexcept {
+  inline void enqueue(const std::size_t edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    const CustomEdgeLabel &label = edgeLabels[edge];
+    const EdgeLabel &label = edgeLabels[edge];
 
-    if (reachedIndex.alreadyReached(label.trip, label.stopEvent)) [[likely]]
+    const uint8_t reachedTrip = reachedIndex(label.getTrip());
+    if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
-    if (((label.cellId ^ sourceCellId) >> label.localLevel) &&
-        ((label.cellId ^ targetCellId) >> label.localLevel)) [[likely]] {
+    AssertMsg(0 < label.getStopEvent(), "StopEvent of label out of bounds!");
+    AssertMsg(label.getStopEvent() < cellIdOfEvent.size(),
+              "StopEvent of label out of bounds!");
+    const std::uint16_t thisCellId = cellIdOfEvent[label.getStopEvent() - 1];
+    if ((thisCellId ^ sourceCellId) >> label.getRank() &&
+        ((thisCellId ^ targetCellId) >> label.getRank())) [[likely]] {
       profiler.countMetric(DISCARDED_EDGE);
-      reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+      reachedIndex.update(label.getTrip(), label.getStopIndex());
       return;
     }
 
-    queue[queueSize] = TripLabel(
-        StopEventId(label.stopEvent + label.firstEvent),
-        StopEventId(label.firstEvent + reachedIndex(label.trip)), parent);
-    ++queueSize;
+    queue[queueSize] =
+        TripLabel(label.getStopEvent(),
+                  StopEventId(label.getFirstEvent() + reachedTrip), parent);
+
+    queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip, StopIndex(label.stopEvent));
+    reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -495,8 +484,7 @@ private:
             const StopEventId departureStopEvent) const noexcept {
     for (StopEventId i = parentLabel.begin; i < parentLabel.end; ++i) {
       for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(i))) {
-        if (edgeLabels[edge].stopEvent + edgeLabels[edge].firstEvent ==
-            departureStopEvent)
+        if (edgeLabels[edge].getStopEvent() == departureStopEvent)
           return std::make_pair(i, edge);
       }
     }
@@ -545,7 +533,8 @@ private:
   std::vector<TargetLabel> targetLabels;
   int minArrivalTime;
 
-  std::vector<CustomEdgeLabel> edgeLabels;
+  std::vector<EdgeLabel> edgeLabels;
+  std::vector<std::uint16_t> cellIdOfEvent;
   std::vector<RouteLabel> routeLabels;
 
   StopId sourceStop;
