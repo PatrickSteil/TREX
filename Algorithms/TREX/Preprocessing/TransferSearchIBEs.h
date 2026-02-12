@@ -86,10 +86,11 @@ public:
         edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         toBeUnpacked(data.numberOfStopEvents()),
         lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0) {
-    profiler.registerPhases({PHASE_SCAN_TRIPS});
+    profiler.registerPhases({PHASE_SCAN_TRIPS, PHASE_TREX_UNPACK});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
-                              METRIC_ENQUEUES});
+                              METRIC_ENQUEUES,
+                              METRIC_TREX_STOPEVENT_TO_UNPACK});
   }
 
   inline void run(const TripId trip, const StopIndex stopIndex,
@@ -103,11 +104,15 @@ public:
     profiler.start();
     clear();
 
+    assert(newLevel < data.getNumberOfLevels());
     minLevel = newLevel;
     currentCellId =
         data.getCellIdOfStop(data.getStop(trip, StopIndex(stopIndex + 1)));
+    AssertMsg(currentCellId !=
+                  data.getCellIdOfStop(data.getStop(trip, stopIndex)),
+              "CellId should be different!");
 
-    enqueue(trip, stopIndex);
+    enqueue(trip, StopIndex(stopIndex + 1));
     scanTrips(16);
     unpack();
     profiler.done();
@@ -150,6 +155,7 @@ private:
           isInSameCell &= isEventInCell(cellIdOfEvent[j]);
         }
         if (!isInSameCell) {
+          profiler.countMetric(METRIC_TREX_STOPEVENT_TO_UNPACK);
           toBeUnpacked.insert(i);
         }
       }
@@ -163,6 +169,7 @@ private:
 #endif
         TripLabel &label = queue[i];
 
+        // skip the first event that was enqueue in the first trip segment
         for (StopEventId j = label.begin; j < label.end; j++) {
           if (!isEventInCell(cellIdOfEvent[j])) {
             label.end = j;
@@ -219,27 +226,28 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
 
     const EdgeLabel &label = edgeLabels[edge];
-    AssertMsg(isEventInCell(label.cellId()),
+    AssertMsg(isEventInCell(label.getCellId()),
               "Only relax edge in the current cell id");
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 
-    const uint8_t reachedTrip = reachedIndex(label.trip());
-    if (reachedTrip <= uint8_t(label.stopEvent() - label.firstEvent()))
+    const uint8_t reachedTrip = reachedIndex(label.getTrip());
+    if (reachedTrip <= uint8_t(label.getStopEvent() - label.getFirstEvent()))
         [[likely]]
       return;
 
-    queue[queueSize] =
-        TripLabel(label.stopEvent(),
-                  StopEventId(label.firstEvent() + reachedTrip), parent, edge);
+    queue[queueSize] = TripLabel(
+        label.getStopEvent(), StopEventId(label.getFirstEvent() + reachedTrip),
+        parent, edge);
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.trip(),
-                        StopIndex(label.stopEvent() - label.firstEvent()));
+    reachedIndex.update(label.getTrip(), StopIndex(label.getStopEvent() -
+                                                   label.getFirstEvent()));
   }
 
   inline void unpack() {
+    profiler.startPhase();
     const auto &indexToLoopOver = toBeUnpacked.getValues();
 
     for (size_t i(0); i < indexToLoopOver.size(); ++i) {
@@ -250,6 +258,7 @@ private:
 #endif
       unpackStopEvent(indexToLoopOver[i]);
     }
+    profiler.donePhase(PHASE_TREX_UNPACK);
   }
 
   inline void unpackStopEvent(size_t index) {

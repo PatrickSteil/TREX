@@ -27,20 +27,32 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../Helpers/Types.h"
 
 namespace TripBased {
-/* struct EdgeLabel { */
-/*   EdgeLabel(const StopEventId stopEvent = noStopEvent, */
-/*             const TripId trip = noTripId, */
-/*             const StopEventId firstEvent = noStopEvent, */
-/*             const uint16_t cellId = 0) */
-/*       : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent), */
-/*         cellId(cellId) {} */
+/*
+struct EdgeLabel {
+EdgeLabel(const StopEventId stopEvent = noStopEvent,
+        const TripId trip = noTripId,
+        const StopEventId firstEvent = noStopEvent,
+        const uint16_t cellId = 0)
+  : stopEvent(stopEvent), trip(trip), firstEvent(firstEvent),
+    cellId(cellId) {}
 
-/*   StopEventId stopEvent; */
-/*   TripId trip; */
-/*   StopEventId firstEvent; */
-/*   uint16_t cellId; */
-/* }; */
+StopEventId stopEvent;
+TripId trip;
+StopEventId firstEvent;
+uint16_t cellId;
 
+StopEventId getStopEvent() const { return stopEvent; }
+TripId getTrip() const { return trip; }
+StopEventId getFirstEvent() const { return firstEvent; }
+uint16_t getCellId() const { return cellId; }
+
+void setStopEvent(StopEventId id) { stopEvent = id; }
+void setTrip(TripId id) { trip = id; }
+void setCellId(uint16_t id) { cellId = id; }
+void setFirstEvent(StopEventId id) { firstEvent = id; }
+};
+
+*/
 #pragma pack(push, 1)
 struct alignas(4) EdgeLabel {
   uint64_t lo; // 64-bit lower part
@@ -54,7 +66,7 @@ struct alignas(4) EdgeLabel {
     setFirstEvent(firstEvent);
   }
 
-  StopEventId stopEvent() const {
+  StopEventId getStopEvent() const {
     return static_cast<StopEventId>(lo & 0x7FFFFFF); // mask 27 bits
   }
   void setStopEvent(StopEventId id) {
@@ -63,7 +75,7 @@ struct alignas(4) EdgeLabel {
     lo = (lo & ~0x7FFFFFFULL) | (id & 0x7FFFFFFULL);
   }
 
-  TripId trip() const {
+  TripId getTrip() const {
     return static_cast<TripId>((lo >> 27) & 0x7FFFFF); // mask 23 bits
   }
   void setTrip(TripId id) {
@@ -72,7 +84,7 @@ struct alignas(4) EdgeLabel {
          (static_cast<uint64_t>(id & 0x7FFFFF) << 27);
   }
 
-  uint16_t cellId() const {
+  uint16_t getCellId() const {
     uint16_t lower = static_cast<uint16_t>((lo >> 50) & 0x3FFF); // 14 bits
     uint16_t upper = static_cast<uint16_t>(hi & 0x3);            // 2 bits
     return (upper << 14) | lower;
@@ -82,7 +94,7 @@ struct alignas(4) EdgeLabel {
     hi = (hi & ~0x3) | ((id >> 14) & 0x3);
   }
 
-  StopEventId firstEvent() const {
+  StopEventId getFirstEvent() const {
     return static_cast<StopEventId>((hi >> 2) & 0x7FFFFFF); // mask 27 bits
   }
   void setFirstEvent(StopEventId id) {
@@ -92,7 +104,6 @@ struct alignas(4) EdgeLabel {
 };
 #pragma pack(pop)
 
-// Ensure exact size
 static_assert(sizeof(EdgeLabel) == 12, "EdgeLabel should be 12 bytes");
 static_assert(alignof(EdgeLabel) == 4, "Alignment should be 4 bytes");
 

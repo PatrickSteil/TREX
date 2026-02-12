@@ -82,8 +82,11 @@ public:
       edgeLabels[edge].setTrip(
           data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
       edgeLabels[edge].setFirstEvent(
-          data.firstStopEventOfTrip[edgeLabels[edge].trip()]);
+          data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
       edgeLabels[edge].setCellId(cellIdOfEvent[toStopEvent - 1]);
+
+      AssertMsg(cellIdOfEvent[from] == cellIdOfEvent[toStopEvent - 1],
+                "CellIDs should change during transfer!");
     }
 
     for (const RouteId route : data.raptorData.routes()) {
@@ -242,8 +245,13 @@ public:
       if (level < data.getNumberOfLevels() - 1)
         filterIrrelevantIBEs(level + 1);
 
-      if (VERBOSE)
+      if (VERBOSE) {
         std::cout << "done!\n";
+
+        /*         for (auto &seeker : seekers) { */
+        /*           seeker.getProfiler().printStatistics(); */
+        /*         } */
+      }
     }
     profiler.done();
   }
@@ -257,6 +265,7 @@ public:
   std::vector<RouteLabel> routeLabels;
   std::vector<uint16_t> cellIdOfEvent;
 
+  /* std::vector<TransferSearch<TripBased::AggregateProfiler>> seekers; */
   std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
   std::vector<PackedIBE> IBEs;
   AggregateProfiler profiler;
