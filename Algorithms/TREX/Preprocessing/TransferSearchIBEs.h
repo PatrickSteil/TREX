@@ -78,7 +78,7 @@ private:
   };
 
 public:
-  TransferSearch(TREXData &data, const std::vector<EdgeLabel> &edgeLabels,
+  TransferSearch(TREXData &data, std::vector<EdgeLabel> &edgeLabels,
                  const std::vector<RouteLabel> &routeLabels,
                  const std::vector<uint16_t> &cellIdOfEvent)
       : data(data), edgeLabels(edgeLabels), routeLabels(routeLabels),
@@ -167,7 +167,7 @@ private:
           __builtin_prefetch(&edgeRanges[i + 4]);
         }
 #endif
-        const TripLabel &label = queue[i];
+        TripLabel &label = queue[i];
 
         for (StopEventId j = label.begin; j < label.end; j++) {
           if (!isEventInCell(cellIdOfEvent[j])) [[unlikely]] {
@@ -224,8 +224,10 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
 
     const EdgeLabel &label = edgeLabels[edge];
-    if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
+    if (minLevel > label.getRank()) [[likely]]
       return;
+    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
+    /*   return; */
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
     if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
@@ -260,14 +262,15 @@ private:
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
 
-    auto &levelPerEdge = data.stopEventGraph[LocalLevel];
+    /* auto &levelPerEdge = data.stopEventGraph[LocalLevel]; */
 
     while (currentEdge != noEdge) {
       if (lastExtractedRun[currentEdge] == currentRun)
         return;
       lastExtractedRun[currentEdge] = currentRun;
 
-      levelPerEdge[currentEdge] = minLevel + 1;
+      /* levelPerEdge[currentEdge] = minLevel + 1; */
+      edgeLabels[currentEdge].setRank(minLevel + 1);
 
       index = label.parent;
       label = queue[index];
@@ -282,7 +285,7 @@ private:
 private:
   TREXData &data;
 
-  const std::vector<EdgeLabel> &edgeLabels;
+  std::vector<EdgeLabel> &edgeLabels;
   const std::vector<RouteLabel> &routeLabels;
   const std::vector<uint16_t> &cellIdOfEvent;
 

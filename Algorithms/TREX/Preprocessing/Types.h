@@ -87,6 +87,16 @@ struct EdgeLabel {
   StopEventId getStopEvent() const {
     return StopEventId(getFirstEvent() + getStopIndex());
   }
+
+  uint8_t getRank() const {
+    return static_cast<uint8_t>((data >> 58) & 0x1FULL);
+  }
+
+  void setRank(uint8_t value) {
+    assert(value <= 16);
+    data =
+        (data & ~(0x1FULL << 58)) | (static_cast<uint64_t>(value & 0x1F) << 58);
+  }
 };
 
 static_assert(sizeof(EdgeLabel) == 8, "EdgeLabel must be 8 bytes");

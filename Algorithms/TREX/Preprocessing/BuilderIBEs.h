@@ -249,6 +249,13 @@ public:
         std::cout << "done!\n";
       }
     }
+
+    const std::size_t numEdges = data.stopEventGraph.numEdges();
+#pragma omp parallel for
+    for (Edge edge = Edge(0); edge < numEdges; ++edge) {
+      data.stopEventGraph.set(LocalLevel, edge, edgeLabels[edge].getRank());
+    }
+
     profiler.done();
   }
 
