@@ -157,11 +157,18 @@ private:
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+          __builtin_prefetch(&cellIdOfEvent[queue[i + 4].begin]);
           __builtin_prefetch(&edgeRanges[i + 4]);
         }
 #endif
-        const TripLabel &label = queue[i];
+        TripLabel &label = queue[i];
+
+        for (StopEventId j = label.begin; j < label.end; j++) {
+          if (!isEventInCell(cellIdOfEvent[j])) {
+            label.end = j;
+          }
+        }
+
         edgeRanges[i].begin =
             data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
         edgeRanges[i].end =
@@ -178,7 +185,6 @@ private:
         const EdgeRange &label = edgeRanges[i];
         for (Edge edge = label.begin; edge < label.end; edge++) {
           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-
           enqueue(edge, i);
         }
       }
@@ -211,11 +217,10 @@ private:
 
   inline void enqueue(const Edge edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
+
     const EdgeLabel &label = edgeLabels[edge];
-
-    if (!isEventInCell(label.cellId())) [[likely]]
-      return;
-
+    AssertMsg(isEventInCell(label.cellId()),
+              "Only relax edge in the current cell id");
     if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
       return;
 

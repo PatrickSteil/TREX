@@ -486,7 +486,7 @@ private:
           // if the stop (of event j) is not in the target cell => jump to next
           // cell that is crossed by trip
           if (eventLookup[j].cellId == targetCellId) [[likely]] {
-            if (eventLookup[j].arrTime >= minArrivalTime)
+            if ((int)eventLookup[j].arrTime >= minArrivalTime)
               break;
             const int timeToTarget = transferToTarget[eventLookup[j].stop];
             if (timeToTarget != INFTY) {
@@ -550,7 +550,9 @@ private:
               curGraph.beginEdge(Vertex(endOfConsecutiveLCL));
 
 #ifdef ENABLE_PREFETCH
-          __builtin_prefetch(&edgeLabels[lcl][beginEdgeRange]);
+          if (beginEdgeRange < endEdgeRange) {
+            __builtin_prefetch(&edgeLabels[lcl][beginEdgeRange]);
+          }
 #endif
 
           for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
