@@ -43,15 +43,36 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "TransferSearchIBEs.h"
 
 namespace TripBased {
-// IBE <=> Incomming Border Event
-// Idea: use the lowest 8 bit for the stopindex, then the rest for the tripid
-typedef uint32_t PackedIBE;
 
-// Bit mask for the PackedIBE
-constexpr uint32_t TRIPOFFSET = 8;
+struct PackedIBE {
+  uint32_t tripId : 24;
+  uint32_t stopIndex : 8;
 
-// Bit mask for the PackedIBE
-constexpr uint32_t STOPINDEX_MASK = ((1 << 8) - 1);
+  constexpr PackedIBE(const TripId trip = noTripId,
+                      const StopIndex stop = noStopIndex)
+      : tripId(static_cast<uint32_t>(trip)),
+        stopIndex(static_cast<uint32_t>(stop)) {}
+
+  constexpr TripId getTripId() const noexcept { return TripId(tripId); }
+
+  constexpr StopIndex getStopIndex() const noexcept {
+    return StopIndex(stopIndex);
+  }
+
+  friend constexpr bool operator<(const PackedIBE &a,
+                                  const PackedIBE &b) noexcept {
+    return (static_cast<uint32_t>(a.tripId) << 8 | a.stopIndex) <
+           (static_cast<uint32_t>(b.tripId) << 8 | b.stopIndex);
+  }
+
+  friend constexpr bool operator==(const PackedIBE &a,
+                                   const PackedIBE &b) noexcept {
+    return a.tripId == b.tripId && a.stopIndex == b.stopIndex;
+  }
+};
+
+static_assert(sizeof(PackedIBE) == 4);
+static_assert(std::is_trivially_copyable_v<PackedIBE>);
 
 class Builder {
 public:
@@ -167,7 +188,7 @@ public:
             if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
               break;
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
-            IBEs.push_back((trip << TRIPOFFSET) | (route.stopIndex - 1));
+            IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
           }
         }
       }
@@ -181,18 +202,19 @@ public:
     // cross at this level, not lower levels
 
     profiler.startPhase();
-    IBEs.erase(std::remove_if(
-                   std::execution::par, IBEs.begin(), IBEs.end(),
-                   [&](PackedIBE ibe) {
-                     auto trip = TripId(ibe >> TRIPOFFSET);
-                     auto stopIndex = StopIndex(ibe & STOPINDEX_MASK);
+    IBEs.erase(std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
+                              [&](const PackedIBE &ibe) {
+                                auto trip = ibe.getTripId();
+                                auto stopIndex = ibe.getStopIndex();
 
-                     auto fromStop = data.getStop(trip, stopIndex);
-                     auto toStop = data.getStop(trip, StopIndex(stopIndex + 1));
-                     return !((data.getCellIdOfStop(fromStop) ^
-                               data.getCellIdOfStop(toStop)) >>
-                              level);
-                   }),
+                                auto fromStop = data.getStop(trip, stopIndex);
+                                auto toStop = data.getStop(
+                                    trip, StopIndex(stopIndex + 1));
+
+                                return !((data.getCellIdOfStop(fromStop) ^
+                                          data.getCellIdOfStop(toStop)) >>
+                                         level);
+                              }),
                IBEs.end());
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
   }
@@ -206,11 +228,13 @@ public:
 
     if (SORT_IBES) {
       profiler.startPhase();
-      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end()); */
-      ips4o::parallel::sort(IBEs.begin(), IBEs.end());
+      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
+       * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
+      ips4o::parallel::sort(
+          IBEs.begin(), IBEs.end(),
+          [](const PackedIBE &a, const PackedIBE &b) { return a < b; });
       profiler.donePhase(PHASE_TREX_SORT_IBES);
     }
-
     const int numCores = numberOfCores();
 
     // now for every level, we have an invariant: IBEs contains exactly the IBEs
@@ -233,9 +257,8 @@ public:
                                             << ", but should be "
                                             << numberOfThreads << "!");
 
-          auto &values = IBEs[i];
-          seekers[threadId].run(TripId(values >> TRIPOFFSET),
-                                StopIndex(values & STOPINDEX_MASK), level);
+          const auto &ibe = IBEs[i];
+          seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
           ++progress;
         }
       }
