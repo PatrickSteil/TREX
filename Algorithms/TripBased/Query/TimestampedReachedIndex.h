@@ -26,71 +26,108 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
+#include <vector>
 
 #include "../../../DataStructures/TripBased/Data.h"
 
 namespace TripBased {
 
+/**
+ * PackedEntry Layout (32 bits):
+ * [ Timestamp (16 bits) | Default Label (8 bits) | Current Label (8 bits) ]
+ */
+using PackedEntry = uint32_t;
+
+static constexpr uint32_t TS_SHIFT = 16;
+static constexpr uint32_t DEF_SHIFT = 8;
+static constexpr uint32_t LABEL_MASK = 0xFFu;
+static constexpr uint32_t TS_MASK = 0xFFFFu;
+
+static inline uint32_t pack(uint16_t ts, uint8_t def, uint8_t cur) noexcept {
+  return (static_cast<uint32_t>(ts) << TS_SHIFT) |
+         (static_cast<uint32_t>(def) << DEF_SHIFT) | static_cast<uint32_t>(cur);
+}
+
+static inline uint16_t unpackTimestamp(uint32_t v) noexcept {
+  return static_cast<uint16_t>(v >> TS_SHIFT);
+}
+
+static inline uint8_t unpackDefault(uint32_t v) noexcept {
+  return static_cast<uint8_t>((v >> DEF_SHIFT) & LABEL_MASK);
+}
+
+static inline uint8_t unpackCurrent(uint32_t v) noexcept {
+  return static_cast<uint8_t>(v & LABEL_MASK);
+}
+
 class TimestampedReachedIndex {
- public:
-  TimestampedReachedIndex(const Data& data)
-      : data(data),
-        labels(data.numberOfTrips(), -1),
-        timestamps(data.numberOfTrips(), 0),
-        timestamp(0),
-        defaultLabels(data.numberOfTrips(), -1) {
-    for (const TripId trip : data.trips()) {
-      if (data.numberOfStopsInTrip(trip) > 255)
-        warning("Trip ", trip, " has ", data.numberOfStopsInTrip(trip),
-                " stops!");
-      defaultLabels[trip] = data.numberOfStopsInTrip(trip);
+public:
+  TimestampedReachedIndex(const Data &data)
+      : data(data), entries(data.numberOfTrips()), timestamp(0) {
+
+    for (TripId trip : data.trips()) {
+      const auto stops = data.numberOfStopsInTrip(trip);
+      const uint8_t def = static_cast<uint8_t>(stops);
+      entries[trip] = pack(0, def, def);
     }
   }
 
- public:
+public:
   inline void clear() noexcept {
-    ++timestamp;
-    if (timestamp == 0) {
-      labels = defaultLabels;
-      std::fill(timestamps.begin(), timestamps.end(), 0);
+    timestamp = (timestamp + 1) & TS_MASK;
+
+    if (__builtin_expect(timestamp == 0, 0)) {
+      for (TripId i(0); i < entries.size(); ++i) {
+        uint8_t def = unpackDefault(entries[i]);
+        entries[i] = pack(0, def, def);
+      }
     }
   }
 
   inline StopIndex operator()(const TripId trip) noexcept {
-    AssertMsg(trip < labels.size(), "Trip " << trip << " is out of bounds!");
     return StopIndex(getLabel(trip));
   }
 
-  inline bool alreadyReached(const TripId trip, const u_int8_t index) noexcept {
+  inline bool alreadyReached(const TripId trip, const uint8_t index) noexcept {
     return getLabel(trip) <= index;
   }
 
   inline void update(const TripId trip, const StopIndex index) noexcept {
-    AssertMsg(trip < labels.size(), "Trip " << trip << " is out of bounds!");
     const TripId routeEnd = data.firstTripOfRoute[data.routeOfTrip[trip] + 1];
+
     for (TripId i = trip; i < routeEnd; i++) {
-      u_int8_t& label = getLabel(i);
-      if (label <= index) break;
-      label = index;
+      uint8_t currentLabel = getLabel(i);
+      if (currentLabel <= index)
+        break;
+
+      uint8_t def = unpackDefault(entries[i]);
+      entries[i] = pack(timestamp, def, static_cast<uint8_t>(index));
     }
   }
 
- private:
-  inline u_int8_t& getLabel(const TripId trip) noexcept {
-    if (timestamps[trip] != timestamp) {
-      labels[trip] = defaultLabels[trip];
-      timestamps[trip] = timestamp;
-    }
-    return labels[trip];
+  void prefetch(const TripId trip) const noexcept {
+      __builtin_prefetch(&entries[trip]);
   }
 
-  const Data& data;
+private:
+  inline uint8_t getLabel(const TripId trip) noexcept {
+    PackedEntry v = entries[trip];
+    const uint16_t ts = unpackTimestamp(v);
 
-  std::vector<u_int8_t> labels;
-  std::vector<u_int16_t> timestamps;
-  u_int16_t timestamp;
+    if (__builtin_expect(ts != timestamp, 0)) {
+      const uint8_t def = unpackDefault(v);
+      const PackedEntry newVal = pack(timestamp, def, def);
+      entries[trip] = newVal;
+      return def;
+    }
 
-  std::vector<u_int8_t> defaultLabels;
+    return unpackCurrent(v);
+  }
+
+  const Data &data;
+  std::vector<PackedEntry> entries;
+  uint16_t timestamp;
 };
 
-}  // namespace TripBased
+} // namespace TripBased
