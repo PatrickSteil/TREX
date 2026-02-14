@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -12,8 +13,7 @@
 
 namespace Vector {
 
-template <typename T>
-inline std::vector<T> id(const size_t size) {
+template <typename T> inline std::vector<T> id(const size_t size) {
   std::vector<T> result;
   result.reserve(size);
   while (result.size() < size) {
@@ -23,47 +23,47 @@ inline std::vector<T> id(const size_t size) {
 }
 
 template <typename T>
-inline size_t count(const std::vector<T>& container, const T& element) {
+inline size_t count(const std::vector<T> &container, const T &element) {
   size_t c = 0;
   for (size_t i = 0; i < container.size(); i++) {
-    if (container[i] == element) c++;
+    if (container[i] == element)
+      c++;
   }
   return c;
 }
 
 template <typename T, typename COUNT_IF,
           typename = decltype(std::declval<COUNT_IF>()(std::declval<T>()))>
-inline size_t count(const std::vector<T>& container, const COUNT_IF& countIf) {
+inline size_t count(const std::vector<T> &container, const COUNT_IF &countIf) {
   size_t c = 0;
   for (size_t i = 0; i < container.size(); i++) {
-    if (countIf(container[i])) c++;
+    if (countIf(container[i]))
+      c++;
   }
   return c;
 }
 
 template <typename T>
-inline size_t indexOf(const std::vector<T>& vec, const T& elem) {
+inline size_t indexOf(const std::vector<T> &vec, const T &elem) {
   for (size_t i = 0; i < vec.size(); i++) {
-    if (vec[i] == elem) return i;
+    if (vec[i] == elem)
+      return i;
   }
   return static_cast<size_t>(-1);
 }
 
-template <typename T>
-inline std::vector<T> reverse(std::vector<T>&& a) {
+template <typename T> inline std::vector<T> reverse(std::vector<T> &&a) {
   std::vector<T> result(a);
   std::reverse(result.begin(), result.end());
   return result;
 }
 
-template <typename T>
-inline std::vector<T>& reverse(std::vector<T>& a) {
+template <typename T> inline std::vector<T> &reverse(std::vector<T> &a) {
   std::reverse(a.begin(), a.end());
   return a;
 }
 
-template <typename T>
-inline T& remove(T& array, size_t index) {
+template <typename T> inline T &remove(T &array, size_t index) {
   Assert(index >= 0);
   Assert(index < array.size());
   array[index] = array.back();
@@ -72,15 +72,15 @@ inline T& remove(T& array, size_t index) {
 }
 
 template <typename T, typename FUNCTION>
-inline void removeIf(std::vector<T>& container,
-                     const FUNCTION& condition) noexcept {
+inline void removeIf(std::vector<T> &container,
+                     const FUNCTION &condition) noexcept {
   container.erase(std::remove_if(container.begin(), container.end(), condition),
                   container.end());
 }
 
 template <typename T, typename FUNCTION>
-inline void removeIf(std::vector<T>& container, const size_t beginIndex,
-                     const FUNCTION& condition) noexcept {
+inline void removeIf(std::vector<T> &container, const size_t beginIndex,
+                     const FUNCTION &condition) noexcept {
   AssertMsg(beginIndex < container.size(), "Index " << beginIndex
                                                     << " is out of bounds! ("
                                                     << container.size() << ")");
@@ -90,9 +90,9 @@ inline void removeIf(std::vector<T>& container, const size_t beginIndex,
 }
 
 template <typename T, typename FUNCTION>
-inline void removeIf(std::vector<T>& container, const size_t beginIndex,
+inline void removeIf(std::vector<T> &container, const size_t beginIndex,
                      const size_t endIndex,
-                     const FUNCTION& condition) noexcept {
+                     const FUNCTION &condition) noexcept {
   AssertMsg(beginIndex < container.size(), "Index " << beginIndex
                                                     << " is out of bounds! ("
                                                     << container.size() << ")");
@@ -105,7 +105,7 @@ inline void removeIf(std::vector<T>& container, const size_t beginIndex,
 }
 
 template <typename T>
-inline bool contains(const std::vector<T>& container, const T& element) {
+inline bool contains(const std::vector<T> &container, const T &element) {
   for (size_t i = 0; i < container.size(); i++) {
     if (container[i] == element) {
       return true;
@@ -115,7 +115,7 @@ inline bool contains(const std::vector<T>& container, const T& element) {
 }
 
 template <typename T, bool ALLOW_DUPLICATES = false>
-inline void insertSorted(std::vector<T>& container, const T& element) {
+inline void insertSorted(std::vector<T> &container, const T &element) {
   size_t insertionIndex = container.size();
   while ((insertionIndex > 0) && container[insertionIndex - 1] >= element) {
     insertionIndex--;
@@ -124,7 +124,8 @@ inline void insertSorted(std::vector<T>& container, const T& element) {
     container.emplace_back(element);
   } else {
     if constexpr (!ALLOW_DUPLICATES) {
-      if (container[insertionIndex] == element) return;
+      if (container[insertionIndex] == element)
+        return;
     }
     container.emplace_back(container.back());
     for (size_t i = container.size() - 2; i > insertionIndex; i--) {
@@ -135,40 +136,44 @@ inline void insertSorted(std::vector<T>& container, const T& element) {
 }
 
 template <typename T>
-inline bool equals(const std::vector<T>& a, const std::vector<T>& b) {
-  if (a.size() != b.size()) return false;
+inline bool equals(const std::vector<T> &a, const std::vector<T> &b) {
+  if (a.size() != b.size())
+    return false;
   for (size_t i = 0; i < a.size(); i++) {
-    if (!(a[i] == b[i])) return false;
+    if (!(a[i] == b[i]))
+      return false;
   }
   return true;
 }
 
 template <typename T>
-inline bool equals(const std::vector<std::vector<T>>& a,
-                   const std::vector<std::vector<T>>& b) {
-  if (a.size() != b.size()) return false;
+inline bool equals(const std::vector<std::vector<T>> &a,
+                   const std::vector<std::vector<T>> &b) {
+  if (a.size() != b.size())
+    return false;
   for (size_t i = 0; i < a.size(); i++) {
-    if (!equals(a[i], b[i])) return false;
+    if (!equals(a[i], b[i]))
+      return false;
   }
   return true;
 }
 
 template <typename T, typename LESS>
-inline bool isSorted(const std::vector<T>& vec, const LESS& less) {
+inline bool isSorted(const std::vector<T> &vec, const LESS &less) {
   for (size_t i = 0; i + 1 < vec.size(); i++) {
-    if (less(vec[i + 1], vec[i])) return false;
+    if (less(vec[i + 1], vec[i]))
+      return false;
   }
   return true;
 }
 
-template <typename T>
-inline bool isSorted(const std::vector<T>& vec) {
-  return isSorted(vec, [](const T& a, const T& b) { return a < b; });
+template <typename T> inline bool isSorted(const std::vector<T> &vec) {
+  return isSorted(vec, [](const T &a, const T &b) { return a < b; });
 }
 
 template <typename T>
-inline std::vector<T> sortedIntersection(const std::vector<T>& a,
-                                         const std::vector<T>& b) noexcept {
+inline std::vector<T> sortedIntersection(const std::vector<T> &a,
+                                         const std::vector<T> &b) noexcept {
   std::vector<T> result;
   AssertMsg(isSorted(a), "First vector is not sorted!");
   AssertMsg(isSorted(b), "Second vector is not sorted!");
@@ -178,8 +183,8 @@ inline std::vector<T> sortedIntersection(const std::vector<T>& a,
 }
 
 template <typename T>
-inline std::vector<T> sortedUnion(const std::vector<T>& a,
-                                  const std::vector<T>& b) noexcept {
+inline std::vector<T> sortedUnion(const std::vector<T> &a,
+                                  const std::vector<T> &b) noexcept {
   std::vector<T> result;
   AssertMsg(isSorted(a), "First vector is not sorted!");
   AssertMsg(isSorted(b), "Second vector is not sorted!");
@@ -189,91 +194,89 @@ inline std::vector<T> sortedUnion(const std::vector<T>& a,
 }
 
 template <typename T, typename U, typename COMPARE>
-inline size_t lowerBound(const std::vector<T>& vec, const U& val,
-                         const COMPARE& compare) noexcept {
+inline size_t lowerBound(const std::vector<T> &vec, const U &val,
+                         const COMPARE &compare) noexcept {
   AssertMsg(isSorted(vec), "Vector is not sorted!");
   return std::lower_bound(vec.begin(), vec.end(), val, compare) - vec.begin();
 }
 
 template <typename T, typename U, typename COMPARE>
-inline size_t upperBound(const std::vector<T>& vec, const U& val,
-                         const COMPARE& compare) noexcept {
+inline size_t upperBound(const std::vector<T> &vec, const U &val,
+                         const COMPARE &compare) noexcept {
   AssertMsg(isSorted(vec), "Vector is not sorted!");
   return std::upper_bound(vec.begin(), vec.end(), val, compare) - vec.begin();
 }
 
-template <typename T>
-inline long long byteSize(const std::vector<T>& vec) {
+template <typename T> inline long long byteSize(const std::vector<T> &vec) {
   return sizeof(T) * vec.size();
 }
 
-template <>
-inline long long byteSize(const std::vector<bool>& vec) {
+template <> inline long long byteSize(const std::vector<bool> &vec) {
   return vec.size();
 }
 
 template <typename T>
-inline long long byteSize(const std::vector<std::vector<T>>& vec) {
+inline long long byteSize(const std::vector<std::vector<T>> &vec) {
   long long size = 0;
-  for (const std::vector<T>& e : vec)
+  for (const std::vector<T> &e : vec)
     size += sizeof(std::vector<T>) + byteSize(e);
   return size;
 }
 
 template <typename T>
-inline long long memoryUsageInBytes(const std::vector<T>& vec) {
+inline long long memoryUsageInBytes(const std::vector<T> &vec) {
   return sizeof(std::vector<T>) + (sizeof(T) * vec.capacity());
 }
 
-template <>
-inline long long memoryUsageInBytes(const std::vector<bool>& vec) {
+template <> inline long long memoryUsageInBytes(const std::vector<bool> &vec) {
   return vec.capacity() / 8;
 }
 
 template <typename T>
-inline long long memoryUsageInBytes(const std::vector<std::vector<T>>& vec) {
+inline long long memoryUsageInBytes(const std::vector<std::vector<T>> &vec) {
   long long size = sizeof(std::vector<std::vector<T>>);
-  for (const std::vector<T>& e : vec) size += memoryUsageInBytes(e);
+  for (const std::vector<T> &e : vec)
+    size += memoryUsageInBytes(e);
   return size + ((vec.capacity() - vec.size()) * sizeof(std::vector<T>));
 }
 
 template <typename T, typename LESS>
-inline T max(const std::vector<T>& vec, const LESS& less) {
+inline T max(const std::vector<T> &vec, const LESS &less) {
   Assert(!vec.empty());
   T result = vec.front();
-  for (const T& element : vec) {
-    if (less(result, element)) result = element;
+  for (const T &element : vec) {
+    if (less(result, element))
+      result = element;
   }
   return result;
 }
 
 template <typename T, typename LESS>
-inline T min(const std::vector<T>& vec, const LESS& less) {
+inline T min(const std::vector<T> &vec, const LESS &less) {
   Assert(!vec.empty());
   T result = vec.front();
-  for (const T& element : vec) {
-    if (less(element, result)) result = element;
+  for (const T &element : vec) {
+    if (less(element, result))
+      result = element;
   }
   return result;
 }
 
-template <typename T>
-inline T max(const std::vector<T>& vec) {
-  return max(vec, [](const T& a, const T& b) { return a < b; });
+template <typename T> inline T max(const std::vector<T> &vec) {
+  return max(vec, [](const T &a, const T &b) { return a < b; });
 }
 
-template <typename T>
-inline T min(const std::vector<T>& vec) {
-  return min(vec, [](const T& a, const T& b) { return a < b; });
+template <typename T> inline T min(const std::vector<T> &vec) {
+  return min(vec, [](const T &a, const T &b) { return a < b; });
 }
 
 template <typename T, typename LESS>
-inline std::array<T, 2> twoSmallestValues(const std::vector<T>& vec,
-                                          const LESS& less) {
+inline std::array<T, 2> twoSmallestValues(const std::vector<T> &vec,
+                                          const LESS &less) {
   Assert(!vec.empty());
   std::array<T, 2> result{std::numeric_limits<T>::max(),
                           std::numeric_limits<T>::max()};
-  for (const T& element : vec) {
+  for (const T &element : vec) {
     if (less(element, result[1])) {
       if (less(element, result[0])) {
         result[1] = result[0];
@@ -287,107 +290,107 @@ inline std::array<T, 2> twoSmallestValues(const std::vector<T>& vec,
 }
 
 template <typename T>
-inline std::array<T, 2> twoSmallestValues(const std::vector<T>& vec) {
-  return twoSmallestValues(vec, [](const T& a, const T& b) { return a < b; });
+inline std::array<T, 2> twoSmallestValues(const std::vector<T> &vec) {
+  return twoSmallestValues(vec, [](const T &a, const T &b) { return a < b; });
 }
 
-template <typename T>
-inline T sum(const std::vector<T>& vec) {
+template <typename T> inline T sum(const std::vector<T> &vec) {
   T result = 0;
-  for (const T& element : vec) {
+  for (const T &element : vec) {
     result += element;
   }
   return result;
 }
 
 template <typename T, typename EVALUATE>
-inline T sum(const std::vector<T>& vec, const EVALUATE& evaluate) {
+inline T sum(const std::vector<T> &vec, const EVALUATE &evaluate) {
   T result = 0;
-  for (const T& element : vec) {
+  for (const T &element : vec) {
     result += evaluate(element);
   }
   return result;
 }
 
 template <typename T, typename U, typename EVALUATE>
-inline T sum(const std::vector<U>& vec, const EVALUATE& evaluate) {
+inline T sum(const std::vector<U> &vec, const EVALUATE &evaluate) {
   T result = 0;
-  for (const U& element : vec) {
+  for (const U &element : vec) {
     result += evaluate(element);
   }
   return result;
 }
 
-template <typename T>
-inline double mean(const std::vector<T>& vec) {
+template <typename T> inline double mean(const std::vector<T> &vec) {
   long double sum = 0;
-  for (const T& element : vec) {
+  for (const T &element : vec) {
     sum += element;
   }
   return static_cast<double>(sum / vec.size());
 }
 
 template <typename T, typename EVALUATE>
-inline double mean(const std::vector<T>& vec, const EVALUATE& evaluate) {
+inline double mean(const std::vector<T> &vec, const EVALUATE &evaluate) {
   long double sum = 0;
-  for (const T& element : vec) {
+  for (const T &element : vec) {
     sum += evaluate(element);
   }
   return static_cast<double>(sum / vec.size());
 }
 
 template <typename T, typename EVALUATE>
-inline double percentile(const std::vector<T>& sortedData, const double p,
-                         const EVALUATE& evaluate) noexcept {
+inline double percentile(const std::vector<T> &sortedData, const double p,
+                         const EVALUATE &evaluate) noexcept {
   AssertMsg(!sortedData.empty(),
             "Percentile is not defined for empty data sets!");
   AssertMsg(p >= 0, "Percentile cannot be negative!");
   AssertMsg(p <= 1, "Percentile cannot be greater than one!");
-  if (sortedData.size() == 1) return evaluate(sortedData.front());
+  if (sortedData.size() == 1)
+    return evaluate(sortedData.front());
   const double index = (sortedData.size() - 1) * p;
   const size_t lowerIndex = index;
   const size_t higherIndex = lowerIndex + 1;
-  if (higherIndex == sortedData.size()) return evaluate(sortedData.back());
+  if (higherIndex == sortedData.size())
+    return evaluate(sortedData.back());
   const double lambda = higherIndex - index;
   return (lambda * evaluate(sortedData[lowerIndex])) +
          ((1 - lambda) * evaluate(sortedData[higherIndex]));
 }
 
 template <typename T>
-inline double percentile(const std::vector<T>& sortedData,
+inline double percentile(const std::vector<T> &sortedData,
                          const double p) noexcept {
-  return percentile(sortedData, p, [&](const T& element) { return element; });
+  return percentile(sortedData, p, [&](const T &element) { return element; });
 }
 
 template <typename T, typename EVALUATE>
-inline double median(const std::vector<T>& sortedData,
-                     const EVALUATE& evaluate) noexcept {
+inline double median(const std::vector<T> &sortedData,
+                     const EVALUATE &evaluate) noexcept {
   return percentile(sortedData, 0.5, evaluate);
 }
 
 template <typename T>
-inline double median(const std::vector<T>& sortedData) noexcept {
+inline double median(const std::vector<T> &sortedData) noexcept {
   return percentile(sortedData, 0.5);
 }
 
 template <typename T>
-inline void fill(std::vector<T>& vector, const T& value = T()) noexcept {
+inline void fill(std::vector<T> &vector, const T &value = T()) noexcept {
   std::fill(vector.begin(), vector.end(), value);
 }
 
 template <typename T, typename U,
           typename = std::enable_if_t<!Meta::Equals<T, U>()>>
-inline void assign(std::vector<T>& to, const std::vector<U>& from) noexcept {
+inline void assign(std::vector<T> &to, const std::vector<U> &from) noexcept {
   to.clear();
   to.reserve(from.size());
-  for (const U& u : from) {
+  for (const U &u : from) {
     to.push_back(u);
   }
 }
 
 template <typename T, typename U>
-inline void assign(std::vector<std::vector<T>>& to,
-                   const std::vector<std::vector<U>>& from) noexcept {
+inline void assign(std::vector<std::vector<T>> &to,
+                   const std::vector<std::vector<U>> &from) noexcept {
   to.clear();
   to.resize(from.size());
   for (size_t i = 0; i < from.size(); i++) {
@@ -396,28 +399,28 @@ inline void assign(std::vector<std::vector<T>>& to,
 }
 
 template <typename T>
-inline void assign(std::vector<std::vector<T>>& to,
-                   const std::vector<std::vector<T>>& from) noexcept {
+inline void assign(std::vector<std::vector<T>> &to,
+                   const std::vector<std::vector<T>> &from) noexcept {
   to = from;
 }
 
 template <typename T>
-inline void assign(std::vector<T>& to, const std::vector<T>& from) noexcept {
+inline void assign(std::vector<T> &to, const std::vector<T> &from) noexcept {
   to = from;
 }
 
 template <typename T>
-inline void assign(std::vector<T>& to, std::vector<T>&& from) noexcept {
+inline void assign(std::vector<T> &to, std::vector<T> &&from) noexcept {
   to = std::move(from);
 }
 
-inline std::vector<uint8_t> packBool(const std::vector<bool>& vector) noexcept {
+inline std::vector<uint8_t> packBool(const std::vector<bool> &vector) noexcept {
   std::vector<uint8_t> result;
   result.resize(std::ceil(vector.size() / 8.0), 0);
   size_t vectorIndex = 0;
   size_t resultIndex = 0;
   while (vectorIndex + 7 < vector.size()) {
-    uint8_t& resultValue = result[resultIndex];
+    uint8_t &resultValue = result[resultIndex];
     for (size_t i = 0; i < 8; i++) {
       resultValue =
           (resultValue << 1) | static_cast<uint8_t>(vector[vectorIndex]);
@@ -425,8 +428,9 @@ inline std::vector<uint8_t> packBool(const std::vector<bool>& vector) noexcept {
     }
     resultIndex++;
   }
-  if (resultIndex == result.size()) return result;
-  uint8_t& resultValue = result[resultIndex];
+  if (resultIndex == result.size())
+    return result;
+  uint8_t &resultValue = result[resultIndex];
   for (size_t i = 0; i < 8; i++) {
     resultValue =
         (resultValue << 1) | static_cast<uint8_t>((vectorIndex < vector.size())
@@ -439,8 +443,8 @@ inline std::vector<uint8_t> packBool(const std::vector<bool>& vector) noexcept {
 
 inline constexpr uint8_t bitMask = (1 << 7);
 
-inline std::vector<bool> unpackBool(
-    const std::vector<uint8_t>& vector) noexcept {
+inline std::vector<bool>
+unpackBool(const std::vector<uint8_t> &vector) noexcept {
   std::vector<bool> result;
   result.reserve(vector.size() * 8);
   for (size_t i = 0; i < vector.size(); i++) {
@@ -454,30 +458,33 @@ inline std::vector<bool> unpackBool(
 }
 
 template <typename T, typename STREAM = std::ostream>
-inline void printConcise(const std::vector<T>& vector, STREAM& out = std::cout,
-                         const std::string& separator = ", ") noexcept {
+inline void printConcise(const std::vector<T> &vector, STREAM &out = std::cout,
+                         const std::string &separator = ", ") noexcept {
   for (size_t i = 0; i < vector.size(); i++) {
     out << vector[i];
-    if (i != vector.size() - 1) out << separator;
+    if (i != vector.size() - 1)
+      out << separator;
   }
 }
 
 template <typename T, typename TO_STRING, typename STREAM = std::ostream>
-inline void printConciseMapped(const std::vector<T>& vector,
-                               const TO_STRING& toString,
-                               STREAM& out = std::cout,
-                               const std::string& separator = ", ") noexcept {
+inline void printConciseMapped(const std::vector<T> &vector,
+                               const TO_STRING &toString,
+                               STREAM &out = std::cout,
+                               const std::string &separator = ", ") noexcept {
   for (size_t i = 0; i < vector.size(); i++) {
     out << toString(vector[i]);
-    if (i != vector.size() - 1) out << separator;
+    if (i != vector.size() - 1)
+      out << separator;
   }
 }
 
-inline double difference(const std::vector<bool>& firstVector,
-                         const std::vector<bool>& secondVector) noexcept {
+inline double difference(const std::vector<bool> &firstVector,
+                         const std::vector<bool> &secondVector) noexcept {
   AssertMsg(firstVector.size() == secondVector.size(),
             "Vectors have different sizes!");
-  if (firstVector.size() != secondVector.size()) return -1;
+  if (firstVector.size() != secondVector.size())
+    return -1;
   size_t common = 1;
   size_t different = 0;
   for (size_t i = 0; i < firstVector.size(); i++) {
@@ -491,37 +498,37 @@ inline double difference(const std::vector<bool>& firstVector,
 }
 
 template <typename T>
-inline std::vector<T> flatten(
-    const std::vector<std::vector<T>>& vector) noexcept {
+inline std::vector<T>
+flatten(const std::vector<std::vector<T>> &vector) noexcept {
   std::vector<T> result;
-  for (const std::vector<T>& e : vector) {
+  for (const std::vector<T> &e : vector) {
     result += e;
   }
   return result;
 }
 
 template <typename T, typename F>
-inline std::vector<decltype(std::declval<F>()(std::declval<T>()))> map(
-    const std::vector<T>& vector, const F& function) noexcept {
+inline std::vector<decltype(std::declval<F>()(std::declval<T>()))>
+map(const std::vector<T> &vector, const F &function) noexcept {
   std::vector<decltype(std::declval<F>()(std::declval<T>()))> result;
-  for (const T& e : vector) {
+  for (const T &e : vector) {
     result.emplace_back(function(e));
   }
   return result;
 }
-}  // namespace Vector
+} // namespace Vector
 
 template <typename T>
-inline std::vector<T> operator+(const T& a, const std::vector<T>& b) {
+inline std::vector<T> operator+(const T &a, const std::vector<T> &b) {
   std::vector<T> result;
-  for (const T& t : b) {
+  for (const T &t : b) {
     result.emplace_back(a + t);
   }
   return result;
 }
 
 template <typename T>
-inline std::vector<T> operator+(std::vector<T>&& a, const std::vector<T>& b) {
+inline std::vector<T> operator+(std::vector<T> &&a, const std::vector<T> &b) {
   std::vector<T> result;
   result.swap(a);
   result.reserve(result.size() + b.size());
@@ -530,8 +537,8 @@ inline std::vector<T> operator+(std::vector<T>&& a, const std::vector<T>& b) {
 }
 
 template <typename T>
-inline std::vector<T> operator+(const std::vector<T>& a,
-                                const std::vector<T>& b) {
+inline std::vector<T> operator+(const std::vector<T> &a,
+                                const std::vector<T> &b) {
   std::vector<T> result;
   result.reserve(a.size() + b.size());
   result.insert(result.end(), a.begin(), a.end());
@@ -540,38 +547,56 @@ inline std::vector<T> operator+(const std::vector<T>& a,
 }
 
 template <typename T>
-inline std::vector<T>& operator+=(std::vector<T>& a, const std::vector<T>& b) {
+inline std::vector<T> &operator+=(std::vector<T> &a, const std::vector<T> &b) {
   a.reserve(a.size() + b.size());
   a.insert(a.end(), b.begin(), b.end());
   return a;
 }
 
 template <typename T>
-inline std::vector<T>& operator+=(std::vector<T>& a, std::vector<T>&& b) {
+inline std::vector<T> &operator+=(std::vector<T> &a, std::vector<T> &&b) {
   a.reserve(a.size() + b.size());
   std::move(b.begin(), b.end(), std::back_inserter(a));
   b.clear();
   return a;
 }
 
+template <typename T>
+std::vector<T> samplePercentage(const std::vector<T> &input,
+                                double percentage) {
+  if (percentage <= 0.0)
+    return {}; // empty vector for 0%
+  if (percentage >= 100.0)
+    return input; // return all elements for >=100%
+
+  std::vector<T> temp = input;
+
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(temp.begin(), temp.end(), g);
+
+  size_t n = static_cast<size_t>(temp.size() * (percentage / 100.0));
+
+  return std::vector<T>(temp.begin(), temp.begin() + n);
+}
+
 namespace std {
 
 template <typename T>
-inline std::ostream& operator<<(std::ostream& out, const std::vector<T>& a) {
+inline std::ostream &operator<<(std::ostream &out, const std::vector<T> &a) {
   for (size_t i = 0; i < a.size(); i++) {
     out << a[i] << std::endl;
   }
   return out;
 }
-template <typename T>
-struct VectorHasher {
-  int operator()(const vector<T>& V) const {
+template <typename T> struct VectorHasher {
+  int operator()(const vector<T> &V) const {
     int hash = V.size();
-    for (auto& i : V) {
+    for (auto &i : V) {
       hash ^= (int)i + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     }
     return hash;
   }
 };
 
-}  // namespace std
+} // namespace std
