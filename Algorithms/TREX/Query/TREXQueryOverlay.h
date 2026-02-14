@@ -50,10 +50,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 static constexpr int MAX_LEVELS = 17;
 namespace TripBased {
 
-template <typename PROFILER = NoProfiler> class TREXQuery {
+template <typename PROFILER = NoProfiler> class TREXQueryOverlay {
 public:
   using Profiler = PROFILER;
-  using Type = TREXQuery<Profiler>;
+  using Type = TREXQueryOverlay<Profiler>;
 
 private:
   // compact information for an event
@@ -108,7 +108,7 @@ private:
   };
 
 public:
-  TREXQuery(TREXData &data)
+  TREXQueryOverlay(TREXData &data)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
