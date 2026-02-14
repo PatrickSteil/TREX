@@ -43,7 +43,8 @@ public:
   TREXData(const RAPTOR::Data &raptor, const int numLevels)
       : Data(raptor), numberOfLevels(numLevels), unionFind(numberOfStops()),
         layoutGraph(), localLevelOfEvent(raptor.numberOfStopEvents(), 0),
-        cellIds(raptor.numberOfStops(), 0) {}
+        cellIds(raptor.numberOfStops(), 0),
+        edgeFlags(stopEventGraph.numEdges(), 0) {}
 
   TREXData(const std::string &fileName) { deserialize(fileName); }
 
@@ -52,8 +53,7 @@ public:
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);
 
-    /* std::vector<uint8_t> initHops(stopEventGraph.numEdges(), 1); */
-    /* stopEventGraph.get(Hop).swap(initHops); */
+    edgeFlags.assign(stopEventGraph.numEdges(), 0);
   }
 
   inline void readPartitionFile(const std::string &fileName) {
@@ -81,23 +81,7 @@ public:
   }
 
   inline void applyGlobalIDs(std::vector<uint64_t> &globalIds) noexcept {
-    /*
-    std::vector<Vertex> stopToVertexMapping(numberOfStops(), noVertex);
-
-    for (Vertex v : layoutGraph.vertices()) {
-        stopToVertexMapping[layoutGraph.get(Size, v)] = v;
-    }
-    */
-
-    // now set the correct cellIds
     for (size_t i(0); i < numberOfStops(); ++i) {
-      /*
-      AssertMsg((size_t)unionFind(i) < stopToVertexMapping.size(),
-          "unionFind[i] is out of bounds!");
-      AssertMsg((size_t)stopToVertexMapping[unionFind(i)] < globalIds.size(),
-          "stopToVertexMapping[unionFind[i]] is out of bounds!");
-      cellIds[i] = globalIds[stopToVertexMapping[unionFind(i)]];
-      */
       AssertMsg(static_cast<size_t>(unionFind(i)) < globalIds.size(),
                 "unionFind is out of bounds!");
       AssertMsg(layoutGraph.get(Weight, Vertex(unionFind(i))) > 0,
@@ -302,6 +286,16 @@ public:
     return cellIds[stop];
   }
 
+  inline uint32_t getEdgeFlags(const Edge edge) const noexcept {
+    AssertMsg(edge < stopEventGraph.numEdges(),
+              "Edge " << (int)edge << " is out of bounds!");
+    AssertMsg(edge < edgeFlags.size(),
+              "Edge " << (int)edge << " is out of bounds!");
+    return edgeFlags[edge];
+  }
+
+  inline std::vector<uint32_t> &getEdgeFlags() noexcept { return edgeFlags; }
+
   inline SubRange<std::vector<RAPTOR::RouteSegment>>
   routesContainingStop(const StopId stop) const noexcept {
     return raptorData.routesContainingStop(stop);
@@ -502,6 +496,8 @@ public:
 
   // for the 2' cell ids
   std::vector<uint16_t> cellIds;
+
+  std::vector<uint32_t> edgeFlags;
 };
 
 } // namespace TripBased
