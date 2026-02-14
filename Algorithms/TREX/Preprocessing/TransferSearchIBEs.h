@@ -259,27 +259,26 @@ private:
 
   inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
-    TripLabel label = queue[index];
-    Edge currentEdge = label.parentTransfer;
 
-    /* auto &levelPerEdge = data.stopEventGraph[LocalLevel]; */
+    while (true) {
+      const TripLabel &label = queue[index];
+      Edge currentEdge = label.parentTransfer;
 
-    while (currentEdge != noEdge) {
+      if (currentEdge == noEdge)
+        break;
+
       if (lastExtractedRun[currentEdge] == currentRun)
         return;
-      lastExtractedRun[currentEdge] = currentRun;
 
-      /* levelPerEdge[currentEdge] = minLevel + 1; */
+      lastExtractedRun[currentEdge] = currentRun;
       edgeLabels[currentEdge].setRank(minLevel + 1);
 
       index = label.parent;
-      label = queue[index];
-      currentEdge = label.parentTransfer;
     }
 
     AssertMsg(
         index == 0,
-        "The origin of the journey does not start with the incomming event!");
+        "The origin of the journey does not start with the incoming event!");
   }
 
 private:
