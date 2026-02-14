@@ -36,6 +36,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../RAPTOR/Entities/RouteSegment.h"
 #include "../TripBased/Data.h"
 
+#include <bit>
+#include <cstdint>
+
+uint32_t highest_bit(uint32_t x) {
+  if (x == 0)
+    return -1;
+  return static_cast<uint32_t>(31 - __builtin_clz(x));
+}
+
+uint32_t round_down_even(uint32_t x) { return x & ~1u; }
+
 namespace TripBased {
 
 class TREXData : public Data {
@@ -338,15 +349,28 @@ public:
   inline void serialize(const std::string &fileName) const noexcept {
     Data::serialize(fileName + ".trip");
     IO::serialize(fileName, numberOfLevels, unionFind, layoutGraph,
-                  localLevelOfEvent, cellIds);
+                  localLevelOfEvent, cellIds, edgeFlags);
     stopEventGraph.writeBinary(fileName + ".trip.graph");
   }
 
   inline void deserialize(const std::string &fileName) noexcept {
-    Data::deserialize(fileName + ".trip");
-    IO::deserialize(fileName, numberOfLevels, unionFind, layoutGraph,
-                    localLevelOfEvent, cellIds);
-    stopEventGraph.readBinary(fileName + ".trip.graph");
+    try {
+      Data::deserialize(fileName + ".trip");
+      IO::deserialize(fileName, numberOfLevels, unionFind, layoutGraph,
+                      localLevelOfEvent, cellIds, edgeFlags);
+      stopEventGraph.readBinary(fileName + ".trip.graph");
+
+    } catch (...) {
+      Data::deserialize(fileName + ".trip");
+      IO::deserialize(fileName, numberOfLevels, unionFind, layoutGraph,
+                      localLevelOfEvent, cellIds);
+      stopEventGraph.readBinary(fileName + ".trip.graph");
+
+      std::cout << "Did not load edgeFlags, set to 0!\n";
+
+      std::vector<std::uint32_t> empty(stopEventGraph.numEdges(), 0);
+      edgeFlags = std::move(empty);
+    }
   }
 
   inline void writePartitionToCSV(const std::string &fileName) noexcept {
@@ -484,6 +508,39 @@ public:
     }
 
     file.close();
+  }
+
+  inline void showStats() const noexcept {
+    std::array<std::size_t, 17> bucketsPerLevel{};
+    std::array<std::size_t, 33> bitsSetHistogram{};
+
+    for (uint32_t flag : edgeFlags) {
+      int val = highest_bit(flag);
+      if (val != -1) {
+        val = (round_down_even(val) >> 1) + 1;
+      } else {
+        val = 0;
+      }
+      bucketsPerLevel[val]++;
+
+      int bits = std::popcount(flag);
+      bitsSetHistogram[bits]++;
+    }
+
+    std::cout << "\nLevel distribution:\n";
+    for (int i = 0; i < 17; ++i)
+      std::cout << "Level " << i << ": " << bucketsPerLevel[i] << " ("
+                << (double)(100.0 * bucketsPerLevel[i] /
+                            (double)edgeFlags.size())
+                << "%)\n";
+
+    std::cout << "\nBits-set distribution:\n";
+    for (int i = 0; i <= 32; ++i) {
+      std::cout << i << " bits set: " << bitsSetHistogram[i] << " ("
+                << (double)(100.0 * bitsSetHistogram[i] /
+                            (double)edgeFlags.size())
+                << "%)\n";
+    }
   }
 
 public:

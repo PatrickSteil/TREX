@@ -84,8 +84,7 @@ public:
       : data(data), edgeLabels(edgeLabels), routeLabels(routeLabels),
         cellIdOfEvent(cellIdOfEvent), queue(data.numberOfStopEvents()),
         edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
-        toBeUnpacked(data.numberOfStopEvents()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0) {
+        toBeUnpacked(data.numberOfStopEvents()) {
     profiler.registerPhases({PHASE_SCAN_TRIPS, PHASE_TREX_UNPACK});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
@@ -125,11 +124,6 @@ private:
     queueSize = 0;
     reachedIndex.clear();
     toBeUnpacked.clear();
-
-    if (currentRun == 0) {
-      lastExtractedRun.assign(data.stopEventGraph.numEdges(), 0);
-    }
-    ++currentRun;
   }
 
   inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
@@ -226,8 +220,6 @@ private:
     const EdgeLabel &label = edgeLabels[edge];
     if (minLevel > label.getRank()) [[likely]]
       return;
-    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
-    /*   return; */
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
     if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
@@ -262,15 +254,21 @@ private:
     TripLabel label = queue[index];
     Edge currentEdge = label.parentTransfer;
 
-    /* auto &levelPerEdge = data.stopEventGraph[LocalLevel]; */
+    std::uint32_t toMark = 0;
 
+    const TripId trip = data.tripOfStopEvent[label.begin];
+    const StopEventId endEvent = data.firstStopEventOfTrip[trip + 1];
+
+    for (StopEventId e(label.end); e < endEvent; e++) {
+      std::uint16_t toCellId = cellIdOfEvent[e];
+      std::uint32_t bit = (toCellId >> minLevel) & 1u;
+      toMark |= 1u << (2 * minLevel + bit);
+    }
+
+    uint8_t newRank = minLevel + 1;
     while (currentEdge != noEdge) {
-      if (lastExtractedRun[currentEdge] == currentRun)
-        return;
-      lastExtractedRun[currentEdge] = currentRun;
-
-      /* levelPerEdge[currentEdge] = minLevel + 1; */
-      edgeLabels[currentEdge].setRank(minLevel + 1);
+      edgeLabels[currentEdge].setRank(newRank);
+      data.edgeFlags[currentEdge] |= toMark;
 
       index = label.parent;
       label = queue[index];
@@ -301,9 +299,6 @@ private:
   Profiler profiler;
 
   IndexedSet<false, size_t> toBeUnpacked;
-
-  std::vector<uint32_t> lastExtractedRun;
-  uint32_t currentRun;
 };
 
 } // namespace TripBased

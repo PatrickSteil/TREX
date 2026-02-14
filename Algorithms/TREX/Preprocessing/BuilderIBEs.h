@@ -274,12 +274,42 @@ public:
     }
 
     const std::size_t numEdges = data.stopEventGraph.numEdges();
-#pragma omp parallel for
     for (Edge edge = Edge(0); edge < numEdges; ++edge) {
       data.stopEventGraph.set(LocalLevel, edge, edgeLabels[edge].getRank());
     }
 
     profiler.done();
+  }
+
+  inline void showStats() const noexcept {
+    std::array<std::size_t, 17> bucketsPerLevel{};
+    std::array<std::size_t, 33> bitsSetHistogram{};
+
+    for (uint32_t flag : data.edgeFlags) {
+      int val = highest_bit(flag);
+      if (val != -1) {
+        val = (round_down_even(val) >> 1) + 1;
+      } else {
+        val = 0;
+      }
+      bucketsPerLevel[val]++;
+
+      int bits = std::popcount(flag);
+      bitsSetHistogram[bits]++;
+    }
+
+    std::cout << "\nLevel distribution:\n";
+    for (int i = 0; i < 17; ++i)
+      std::cout << "Level " << i << ": " << bucketsPerLevel[i] << " ("
+                << (double)(bucketsPerLevel[i] / data.edgeFlags.size())
+                << "%)\n";
+
+    std::cout << "\nBits-set distribution:\n";
+    for (int i = 0; i <= 32; ++i) {
+      std::cout << i << " bits set: " << bitsSetHistogram[i] << " ("
+                << (double)(bitsSetHistogram[i] / data.edgeFlags.size())
+                << "%)\n";
+    }
   }
 
   inline AggregateProfiler &getProfiler() noexcept { return profiler; }
