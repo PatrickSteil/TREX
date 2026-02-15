@@ -43,13 +43,14 @@ public:
 private:
   struct TripLabel {
     TripLabel(const StopEventId begin = noStopEvent,
-              const StopEventId end = noStopEvent, const u_int32_t parent = -1,
+              const StopEventId end = noStopEvent,
+              TripLabel *parentPtr = nullptr,
               const Edge parentTransfer = noEdge)
-        : begin(begin), end(end), parent(parent),
+        : begin(begin), end(end), parentPtr(parentPtr),
           parentTransfer(parentTransfer) {}
     StopEventId begin;
     StopEventId end;
-    u_int32_t parent;
+    TripLabel *parentPtr;
     Edge parentTransfer;
   };
 
@@ -225,9 +226,10 @@ private:
     if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
+    AssertMsg(parent < queueSize, "Parent cannot be outside the queue!");
     queue[queueSize] = TripLabel(
         label.getStopEvent(), StopEventId(label.getFirstEvent() + reachedTrip),
-        parent, edge);
+        &queue[parent], edge);
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
@@ -252,32 +254,26 @@ private:
   inline void unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
     TripLabel label = queue[index];
-    Edge currentEdge = label.parentTransfer;
 
     std::uint32_t toMark = 0;
+    uint32_t lut[2] = {1u << (2 * minLevel), 1u << (2 * minLevel + 1)};
 
     const TripId trip = data.tripOfStopEvent[label.begin];
     const StopEventId endEvent = data.firstStopEventOfTrip[trip + 1];
 
     for (StopEventId e(label.end); e < endEvent; e++) {
       std::uint16_t toCellId = cellIdOfEvent[e];
-      std::uint32_t bit = (toCellId >> minLevel) & 1u;
-      toMark |= 1u << (2 * minLevel + bit);
+      toMark |= lut[(toCellId >> minLevel) & 1];
     }
 
     uint8_t newRank = minLevel + 1;
-    while (currentEdge != noEdge) {
-      edgeLabels[currentEdge].setRank(newRank);
-      data.edgeFlags[currentEdge] |= toMark;
-
-      index = label.parent;
-      label = queue[index];
-      currentEdge = label.parentTransfer;
+    for (TripLabel *p = &queue[index]; p->parentTransfer != noEdge;
+         p = p->parentPtr) {
+      assert(p != nullptr);
+      auto e = p->parentTransfer;
+      edgeLabels[e].setRank(newRank);
+      data.edgeFlags[e] |= toMark;
     }
-
-    AssertMsg(
-        index == 0,
-        "The origin of the journey does not start with the incomming event!");
   }
 
 private:

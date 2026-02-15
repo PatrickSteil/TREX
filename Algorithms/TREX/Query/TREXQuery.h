@@ -336,6 +336,14 @@ private:
 #endif
 
         const TripLabel &label = queue[i];
+
+        /* std::cout << "Round " << (int)currentRoundNumber << " scan route " */
+        /*           << (int)data.routeOfTrip[data.tripOfStopEvent[label.begin]]
+         */
+        /*           << " trip " << (int)data.tripOfStopEvent[label.begin] */
+        /*           << ", from " << (int)label.begin << " to " <<
+         * (int)label.end */
+        /*           << std::endl; */
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         for (StopEventId j = label.begin; j < label.end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
@@ -404,11 +412,25 @@ private:
     AssertMsg(label.getStopEvent() < cellIdOfEvent.size(),
               "StopEvent of label out of bounds!");
     const std::uint16_t thisCellId = cellIdOfEvent[label.getStopEvent() - 1];
-    if ((thisCellId ^ sourceCellId) >> label.getRank() &&
-        ((thisCellId ^ targetCellId) >> label.getRank())) [[likely]] {
-      profiler.countMetric(DISCARDED_EDGE);
-      reachedIndex.update(label.getTrip(), label.getStopIndex());
-      return;
+    int lcl = std::min(std::bit_width<uint16_t>(thisCellId ^ sourceCellId),
+                       std::bit_width<uint16_t>(thisCellId ^ targetCellId));
+
+    const uint32_t edgeFlag = data.edgeFlags[edge];
+
+    /* std::cout << "> ENQ " << (int)edge */
+    /*           << ", toStopEvent: " << (int)(label.getStopEvent() - 1) */
+    /*           << ", cell " << (int)thisCellId << ", lcl: " << (int)lcl */
+    /*           << " and edgeFlag: " << std::bitset<32>(edgeFlag) << std::endl;
+     */
+
+    if (lcl > 0) {
+      lcl--;
+      bool whichSide = ((targetCellId >> lcl) & 1);
+      if (!(edgeFlag & (1 << (2 * lcl + whichSide)))) {
+        profiler.countMetric(DISCARDED_EDGE);
+        /* reachedIndex.update(label.getTrip(), label.getStopIndex()); */
+        return;
+      }
     }
 
     queue[queueSize] =
