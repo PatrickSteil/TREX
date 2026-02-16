@@ -322,8 +322,8 @@ public:
       }
     }
 
-    profiler.registerPhases(
-        {PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL, PHASE_SCAN_TRIPS});
+    profiler.registerPhases({PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL,
+                             PHASE_SCAN_TRIPS, PHASE_GET_JOURNEYS});
     profiler.registerMetrics(
         {METRIC_ROUNDS, METRIC_SCANNED_TRIPS, METRIC_SCANNED_LEVEL_ZERO_TRIPS,
          METRIC_SCANNED_STOPS, METRIC_SCANNED_LEVEL_ZERO_STOPS,

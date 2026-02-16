@@ -299,6 +299,7 @@ public:
     addParameter("Use overlay graphs?");
     addParameter("Compare to TB?", "false");
     addParameter("TB Input for eval", ".");
+    addParameter("Verbose?", "false");
   }
 
   virtual void execute() noexcept {
@@ -306,6 +307,7 @@ public:
     const bool eval = getParameter<bool>("Compare to TB?");
     const bool overlay = getParameter<bool>("Use overlay graphs?");
     const std::string evalFile = getParameter("TB Input for eval");
+    const bool verbose = getParameter<bool>("Verbose?");
 
     TripBased::TREXData data(tripFile);
     data.printInfo();
@@ -322,12 +324,37 @@ public:
     auto run = [&](auto &algo) {
       size_t i(0);
       for (const StopQuery &query : queries) {
+        if (verbose)
+          std::cout << "Query " << (int)query.source << ", "
+                    << (int)query.target << ", " << (int)query.departureTime
+                    << std::endl;
         algo.run(query.source, query.departureTime, query.target);
         numberOfJourneys += algo.getJourneys().size();
+
+        if (verbose) {
+          std::cout << "TREX Query" << std::endl;
+          for (auto &journey : algo.getJourneys()) {
+            std::cout << query << std::endl;
+            for (auto &leg : journey) {
+              std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
+                        << leg.departureTime << " -> " << leg.arrivalTime
+                        << (leg.usesRoute ? ", route: " : ", transfer: ")
+                        << (int)leg.routeId;
+
+              std::cout << std::endl;
+            }
+            std::cout << std::endl;
+          }
+        }
+
         result[i].reserve(algo.getArrivals().size());
         for (auto &arr : algo.getArrivals()) {
           result[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
+
+          if (verbose)
+            std::cout << "Nr Trips: " << (int)arr.numberOfTrips
+                      << ", Arr Time: " << (int)arr.arrivalTime << std::endl;
         }
 
         i += 1;
@@ -359,33 +386,34 @@ public:
       numberOfJourneys = 0;
       std::size_t i = 0;
       for (const StopQuery &query : queries) {
+        if (verbose)
+          std::cout << "Query " << (int)query.source << ", "
+                    << (int)query.target << ", " << (int)query.departureTime
+                    << std::endl;
         tripAlgorithm.run(query.source, query.departureTime, query.target);
         numberOfJourneys += tripAlgorithm.getJourneys().size();
 
-        /*
-        std::cout << "TB Query" << std::endl;
-        for (auto &journey : tripAlgorithm.getJourneys()) {
-          std::cout << query << std::endl;
-          for (auto &leg : journey) {
-            std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
-                      << leg.departureTime << " -> " << leg.arrivalTime
-                      << (leg.usesRoute ? ", route: " : ", transfer: ")
-                      << (int)leg.routeId;
+        if (verbose) {
+          std::cout << "TB Query" << std::endl;
+          for (auto &journey : tripAlgorithm.getJourneys()) {
+            std::cout << query << std::endl;
+            for (auto &leg : journey) {
+              std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
+                        << leg.departureTime << " -> " << leg.arrivalTime
+                        << (leg.usesRoute ? ", route: " : ", transfer: ")
+                        << (int)leg.routeId;
 
+              std::cout << std::endl;
+            }
             std::cout << std::endl;
           }
-          std::cout << std::endl;
         }
-        */
 
         tripResult[i].reserve(tripAlgorithm.getArrivals().size());
 
         for (auto &arr : tripAlgorithm.getArrivals()) {
           tripResult[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
-          /* std::cout << "Nr Trips: " << (int)arr.numberOfTrips */
-          /*           << ", Arrival Time; " << (int)arr.arrivalTime <<
-           * std::endl; */
         }
 
         i += 1;

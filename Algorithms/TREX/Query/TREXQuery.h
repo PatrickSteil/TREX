@@ -122,8 +122,8 @@ public:
         }
       }
     }
-    profiler.registerPhases(
-        {PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL, PHASE_SCAN_TRIPS});
+    profiler.registerPhases({PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL,
+                             PHASE_SCAN_TRIPS, PHASE_GET_JOURNEYS});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
                               METRIC_ENQUEUES, METRIC_ADD_JOURNEYS,
@@ -166,7 +166,8 @@ public:
     return -1;
   }
 
-  inline std::vector<RAPTOR::Journey> getJourneys() const noexcept {
+  inline std::vector<RAPTOR::Journey> getJourneys() noexcept {
+    profiler.startPhase();
     std::vector<RAPTOR::Journey> result;
     int bestArrivalTime = INFTY;
     for (const TargetLabel &label : targetLabels) {
@@ -175,6 +176,7 @@ public:
       bestArrivalTime = label.arrivalTime;
       result.emplace_back(getJourney(label));
     }
+    profiler.donePhase(PHASE_GET_JOURNEYS);
     return result;
   }
 
