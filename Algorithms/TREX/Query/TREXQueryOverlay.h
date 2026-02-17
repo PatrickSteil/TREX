@@ -172,6 +172,7 @@ public:
         edgeLabels(data.numberOfLevels + 1, std::vector<EdgeLabel>()),
         routeLabels(data.numberOfRoutes()),
         eventLookup(data.numberOfStopEvents()),
+        eventArrTimes(data.numberOfStopEvents()),
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
@@ -303,6 +304,7 @@ public:
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       eventLookup[event] = EventLookup(data.arrivalEvents[event].stop,
                                        data.arrivalEvents[event].arrivalTime);
+      eventArrTimes[event] = data.arrivalEvents[event].arrivalTime;
     }
 
     for (const RouteId route : data.raptorData.routes()) {
@@ -597,6 +599,7 @@ private:
     std::size_t roundEnd = 0;
 
     const EventLookup *RESTRICT eventLookupPtr = eventLookup.data();
+    const std::uint32_t *RESTRICT eventArrTimesPtr = eventArrTimes.data();
     const uint16_t *RESTRICT cellIdPtr = cellIdOfEvent.data();
     const auto *RESTRICT edgeRangeLookupPtr = edgeRangeLookup.data();
 
@@ -686,7 +689,7 @@ private:
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
         if (i + 4 < roundEnd) {
-          __builtin_prefetch(&eventLookupPtr[queue[i + 4].begin()]);
+          __builtin_prefetch(&eventArrTimesPtr[queue[i + 4].begin()]);
         }
 #endif
 
@@ -694,8 +697,7 @@ private:
         const StopEventId end = label.end();
         for (StopEventId j = label.begin(); j < end; j++) {
           profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (eventLookupPtr[j].arrTime >=
-              static_cast<uint32_t>(minArrivalTime)) {
+          if (eventArrTimesPtr[j] >= static_cast<uint32_t>(minArrivalTime)) {
             label.setEnd(j);
             break;
           }
@@ -711,6 +713,7 @@ private:
 
         profiler.countMetric(METRIC_SCANNED_TRIPS);
         const TripLabel &label = queue[i];
+
         AssertMsg(label.lcl() < overlayGraphs.size(),
                   "Label.lcl (" << (int)label.lcl() << ") is out of bounds!");
 
@@ -800,6 +803,7 @@ private:
   std::vector<RouteLabel> routeLabels;
 
   std::vector<EventLookup> eventLookup;
+  std::vector<std::uint32_t> eventArrTimes;
   std::vector<uint16_t> cellIdOfEvent;
 
   StopId sourceStop;
