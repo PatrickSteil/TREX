@@ -35,6 +35,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Algorithms/TREX/Preprocessing/BuilderIBEs.h"
 #include "../../Algorithms/TREX/Preprocessing/TBTEGraph.h"
 #include "../../Algorithms/TREX/Query/TREXProfileQuery.h"
+/* #include "../../Algorithms/TREX/Query/TREXQueryRoute.h" */
 #include "../../Algorithms/TREX/Query/TREXQuery.h"
 #include "../../Algorithms/TREX/Query/TREXQueryOverlay.h"
 #include "../../Algorithms/TripBased/Preprocessing/StopEventGraphBuilder.h"
