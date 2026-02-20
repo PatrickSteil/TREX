@@ -8,7 +8,16 @@ The underlying code base is taken from [FLASH-TB](https://github.com/TransitRout
 If you use this repository, please cite my work using
 
 ```
-TODO
+@mastersthesis{Steil2025_1000190843,
+    author       = {Steil, Patrick},
+    year         = {2025},
+    title        = {{A} {M}ultilevel {D}esign for {S}calable {P}areto-{O}ptimal {P}ublic {T}ransit {Q}ueries},
+    doi          = {10.5445/IR/1000190843},
+    publisher    = {{Karlsruher Institut für Technologie (KIT)}},
+    pagetotal    = {90},
+    school       = {Karlsruher Institut für Technologie (KIT)},
+    language     = {english}
+}
 ```
 
 This code contains the following journey planning algorithms:
