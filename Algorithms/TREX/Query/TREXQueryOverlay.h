@@ -543,11 +543,11 @@ private:
       const RouteId route = routesToLoopOver[i];
 
 #ifdef ENABLE_PREFETCH
-      if (i + 4 < routesToLoopOver.size()) {
-        __builtin_prefetch(&routeLabels[routesToLoopOver[i + 4]]);
-        __builtin_prefetch(&data.firstTripOfRoute[routesToLoopOver[i + 4]]);
+      if (i + 16 < routesToLoopOver.size()) {
+        __builtin_prefetch(&routeLabels[routesToLoopOver[i + 16]]);
+        __builtin_prefetch(&data.firstTripOfRoute[routesToLoopOver[i + 16]]);
         __builtin_prefetch(
-            data.raptorData.stopArrayOfRoute(routesToLoopOver[i + 4]));
+            data.raptorData.stopArrayOfRoute(routesToLoopOver[i + 16]));
       }
 #endif
       const RouteLabel &label = routeLabels[route];
@@ -606,7 +606,7 @@ private:
     while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
       ++currentRoundNumber;
 
-      profiler.countMetric(METRIC_ROUNDS);
+      // profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
       // loop over simple queue and split trip segments
@@ -614,8 +614,8 @@ private:
       for (std::size_t i = 0; i < tmpQueueSize; ++i) {
 
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < tmpQueueSize) {
-          __builtin_prefetch(&edgeRangeLookupPtr[tmpQueue[i + 4].begin()]);
+        if (i + 8 < tmpQueueSize) {
+          __builtin_prefetch(&edgeRangeLookupPtr[tmpQueue[i + 8].begin()]);
         }
 #endif
 
@@ -655,16 +655,16 @@ private:
       const std::size_t targetCellQueueSize = targetCellQueue.size();
       for (std::size_t i = 0; i < targetCellQueueSize; ++i) {
         const QueueElementTargetCell &label = targetCellQueue[i];
-        profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
+        // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
 
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < targetCellQueueSize) {
-          __builtin_prefetch(&eventLookupPtr[targetCellQueue[i + 4].begin]);
+        if (i + 16 < targetCellQueueSize) {
+          __builtin_prefetch(&eventLookupPtr[targetCellQueue[i + 16].begin]);
         }
 #endif
 
         for (StopEventId j = label.begin; j < label.end;) {
-          profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
+          // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
           if (eventLookupPtr[j].arrTime >=
               static_cast<uint32_t>(minArrivalTime))
             break;
@@ -688,15 +688,15 @@ private:
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&eventArrTimesPtr[queue[i + 4].begin()]);
+        if (i + 16 < roundEnd) {
+          __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin()]);
         }
 #endif
 
         TripLabel &label = queue[i];
         const StopEventId end = label.end();
         for (StopEventId j = label.begin(); j < end; j++) {
-          profiler.countMetric(METRIC_SCANNED_STOPS);
+          // profiler.countMetric(METRIC_SCANNED_STOPS);
           if (eventArrTimesPtr[j] >= static_cast<uint32_t>(minArrivalTime)) {
             label.setEnd(j);
             break;
@@ -706,12 +706,13 @@ private:
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          overlayGraphs[queue[i + 4].lcl()].prefetchAdj(queue[i + 4].begin());
+        if (i + 16 < roundEnd) {
+          overlayGraphs[queue[i + 16].lcl()].prefetchAdj(queue[i + 16].begin());
+          overlayGraphs[queue[i + 16].lcl()].prefetchAdj(queue[i + 16].end());
         }
 #endif
 
-        profiler.countMetric(METRIC_SCANNED_TRIPS);
+        // profiler.countMetric(METRIC_SCANNED_TRIPS);
         const TripLabel &label = queue[i];
 
         AssertMsg(label.lcl() < overlayGraphs.size(),
@@ -729,12 +730,12 @@ private:
 
         for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
 #ifdef ENABLE_PREFETCH
-          if (edge + 4 < endEdgeRange) {
-            __builtin_prefetch(&edgeLabelsPtr[edge + 4]);
+          if (edge + 16 < endEdgeRange) {
+            __builtin_prefetch(&edgeLabelsPtr[edge + 16]);
           }
 #endif
 
-          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+          // profiler.countMetric(METRIC_RELAXED_TRANSFERS);
           const EdgeLabel &edgeLabel = edgeLabelsPtr[edge];
           enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
                   edgeLabel.getFirstEvent(), i);
@@ -747,7 +748,7 @@ private:
   inline void enqueue(const TripId trip, const StopIndex index,
                       const StopEventId firstEvent,
                       const std::uint32_t parent) noexcept {
-    profiler.countMetric(METRIC_ENQUEUES);
+    // profiler.countMetric(METRIC_ENQUEUES);
     const StopIndex endOfTripSeg = StopIndex(reachedIndex(trip));
 
     if (endOfTripSeg <= index) [[likely]] {
@@ -770,7 +771,7 @@ private:
 
   inline void addTargetLabel(const int newArrivalTime,
                              const uint32_t parent = -1) noexcept {
-    profiler.countMetric(METRIC_ADD_JOURNEYS);
+    // profiler.countMetric(METRIC_ADD_JOURNEYS);
     if (newArrivalTime < targetLabels.back().arrivalTime) {
       targetLabels.back() = TargetLabel(newArrivalTime, parent);
       minArrivalTime = newArrivalTime;

@@ -109,9 +109,10 @@ public:
         transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
     reverseTransferGraph.revert();
 
+#pragma omp parallel for
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       const StopId stop = data.getStopOfStopEvent(StopEventId(event));
-      AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
+      AssertMsg(data.raptorData.isStop(stop), "Stop is not a stop!");
       cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
     }
 
@@ -124,15 +125,9 @@ public:
           StopIndex(data.stopEventGraph.get(ToVertex, edge) -
                     edgeLabels[edge].getFirstEvent() + 1));
       edgeLabels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge));
+      edgeLabels[edge].setCellId(
+          cellIdOfEvent[edgeLabels[edge].getStopEvent() - 1]);
     }
-
-#pragma omp parallel for
-    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
-      const StopId stop = data.getStopOfStopEvent(StopEventId(event));
-      AssertMsg(data.raptorData.isStop(stop), "Stop is not a stop!");
-      cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
-    }
-
 #pragma omp parallel for
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       eventLookup[event] = EventLookup(data.arrivalEvents[event].stop,
@@ -309,11 +304,11 @@ private:
       const RouteId route = routesToLoopOver[i];
 
 #ifdef ENABLE_PREFETCH
-      if (i + 4 < routesToLoopOver.size()) {
-        __builtin_prefetch(&routeLabels[routesToLoopOver[i + 4]]);
-        __builtin_prefetch(&data.firstTripOfRoute[routesToLoopOver[i + 4]]);
+      if (i + 16 < routesToLoopOver.size()) {
+        __builtin_prefetch(&routeLabels[routesToLoopOver[i + 16]]);
+        __builtin_prefetch(&data.firstTripOfRoute[routesToLoopOver[i + 16]]);
         __builtin_prefetch(
-            data.raptorData.stopArrayOfRoute(routesToLoopOver[i + 4]));
+            data.raptorData.stopArrayOfRoute(routesToLoopOver[i + 16]));
       }
 #endif
       const RouteLabel &label = routeLabels[route];
@@ -371,8 +366,8 @@ private:
       // reachable
       for (size_t i = roundBegin; i < roundEnd; ++i) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 4].begin]);
+        if (i + 16 < roundEnd) {
+          __builtin_prefetch(&data.arrivalEvents[queue[i + 16].begin]);
         }
 #endif
 
@@ -391,9 +386,10 @@ private:
       // Find the range of transfers for each trip
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&eventArrTimesPtr[queue[i + 4].begin]);
-          /* __builtin_prefetch(&edgeRanges[i + 4]); */
+        if (i + 16 < roundEnd) {
+          __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin]);
+          data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].begin));
+          data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].end));
         }
 #endif
         TripLabel &label = queue[i];
@@ -433,16 +429,14 @@ private:
 
   inline void enqueue(const std::size_t edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    const EdgeLabel &label = edgeLabels[edge];
+    const EdgeLabelCellId &label = edgeLabels[edge];
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
     if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
       return;
 
     AssertMsg(0 < label.getStopEvent(), "StopEvent of label out of bounds!");
-    AssertMsg(label.getStopEvent() < cellIdOfEvent.size(),
-              "StopEvent of label out of bounds!");
-    const std::uint16_t thisCellId = cellIdOfEvent[label.getStopEvent() - 1];
+    const std::uint16_t thisCellId = label.getCellId();
     if ((thisCellId ^ sourceCellId) >> label.getRank() &&
         ((thisCellId ^ targetCellId) >> label.getRank())) [[likely]] {
       profiler.countMetric(DISCARDED_EDGE);
@@ -568,7 +562,7 @@ private:
   std::vector<TargetLabel> targetLabels;
   uint32_t minArrivalTime;
 
-  std::vector<EdgeLabel> edgeLabels;
+  std::vector<EdgeLabelCellId> edgeLabels;
   std::vector<RouteLabel> routeLabels;
 
   std::vector<EventLookup> eventLookup;
