@@ -275,6 +275,15 @@ public:
                         numberOfStopsInRoute(route)]);
   }
 
+  inline const StopEvent *
+  eventOfStopIndexOnLastTrip(const RouteId route,
+                             const StopIndex index) const noexcept {
+    AssertMsg(isRoute(route),
+              "The id " << route << " does not represent a route!");
+    return &(stopEvents[firstStopEventOfRoute[route + 1] -
+                        numberOfStopsInRoute(route) + index]);
+  }
+
   inline const StopEvent *tripOfRoute(const RouteId route,
                                       const size_t tripNum) const noexcept {
     AssertMsg(isRoute(route),
