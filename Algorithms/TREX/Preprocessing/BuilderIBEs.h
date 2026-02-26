@@ -26,13 +26,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // Builder for Number Of Cells = 2 on all levels
 
-#include <omp.h>
-#include <tbb/global_control.h>
-
+#include <atomic>
 #include <cmath>
 #include <execution>
+#include <omp.h>
+#include <tbb/global_control.h>
 #include <vector>
 
+#include "../../../DataStructures/Container/AtomicBool.h"
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../../ExternalLibs/ips4o/ips4o.hpp"
 #include "../../../Helpers/Console/Progress.h"
@@ -82,11 +83,24 @@ public:
         pinMultiplier(pinMultiplier),
         edgeLabels(data.stopEventGraph.numEdges()),
         routeLabels(data.raptorData.numberOfRoutes()),
-        cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs() {
+        cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs(),
+        updatedCell((1 << data.numberOfLevels)) {
     // set number of threads
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
+
+    /*     const int numLowestLevelCells = (1 << data.numberOfLevels); */
+    /*     for (int c = 0; c < numLowestLevelCells; ++c) { */
+    /*       updatedCell.emplace_back(false); */
+    /*     } */
+
+    /*     AssertMsg(updatedCell.size() == */
+    /*                   static_cast<std::size_t>(numLowestLevelCells), */
+    /*               "UpdatedCell should be the size of all possible cells.");
+     */
+
+    // TODO technically, we dont need (1<<numLevels), but one less
 
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       const StopId stop = data.getStopOfStopEvent(StopEventId(event));
@@ -129,7 +143,8 @@ public:
 
     seekers.reserve(numberOfThreads);
     for (int i = 0; i < numberOfThreads; ++i)
-      seekers.emplace_back(data, edgeLabels, routeLabels, cellIdOfEvent);
+      seekers.emplace_back(data, edgeLabels, routeLabels, cellIdOfEvent,
+                           updatedCell);
 
     profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
     profiler.registerPhases({
@@ -197,23 +212,26 @@ public:
   }
 
   inline void filterIrrelevantIBEs(uint8_t level) {
-    // 'level' denotes the level, for which we filter the IBEs
-    // ... in other word: after this method, IBEs should contain all IBEs which
-    // cross at this level, not lower levels
-
     profiler.startPhase();
     IBEs.erase(std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
                               [&](const PackedIBE &ibe) {
                                 auto trip = ibe.getTripId();
                                 auto stopIndex = ibe.getStopIndex();
+                                StopEventId firstEvent =
+                                    data.firstStopEventOfTrip[trip];
 
-                                auto fromStop = data.getStop(trip, stopIndex);
-                                auto toStop = data.getStop(
-                                    trip, StopIndex(stopIndex + 1));
+                                uint16_t fromCellId =
+                                    cellIdOfEvent[firstEvent + stopIndex];
+                                uint16_t toCellId =
+                                    cellIdOfEvent[firstEvent + stopIndex + 1];
 
-                                return !((data.getCellIdOfStop(fromStop) ^
-                                          data.getCellIdOfStop(toStop)) >>
-                                         level);
+                                // TODO a) checkl that load is check
+                                // b) that toCell is what we care about
+                                uint16_t parentCellId = (toCellId >> level);
+
+                                assert(parentCellId < updatedCell.size());
+                                return !((fromCellId ^ toCellId) >> level) &&
+                                       updatedCell[parentCellId].getValue();
                               }),
                IBEs.end());
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
@@ -237,12 +255,14 @@ public:
     }
     const int numCores = numberOfCores();
 
-    // now for every level, we have an invariant: IBEs contains exactly the IBEs
-    // we need on this level
     for (uint8_t level(0); level < data.getNumberOfLevels(); ++level) {
       if (VERBOSE)
         std::cout << "Starting Level " << (int)level
                   << " [IBEs: " << IBEs.size() << "]... " << std::endl;
+
+      for (auto &value : updatedCell) {
+        value.reset();
+      }
 
       Progress progress(IBEs.size());
 
@@ -291,9 +311,10 @@ public:
   std::vector<RouteLabel> routeLabels;
   std::vector<uint16_t> cellIdOfEvent;
 
-  /* std::vector<TransferSearch<TripBased::AggregateProfiler>> seekers; */
   std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
   std::vector<PackedIBE> IBEs;
   AggregateProfiler profiler;
+
+  std::vector<PaddedAtomicBool> updatedCell;
 };
 } // namespace TripBased

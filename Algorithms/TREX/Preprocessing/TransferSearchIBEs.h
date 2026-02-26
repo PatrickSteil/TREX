@@ -24,6 +24,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
+#include "../../../DataStructures/Container/AtomicBool.h"
 #include "../../../DataStructures/Container/Set.h"
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
@@ -80,12 +81,14 @@ private:
 public:
   TransferSearch(TREXData &data, std::vector<EdgeLabel> &edgeLabels,
                  const std::vector<RouteLabel> &routeLabels,
-                 const std::vector<uint16_t> &cellIdOfEvent)
+                 const std::vector<uint16_t> &cellIdOfEvent,
+                 std::vector<PaddedAtomicBool> &updatedCell)
       : data(data), edgeLabels(edgeLabels), routeLabels(routeLabels),
         cellIdOfEvent(cellIdOfEvent), queue(data.numberOfStopEvents()),
         edgeRanges(data.numberOfStopEvents()), queueSize(0), reachedIndex(data),
         toBeUnpacked(data.numberOfStopEvents()),
-        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0) {
+        lastExtractedRun(data.stopEventGraph.numEdges(), 0), currentRun(0),
+        updatedCell(updatedCell) {
     profiler.registerPhases({PHASE_SCAN_TRIPS, PHASE_TREX_UNPACK});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
@@ -105,7 +108,7 @@ public:
     clear();
 
     assert(newLevel < data.getNumberOfLevels());
-    minLevel = newLevel;
+    currentLevel = newLevel;
     currentCellId =
         data.getCellIdOfStop(data.getStop(trip, StopIndex(stopIndex + 1)));
     AssertMsg(currentCellId !=
@@ -201,11 +204,11 @@ private:
 
   inline bool isStopInCell(StopId stop) const {
     AssertMsg(data.isStop(stop), "Stop is not a valid stop!");
-    return !((data.getCellIdOfStop(stop) ^ currentCellId) >> minLevel);
+    return !((data.getCellIdOfStop(stop) ^ currentCellId) >> currentLevel);
   }
 
   inline bool isEventInCell(const uint16_t cellId) const {
-    return !((cellId ^ currentCellId) >> minLevel);
+    return !((cellId ^ currentCellId) >> currentLevel);
   }
 
   inline void enqueue(const TripId trip, const StopIndex index) noexcept {
@@ -224,9 +227,10 @@ private:
     profiler.countMetric(METRIC_ENQUEUES);
 
     const EdgeLabel &label = edgeLabels[edge];
-    if (minLevel > label.getRank()) [[likely]]
+    if (currentLevel > label.getRank()) [[likely]]
       return;
-    /* if (minLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]] */
+    /* if (currentLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
+     */
     /*   return; */
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
@@ -246,39 +250,48 @@ private:
     profiler.startPhase();
     const auto &indexToLoopOver = toBeUnpacked.getValues();
 
+    bool updated = false;
+
     for (size_t i(0); i < indexToLoopOver.size(); ++i) {
 #ifdef ENABLE_PREFETCH
       if (i + 4 < indexToLoopOver.size()) {
         __builtin_prefetch(&queue[indexToLoopOver[i + 4]]);
       }
 #endif
-      unpackStopEvent(indexToLoopOver[i]);
+      updated |= unpackStopEvent(indexToLoopOver[i]);
     }
+
+    uint16_t parentCell = (currentCellId >> currentLevel);
+    assert(parentCell < updatedCell.size());
+    updatedCell[parentCell].set_true();
+
     profiler.donePhase(PHASE_TREX_UNPACK);
   }
 
-  inline void unpackStopEvent(size_t index) {
+  inline bool unpackStopEvent(size_t index) {
     AssertMsg(index < queueSize, "Index is out of bounds!");
+
+    bool updated = false;
+    Edge currentEdge = noEdge;
 
     while (true) {
       const TripLabel &label = queue[index];
-      Edge currentEdge = label.parentTransfer;
+      currentEdge = label.parentTransfer;
 
       if (currentEdge == noEdge)
         break;
 
       if (lastExtractedRun[currentEdge] == currentRun)
-        return;
+        break;
 
       lastExtractedRun[currentEdge] = currentRun;
-      edgeLabels[currentEdge].setRank(minLevel + 1);
+      updated |= (edgeLabels[currentEdge].getRank() < currentLevel + 1);
+      edgeLabels[currentEdge].setRank(currentLevel + 1);
 
       index = label.parent;
     }
 
-    AssertMsg(
-        index == 0,
-        "The origin of the journey does not start with the incoming event!");
+    return updated;
   }
 
 private:
@@ -294,7 +307,7 @@ private:
   size_t queueSize;
   TimestampedReachedIndex reachedIndex;
 
-  uint8_t minLevel;
+  uint8_t currentLevel;
   uint16_t currentCellId;
 
   Profiler profiler;
@@ -303,6 +316,8 @@ private:
 
   std::vector<uint32_t> lastExtractedRun;
   uint32_t currentRun;
+
+  std::vector<PaddedAtomicBool> &updatedCell;
 };
 
 } // namespace TripBased
