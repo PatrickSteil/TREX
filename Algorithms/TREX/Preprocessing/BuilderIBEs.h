@@ -85,22 +85,9 @@ public:
         routeLabels(data.raptorData.numberOfRoutes()),
         cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs(),
         updatedCell((1 << data.numberOfLevels)) {
-    // set number of threads
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
-
-    /*     const int numLowestLevelCells = (1 << data.numberOfLevels); */
-    /*     for (int c = 0; c < numLowestLevelCells; ++c) { */
-    /*       updatedCell.emplace_back(false); */
-    /*     } */
-
-    /*     AssertMsg(updatedCell.size() == */
-    /*                   static_cast<std::size_t>(numLowestLevelCells), */
-    /*               "UpdatedCell should be the size of all possible cells.");
-     */
-
-    // TODO technically, we dont need (1<<numLevels), but one less
 
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       const StopId stop = data.getStopOfStopEvent(StopEventId(event));
@@ -154,54 +141,76 @@ public:
     });
   }
 
-  inline void collectAllIBEsOnLowestLevel() noexcept {
+  inline void
+  collectAffectedIBEs(const std::vector<TripId> &affectedTrips) noexcept {
     profiler.startPhase();
+    std::vector<bool> affectedCellId((1 << data.numberOfLevels), false);
+
+    for (const auto trip : affectedTrips) {
+      for (StopEventId runner = data.firstStopEventOfTrip[trip];
+           runner < data.firstStopEventOfTrip[trip + 1]; ++runner) {
+        AssertMsg(static_cast<std::size_t>(cellIdOfEvent[runner]) <
+                      affectedCellId.size(),
+                  "CellId of event should be in bounds!");
+        affectedCellId[cellIdOfEvent[runner]] = true;
+      }
+    }
+
     IBEs.reserve(data.numberOfStopEvents());
 
-    // TODO to only allow 'time range based' IBE
-    /* int minTime = 7 * 60 * 60; */
-    /* int maxTime = 8 * 60 * 60; */
-
-    auto inSameCell = [&](auto a, auto b) {
-      return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b));
-    };
-
-    auto tripTooEarly = [&]([[maybe_unused]] auto trip,
-                            [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return minTime > event.departureTime; */
-      return false;
-    };
-
-    auto tripTooLate = [&]([[maybe_unused]] auto trip,
-                           [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return event.departureTime > maxTime; */
-      return false;
+    auto crossesAffectedCell = [&](auto a, auto b) {
+      const std::uint16_t towardsCellId = data.getCellIdOfStop(b);
+      assert(static_cast<std::size_t>(towardsCellId) < affectedCellId.size());
+      return (data.getCellIdOfStop(a) != towardsCellId) &&
+             (affectedCellId[towardsCellId]);
     };
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
       for (const RAPTOR::RouteSegment &route :
            data.routesContainingStop(stop)) {
-        // EDGE CASE: a stop is not a border stop (of a route) if it's at either
-        // end (start or end)
         if (route.stopIndex == 0)
           continue;
 
-        // check if the next / previous stop in stop array of route is in
-        // another cell
         RAPTOR::RouteSegment neighbourSeg(route.routeId,
                                           StopIndex(route.stopIndex - 1));
 
-        // check if neighbour is *not* in the same cell
-        if (!inSameCell(stop,
-                        data.raptorData.stopOfRouteSegment(neighbourSeg))) {
-          // add all stop events of this route
+        const StopId prevStop =
+            data.raptorData.stopOfRouteSegment(neighbourSeg);
+
+        if (crossesAffectedCell(prevStop, stop)) {
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
-              continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
-              break;
+            profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
+            IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
+          }
+        }
+      }
+    }
+    profiler.donePhase(PHASE_TREX_COLLECT_IBES);
+  }
+
+  inline void collectAllIBEsOnLowestLevel() noexcept {
+    profiler.startPhase();
+
+    IBEs.reserve(data.numberOfStopEvents());
+
+    auto sameCellId = [&](auto a, auto b) {
+      return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b));
+    };
+
+    for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
+      for (const RAPTOR::RouteSegment &route :
+           data.routesContainingStop(stop)) {
+        if (route.stopIndex == 0)
+          continue;
+
+        RAPTOR::RouteSegment neighbourSeg(route.routeId,
+                                          StopIndex(route.stopIndex - 1));
+
+        const StopId prevStop =
+            data.raptorData.stopOfRouteSegment(neighbourSeg);
+
+        if (!sameCellId(prevStop, stop)) {
+          for (TripId trip : data.tripsOfRoute(route.routeId)) {
             profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
             IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
           }
@@ -235,6 +244,71 @@ public:
                               }),
                IBEs.end());
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
+  }
+
+  template <bool SORT_IBES = true, bool VERBOSE = true>
+  inline void run(const std::vector<TripId> &affectedTrips) noexcept {
+    profiler.start();
+    collectAffectedIBEs(affectedTrips);
+
+    assert(!IBEs.empty());
+
+    if (SORT_IBES) {
+      profiler.startPhase();
+      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
+       * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
+      ips4o::parallel::sort(
+          IBEs.begin(), IBEs.end(),
+          [](const PackedIBE &a, const PackedIBE &b) { return a < b; });
+      profiler.donePhase(PHASE_TREX_SORT_IBES);
+    }
+    const int numCores = numberOfCores();
+
+    for (uint8_t level(0); level < data.getNumberOfLevels(); ++level) {
+      if (VERBOSE)
+        std::cout << ")Starting Level " << (int)level
+                  << " [IBEs: " << IBEs.size() << "]... " << std::endl;
+
+      for (auto &value : updatedCell) {
+        value.reset();
+      }
+
+      Progress progress(IBEs.size());
+
+#pragma omp parallel
+      {
+#pragma omp for schedule(dynamic)
+        for (size_t i = 0; i < IBEs.size(); ++i) {
+          int threadId = omp_get_thread_num();
+          pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+          AssertMsg(omp_get_num_threads() == numberOfThreads,
+                    "Number of threads is " << omp_get_num_threads()
+                                            << ", but should be "
+                                            << numberOfThreads << "!");
+
+          const auto &ibe = IBEs[i];
+          seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
+          ++progress;
+        }
+      }
+
+      progress.finished();
+
+      if (level < data.getNumberOfLevels() - 1)
+        filterIrrelevantIBEs(level + 1);
+
+      if (VERBOSE) {
+        std::cout << "done!\n";
+      }
+    }
+
+    const std::size_t numEdges = data.stopEventGraph.numEdges();
+#pragma omp parallel for
+    for (Edge edge = Edge(0); edge < numEdges; ++edge) {
+      data.stopEventGraph.set(LocalLevel, edge, edgeLabels[edge].getRank());
+    }
+
+    profiler.done();
   }
 
   template <bool SORT_IBES = true, bool VERBOSE = true>

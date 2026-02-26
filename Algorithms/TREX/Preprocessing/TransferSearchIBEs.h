@@ -110,7 +110,7 @@ public:
     assert(newLevel < data.getNumberOfLevels());
     currentLevel = newLevel;
     currentCellId =
-        data.getCellIdOfStop(data.getStop(trip, StopIndex(stopIndex + 1)));
+        cellIdOfEvent[data.firstStopEventOfTrip[trip] + stopIndex + 1];
     AssertMsg(currentCellId !=
                   data.getCellIdOfStop(data.getStop(trip, stopIndex)),
               "CellId should be different!");

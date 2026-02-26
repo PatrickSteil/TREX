@@ -27,6 +27,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <cmath>
 #include <numeric>
 #include <string>
+#include <unordered_set>
 
 #include "../../Algorithms/UnionFind.h"
 #include "../../Helpers/Assert.h"
@@ -48,6 +49,39 @@ public:
   TREXData(const std::string &fileName) { deserialize(fileName); }
 
 public:
+  std::vector<TripId> selectRandomTrips(double percentage,
+                                        const int randomSeed) const noexcept {
+    percentage = std::min<double>(100.0, percentage);
+    std::vector<TripId> indices(numberOfTrips());
+    std::iota(indices.begin(), indices.end(), TripId(0));
+
+    std::mt19937 g(randomSeed);
+    std::shuffle(indices.begin(), indices.end(), g);
+
+    int numToTake =
+        static_cast<int>(std::round(numberOfTrips() * (percentage / 100.0)));
+
+    indices.resize(numToTake);
+
+    return indices;
+  }
+
+  // resets the rank from an affected trip and towards an affected trips
+  inline void
+  resetTransfers(const std::vector<TripId> &affectedTrips) noexcept {
+    std::unordered_set<TripId> tripLookup(affectedTrips.begin(),
+                                          affectedTrips.end());
+
+    for (const auto [edge, from] : stopEventGraph.edgesWithFromVertex()) {
+      const TripId fromTrip = tripOfStopEvent[from];
+      const TripId toTrip = tripOfStopEvent[stopEventGraph.get(ToVertex, edge)];
+
+      if (tripLookup.contains(fromTrip) || tripLookup.contains(toTrip)) {
+        stopEventGraph.set(LocalLevel, edge, 0);
+      }
+    }
+  }
+
   inline void addInformationToStopEventGraph() noexcept {
     std::vector<uint8_t> zeroLevels(stopEventGraph.numEdges(), 0);
     stopEventGraph.get(LocalLevel).swap(zeroLevels);

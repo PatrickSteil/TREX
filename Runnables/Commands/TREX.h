@@ -237,6 +237,59 @@ private:
   }
 };
 
+class PartialCustomization : public ParameterizedCommand {
+public:
+  PartialCustomization(BasicShell &shell)
+      : ParameterizedCommand(shell, "partialCustomize",
+                             "Computes a partial customization of TREX") {
+    addParameter("Input file (TREX Data)");
+    addParameter("Output file (TREX Data)");
+    addParameter("Percentage of trips", "5.0");
+    addParameter("Random seed", "42");
+    addParameter("Number of threads", "max");
+    addParameter("Pin multiplier", "1");
+  }
+
+  virtual void execute() noexcept {
+    const std::string mltbFile = getParameter("Input file (TREX Data)");
+    const std::string output = getParameter("Output file (TREX Data)");
+    const double percentageOfTrips =
+        getParameter<double>("Percentage of trips");
+    const int randomSeed = getParameter<int>("Random seed");
+    const int numberOfThreads = getNumberOfThreads();
+    const int pinMultiplier = getParameter<int>("Pin multiplier");
+
+    TripBased::TREXData data(mltbFile);
+    data.printInfo();
+
+    std::vector<TripId> affectedTrips =
+        data.selectRandomTrips(percentageOfTrips, randomSeed);
+
+    std::cout << "Sampled " << affectedTrips.size() << " many trips!"
+              << std::endl;
+
+    // reset all transfers from and towards an affected trip
+    data.resetTransfers(affectedTrips);
+
+    TripBased::Builder bobTheBuilder(data, numberOfThreads, pinMultiplier);
+
+    bobTheBuilder.run(affectedTrips);
+
+    std::cout << "******* Stats *******\n";
+    bobTheBuilder.getProfiler().printStatistics();
+    data.serialize(output);
+  }
+
+private:
+  inline int getNumberOfThreads() const noexcept {
+    if (getParameter("Number of threads") == "max") {
+      return numberOfCores();
+    } else {
+      return getParameter<int>("Number of threads");
+    }
+  }
+};
+
 class ShowInfoOfTREX : public ParameterizedCommand {
 public:
   ShowInfoOfTREX(BasicShell &shell)
