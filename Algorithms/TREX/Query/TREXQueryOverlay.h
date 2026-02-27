@@ -763,7 +763,7 @@ private:
     AssertMsg(beginStopEventId < endStopEventId, "Begin should be < End!");
     AssertMsg(beginStopEventId < data.numberOfStopEvents(),
               "StopEvent out of bounds!");
-    AssertMsg(endStopEventId < data.numberOfStopEvents(),
+    AssertMsg(endStopEventId <= data.numberOfStopEvents(),
               "StopEvent out of bounds!");
 
     tmpQueue.emplace(beginStopEventId, endStopEventId, parent);

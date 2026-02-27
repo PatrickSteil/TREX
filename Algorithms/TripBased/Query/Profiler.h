@@ -44,6 +44,7 @@ typedef enum {
   PHASE_ENQUEUE_COLLECTED_DEP_TIMES,
   PHASE_TREX_COLLECT_IBES,
   PHASE_TREX_SORT_IBES,
+  PHASE_TREX_PREPARE_AFFECTED_CELLS,
   PHASE_TREX_FILTER_IBES,
   PHASE_TREX_UNPACK,
   NUM_PHASES,
@@ -61,6 +62,7 @@ constexpr const char *PhaseNames[] = {
     "Collect departure times",
     "Collect IBEs",
     "Sort IBEs",
+    "Prepare affected cells",
     "Filter IBEs",
     "Unpacking transfers",
 };

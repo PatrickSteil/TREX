@@ -261,7 +261,7 @@ private:
       updated |= unpackStopEvent(indexToLoopOver[i]);
     }
 
-    uint16_t parentCell = (currentCellId >> currentLevel);
+    uint16_t parentCell = (currentCellId >> (currentLevel + 1));
     assert(parentCell < updatedCell.size());
     updatedCell[parentCell].set_true();
 

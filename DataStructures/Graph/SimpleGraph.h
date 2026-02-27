@@ -4,6 +4,9 @@
  */
 
 #pragma once
+
+#include "../../Helpers/Assert.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -55,13 +58,12 @@ template <typename VertexType = std::size_t> struct SimpleGraph {
   }
 
   std::size_t beginEdge(const VertexType v) const {
-    assert(isValid(v));
-    assert(v < adjArray.size());
+    AssertMsg(isValid(v) || v == numVertices(),
+              "Vertex " << v << " should be valid!");
     return adjArray[v];
   }
 
   std::size_t endEdge(const VertexType v) const {
-    assert(isValid(v));
     assert(v + 1 < adjArray.size());
     return adjArray[v + 1];
   }
@@ -124,13 +126,13 @@ template <typename VertexType = std::size_t> struct SimpleGraph {
   }
 
   void prefetchAdj(const VertexType v) {
-    assert(isValid(v));
-    assert(v + 1 < adjArray.size());
+    AssertMsg(isValid(v) || v == numVertices(),
+              "Vertex " << v << " should be valid!");
     __builtin_prefetch(&adjArray[v]);
   }
   void prefetchEdges(const VertexType v) {
-    assert(isValid(v));
-    assert(v + 1 < adjArray.size());
+    AssertMsg(isValid(v) || v == numVertices(),
+              "Vertex " << v << " should be valid!");
     __builtin_prefetch(&toVertex[adjArray[v]]);
   }
 };
