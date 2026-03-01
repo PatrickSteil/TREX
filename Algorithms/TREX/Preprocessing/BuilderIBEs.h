@@ -85,7 +85,7 @@ public:
         routeLabels(data.raptorData.numberOfRoutes()),
         cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs(),
         updatedCell((1 << data.numberOfLevels)),
-        latestArrTimeOfAffectedCell((1 << data.numberOfLevels), 0) {
+        latestArrTimeOfAffectedCell((1 << data.numberOfLevels), -1) {
     tbb::global_control c(tbb::global_control::max_allowed_parallelism,
                           numberOfThreads);
     omp_set_num_threads(numberOfThreads);
@@ -145,11 +145,7 @@ public:
 
   inline void prepareLookup(const std::vector<TripId> &affectedTrips) noexcept {
     profiler.startPhase();
-    latestArrTimeOfAffectedCell.assign((1 << data.numberOfLevels), 0);
-
-    for (auto &value : updatedCell) {
-      value.set_true();
-    }
+    latestArrTimeOfAffectedCell.assign((1 << data.numberOfLevels), -1);
 
     for (const auto trip : affectedTrips) {
       for (StopEventId runner = data.firstStopEventOfTrip[trip];
@@ -158,22 +154,11 @@ public:
         AssertMsg(static_cast<std::size_t>(cId) < updatedCell.size(),
                   "CellId of event should be in bounds!");
         updatedCell[cId].set_true();
-
-        latestArrTimeOfAffectedCell[cId] = std::max(
-            latestArrTimeOfAffectedCell[cId],
-            static_cast<std::uint32_t>(data.arrivalEvents[runner].arrivalTime));
+        latestArrTimeOfAffectedCell[cId] =
+            std::max(latestArrTimeOfAffectedCell[cId],
+                     data.arrivalEvents[runner].arrivalTime);
       }
     }
-
-#ifndef NDEBUG
-    for (std::size_t i = 0; i < updatedCell.size(); ++i) {
-      if (updatedCell[i].getValue()) {
-        AssertMsg(latestArrTimeOfAffectedCell[i] > 0,
-                  "LatestArrTime should not be 0 for an affected cell! ( "
-                      << (int)latestArrTimeOfAffectedCell[i] << " )");
-      }
-    }
-#endif
 
     profiler.donePhase(PHASE_TREX_PREPARE_AFFECTED_CELLS);
   }
@@ -212,40 +197,31 @@ public:
 
   inline void filterIrrelevantIBEs(uint8_t level) {
     profiler.startPhase();
-    IBEs.erase(std::remove_if(
-                   std::execution::par, IBEs.begin(), IBEs.end(),
-                   [&](const PackedIBE &ibe) {
-                     auto trip = ibe.getTripId();
-                     auto stopIndex = ibe.getStopIndex();
-                     StopEventId firstEvent = data.firstStopEventOfTrip[trip];
+    IBEs.erase(std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
+                              [&](const PackedIBE &ibe) {
+                                auto trip = ibe.getTripId();
+                                auto stopIndex = ibe.getStopIndex();
+                                StopEventId firstEvent =
+                                    data.firstStopEventOfTrip[trip];
 
-                     const uint16_t fromCellId =
-                         cellIdOfEvent[firstEvent + stopIndex];
-                     const uint16_t toCellId =
-                         cellIdOfEvent[firstEvent + stopIndex + 1];
+                                const uint16_t fromCellId =
+                                    cellIdOfEvent[firstEvent + stopIndex];
+                                const uint16_t toCellId =
+                                    cellIdOfEvent[firstEvent + stopIndex + 1];
 
-                     // TODO a) checkl that load is cheap
-
-                     const uint16_t parentCellId = (toCellId >> level);
-
-                     assert(parentCellId < updatedCell.size());
-                     bool keep = ((fromCellId ^ toCellId) >> level) &&
-                                 updatedCell[parentCellId].getValue();
-                     return !keep;
-                   }),
+                                bool keep = ((fromCellId ^ toCellId) >> level);
+                                return !keep;
+                              }),
                IBEs.end());
     profiler.donePhase(PHASE_TREX_FILTER_IBES);
   }
 
-  // we processed level-1, now prepare for level
-  inline void bubbleUpLatestArrivalTime(uint8_t level) {
-    assert(level <= data.numberOfLevels);
-    const std::size_t nrCells = (1 << (data.numberOfLevels - level - 1));
-
-    for (std::size_t cId = 0; cId < nrCells; ++cId) {
+  inline void bubbleUpLatestArrivalTime() {
+    size_t n = latestArrTimeOfAffectedCell.size();
+    for (std::size_t cId = 0; cId < n; ++cId) {
       const auto prevValue = latestArrTimeOfAffectedCell[cId];
-      latestArrTimeOfAffectedCell[cId] = 0;
-      const std::size_t parentId = (cId >> level);
+      latestArrTimeOfAffectedCell[cId] = -1;
+      const std::size_t parentId = (cId >> 1);
       latestArrTimeOfAffectedCell[parentId] =
           std::max(latestArrTimeOfAffectedCell[parentId], prevValue);
     }
@@ -255,7 +231,6 @@ public:
   inline void run(const std::vector<TripId> &affectedTrips) noexcept {
     profiler.start();
     prepareLookup(affectedTrips);
-    /* collectAffectedIBEs(affectedTrips); */
     collectAllIBEs();
 
     assert(!IBEs.empty());
@@ -295,9 +270,9 @@ public:
         // 1)
         bool keep = ((fromCellId ^ toCellId) >> level) != 0;
         // 2)
-        keep &= updatedCell[parentCellId].getValue();
+        /* keep &= updatedCell[parentCellId].getValue(); */
 
-        /* keep &= ((uint32_t)data.departureTime(event) > */
+        /* keep &= ((uint32_t)data.departureTime(event) <= */
         /*          latestArrTimeOfAffectedCell[cell]); */
 
         if (keep) {
@@ -340,7 +315,7 @@ public:
       progress.finished();
 
       if (level < data.getNumberOfLevels() - 1) {
-        bubbleUpLatestArrivalTime(level + 1);
+        bubbleUpLatestArrivalTime();
       }
 
       if (VERBOSE) {
@@ -436,6 +411,6 @@ public:
   AggregateProfiler profiler;
 
   std::vector<PaddedAtomicBool> updatedCell;
-  std::vector<std::uint32_t> latestArrTimeOfAffectedCell;
+  std::vector<int> latestArrTimeOfAffectedCell;
 };
 } // namespace TripBased

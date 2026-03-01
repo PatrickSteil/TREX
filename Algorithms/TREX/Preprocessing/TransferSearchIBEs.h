@@ -229,9 +229,6 @@ private:
     const EdgeLabel &label = edgeLabels[edge];
     if (currentLevel > label.getRank()) [[likely]]
       return;
-    /* if (currentLevel > data.stopEventGraph.get(LocalLevel, edge)) [[likely]]
-     */
-    /*   return; */
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
     if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
