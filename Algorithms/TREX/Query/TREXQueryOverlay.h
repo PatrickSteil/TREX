@@ -328,9 +328,9 @@ public:
                              PHASE_SCAN_TRIPS, PHASE_GET_JOURNEYS});
     profiler.registerMetrics(
         {METRIC_ROUNDS, METRIC_SCANNED_TRIPS, METRIC_SCANNED_LEVEL_ZERO_TRIPS,
-         METRIC_SCANNED_STOPS, METRIC_SCANNED_LEVEL_ZERO_STOPS,
+         METRIC_SCANNED_STOPS, METRIC_STOPS_FINAL_FOOTPATH,
          METRIC_RELAXED_TRANSFERS, METRIC_ENQUEUES, METRIC_ADD_JOURNEYS,
-         DISCARDED_EDGE});
+         DISCARDED_EDGE, METRIC_TMP_QUEUE, METRIC_LABEL_TRIMMING});
   }
 
   inline void run(const Vertex source, const int departureTime,
@@ -606,12 +606,13 @@ private:
     while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
       ++currentRoundNumber;
 
-      // profiler.countMetric(METRIC_ROUNDS);
+      profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
       // loop over simple queue and split trip segments
       const std::size_t tmpQueueSize = tmpQueue.size();
       for (std::size_t i = 0; i < tmpQueueSize; ++i) {
+        profiler.countMetric(METRIC_TMP_QUEUE);
 
 #ifdef ENABLE_PREFETCH
         if (i + 8 < tmpQueueSize) {
@@ -655,7 +656,7 @@ private:
       const std::size_t targetCellQueueSize = targetCellQueue.size();
       for (std::size_t i = 0; i < targetCellQueueSize; ++i) {
         const QueueElementTargetCell &label = targetCellQueue[i];
-        // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
+        profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
 
 #ifdef ENABLE_PREFETCH
         if (i + 16 < targetCellQueueSize) {
@@ -664,7 +665,7 @@ private:
 #endif
 
         for (StopEventId j = label.begin; j < label.end;) {
-          // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
+          profiler.countMetric(METRIC_STOPS_FINAL_FOOTPATH);
           if (eventLookupPtr[j].arrTime >=
               static_cast<uint32_t>(minArrivalTime))
             break;
@@ -687,6 +688,8 @@ private:
         break;
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
+        profiler.countMetric(METRIC_LABEL_TRIMMING);
+
 #ifdef ENABLE_PREFETCH
         if (i + 16 < roundEnd) {
           __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin()]);
@@ -696,7 +699,7 @@ private:
         TripLabel &label = queue[i];
         const StopEventId end = label.end();
         for (StopEventId j = label.begin(); j < end; j++) {
-          // profiler.countMetric(METRIC_SCANNED_STOPS);
+          profiler.countMetric(METRIC_SCANNED_STOPS);
           if (eventArrTimesPtr[j] >= static_cast<uint32_t>(minArrivalTime)) {
             label.setEnd(j);
             break;
@@ -712,7 +715,7 @@ private:
         }
 #endif
 
-        // profiler.countMetric(METRIC_SCANNED_TRIPS);
+        profiler.countMetric(METRIC_SCANNED_TRIPS);
         const TripLabel &label = queue[i];
 
         AssertMsg(label.lcl() < overlayGraphs.size(),
@@ -735,7 +738,7 @@ private:
           }
 #endif
 
-          // profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
           const EdgeLabel &edgeLabel = edgeLabelsPtr[edge];
           enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
                   edgeLabel.getFirstEvent(), i);
@@ -748,7 +751,7 @@ private:
   inline void enqueue(const TripId trip, const StopIndex index,
                       const StopEventId firstEvent,
                       const std::uint32_t parent) noexcept {
-    // profiler.countMetric(METRIC_ENQUEUES);
+    profiler.countMetric(METRIC_ENQUEUES);
     const StopIndex endOfTripSeg = StopIndex(reachedIndex(trip));
 
     if (endOfTripSeg <= index) [[likely]] {
@@ -763,7 +766,7 @@ private:
     AssertMsg(beginStopEventId < endStopEventId, "Begin should be < End!");
     AssertMsg(beginStopEventId < data.numberOfStopEvents(),
               "StopEvent out of bounds!");
-    AssertMsg(endStopEventId < data.numberOfStopEvents(),
+    AssertMsg(endStopEventId <= data.numberOfStopEvents(),
               "StopEvent out of bounds!");
 
     tmpQueue.emplace(beginStopEventId, endStopEventId, parent);
@@ -771,7 +774,7 @@ private:
 
   inline void addTargetLabel(const int newArrivalTime,
                              const uint32_t parent = -1) noexcept {
-    // profiler.countMetric(METRIC_ADD_JOURNEYS);
+    profiler.countMetric(METRIC_ADD_JOURNEYS);
     if (newArrivalTime < targetLabels.back().arrivalTime) {
       targetLabels.back() = TargetLabel(newArrivalTime, parent);
       minArrivalTime = newArrivalTime;

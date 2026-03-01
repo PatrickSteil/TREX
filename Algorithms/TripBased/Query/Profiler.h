@@ -70,7 +70,7 @@ typedef enum {
   METRIC_SCANNED_TRIPS,
   METRIC_SCANNED_STOPS,
   METRIC_SCANNED_LEVEL_ZERO_TRIPS,
-  METRIC_SCANNED_LEVEL_ZERO_STOPS,
+  METRIC_STOPS_FINAL_FOOTPATH,
   METRIC_RELAXED_TRANSFERS,
   METRIC_ENQUEUES,
   METRIC_ADD_JOURNEYS,
@@ -80,23 +80,29 @@ typedef enum {
   METRIC_TREX_COLLECTED_IBES,
   METRIC_TREX_STOPEVENT_TO_UNPACK,
   METRIC_TREX_NUMBER_OF_RUNS,
-  NUM_METRICS
+  METRIC_TMP_QUEUE,
+  METRIC_LABEL_TRIMMING,
+  NUM_METRICS,
 } Metric;
 
-constexpr const char *MetricNames[] = {"Rounds",
-                                       "Scanned trips",
-                                       "Scanned stops",
-                                       "Scanned Level 0 trips",
-                                       "Scanned Level 0 stops",
-                                       "Relaxed transfers",
-                                       "Enqueued trips",
-                                       "Added journeys",
-                                       "Distance / MaxSpeed",
-                                       "Number of Runs",
-                                       "Number of discarded edges",
-                                       "Number of collected IBEs",
-                                       "Number of stop events to unpack",
-                                       "Number of runs"};
+constexpr const char *MetricNames[] = {
+    "Rounds",
+    "Scanned trips",
+    "Scanned stops",
+    "Scanned target cell trip segments",
+    "Scanned final footpath stops",
+    "Relaxed transfers",
+    "Enqueued trips",
+    "Added journeys",
+    "Distance / MaxSpeed",
+    "Number of Runs",
+    "Number of discarded edges",
+    "Number of collected IBEs",
+    "Number of stop events to unpack",
+    "Number of runs",
+    "Nr tmp queue trip segments",
+    "Nr trip segments labeling trimming",
+};
 
 class NoProfiler {
 public:

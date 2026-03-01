@@ -144,13 +144,15 @@ public:
       edgeLabels[edge].setStopIndex(
           StopIndex(data.stopEventGraph.get(ToVertex, edge) -
                     edgeLabels[edge].getFirstEvent() + 1));
+      edgeLabels[edge].setCellId(
+          cellIdOfEvent[edgeLabels[edge].getStopEvent() - 1]);
+
+      // set different ranks
       edgeLabels[edge].setRank(
           rankOfRoute[data.routeOfTrip[data.tripOfStopEvent[from]]]);
       /* edgeLabels[edge].setRank(rankOfTrip[data.tripOfStopEvent[from]]); */
       /* edgeLabels[edge].setRank(rankOfEvent[from]); */
       /* edgeLabels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge)); */
-      edgeLabels[edge].setCellId(
-          cellIdOfEvent[edgeLabels[edge].getStopEvent() - 1]);
     }
 
     for (const RouteId route : data.raptorData.routes()) {
