@@ -285,6 +285,8 @@ public:
 
     if (writeToCSV)
       data.writeLocalLevelOfTripsToCSV(fileName);
+
+    data.showTransferStats();
   }
 };
 
