@@ -32,20 +32,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TripBased {
 
 class ReachedIndex {
- public:
-  ReachedIndex(const Data& data)
-      : data(data),
-        labels(data.numberOfTrips(), -1),
-        defaultLabels(data.numberOfTrips(), -1) {
+public:
+  ReachedIndex(const Data &data)
+      : data(data), labels(data.numberOfTrips(), -1),
+        defaultLabels(data.numberOfTrips(), -1),
+        firstTripOfNextRoute(data.numberOfTrips(), 0) {
     for (const TripId trip : data.trips()) {
-      if (data.numberOfStopsInTrip(trip) > 255)
+      if (data.numberOfStopsInTrip(trip) > 255) {
         warning("Trip ", trip, " has ", data.numberOfStopsInTrip(trip),
                 " stops!");
+      }
       defaultLabels[trip] = data.numberOfStopsInTrip(trip);
+      firstTripOfNextRoute[trip] =
+          data.firstTripOfRoute[data.routeOfTrip[trip] + 1];
     }
   }
 
- public:
+public:
   inline void clear() noexcept { labels = defaultLabels; }
 
   inline void clear(const RouteId route) noexcept {
@@ -67,9 +70,12 @@ class ReachedIndex {
 
   inline void update(const TripId trip, const StopIndex index) noexcept {
     AssertMsg(trip < labels.size(), "Trip " << trip << " is out of bounds!");
-    const TripId routeEnd = data.firstTripOfRoute[data.routeOfTrip[trip] + 1];
+    const TripId routeEnd = TripId(firstTripOfNextRoute[trip]);
+    /* const TripId routeEnd = data.firstTripOfRoute[data.routeOfTrip[trip] +
+     * 1]; */
     for (TripId i = trip; i < routeEnd; i++) {
-      if (labels[i] <= index) break;
+      if (labels[i] <= index)
+        break;
       labels[i] = index;
     }
   }
@@ -82,12 +88,12 @@ class ReachedIndex {
     std::fill(labels.begin() + trip, labels.begin() + tripEnd, index);
   }
 
- private:
-  const Data& data;
+private:
+  const Data &data;
 
   std::vector<u_int8_t> labels;
-
   std::vector<u_int8_t> defaultLabels;
+  std::vector<std::uint32_t> firstTripOfNextRoute;
 };
 
-}  // namespace TripBased
+} // namespace TripBased
