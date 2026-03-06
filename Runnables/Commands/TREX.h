@@ -288,6 +288,44 @@ public:
   }
 };
 
+class CompareOneQuerySearchSpace : public ParameterizedCommand {
+public:
+  CompareOneQuerySearchSpace(BasicShell &shell)
+      : ParameterizedCommand(shell, "compareSearchSpace",
+                             "Compare TB vs TREX search space.") {
+    addParameter("Input file (TREX Data)");
+    addParameter("Source Stop");
+    addParameter("Target Stop");
+    addParameter("Departure Time");
+    addParameter("Output TREX file", "trex.search.csv");
+    addParameter("Output TB file", "tb.search.csv");
+  }
+
+  virtual void execute() noexcept {
+    const std::string trex = getParameter("Input file (TREX Data)");
+    const StopId source = getParameter<StopId>("Source Stop");
+    const StopId target = getParameter<StopId>("Target Stop");
+    const int depTime = getParameter<StopId>("Departure Time");
+
+    {
+      TripBased::TREXData data(trex);
+      data.printInfo();
+
+      TripBased::TREXQuery<TripBased::NoProfiler> algorithm(data);
+
+      algorithm.run(source, depTime, target);
+    }
+    {
+      TripBased::Data data(trex + ".trip");
+      data.printInfo();
+
+      TripBased::TransitiveQuery<TripBased::NoProfiler> algorithm(data);
+
+      algorithm.run(source, depTime, target);
+    }
+  }
+};
+
 class RunTREXQuery : public ParameterizedCommand {
 public:
   RunTREXQuery(BasicShell &shell)

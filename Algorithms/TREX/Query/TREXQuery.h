@@ -25,6 +25,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #pragma once
 
 #include <array>
+#include <unordered_set>
 
 #include "../../../DataStructures/Container/Queue.h"
 #include "../../../DataStructures/Container/Set.h"
@@ -106,7 +107,8 @@ public:
         eventArrTimes(data.numberOfStopEvents()),
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), sourceDepartureTime(never),
-        transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0) {
+        transferPerLevel(data.getNumberOfLevels() + 1, 0), numQueries(0),
+        collectedStops() {
     reverseTransferGraph.revert();
 
 #pragma omp parallel for
@@ -168,6 +170,8 @@ public:
 
   inline void run(const StopId source, const int departureTime,
                   const StopId target) noexcept {
+    collectedStops.clear();
+
     profiler.start();
     clear();
     sourceStop = source;
@@ -180,6 +184,14 @@ public:
     evaluateInitialTransfers();
     scanTrips(16);
     profiler.done();
+
+    std::cout << "Id,Lat,Lon\n";
+    for (const std::uint32_t s : collectedStops) {
+      const StopId stop(s);
+      std::cout << stop.value() << ","
+                << data.raptorData.stopData[stop].coordinates.latitude << ","
+                << data.raptorData.stopData[stop].coordinates.longitude << "\n";
+    }
   }
 
   inline int getEarliestArrivalTime() const noexcept {
@@ -444,6 +456,12 @@ private:
       return;
     }
 
+    {
+      const std::uint32_t currentStop = static_cast<std::uint32_t>(
+          data.getStopOfStopEvent(label.getStopEvent()));
+      collectedStops.insert(currentStop);
+    }
+
     queue.emplace(label.getStopEvent(),
                   StopEventId(label.getFirstEvent() + reachedTrip), parent);
     reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
@@ -576,6 +594,8 @@ private:
   Profiler profiler;
   std::vector<uint64_t> transferPerLevel;
   size_t numQueries;
+
+  std::unordered_set<std::uint32_t> collectedStops;
 };
 
 } // namespace TripBased

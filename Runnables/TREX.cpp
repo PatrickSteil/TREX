@@ -91,6 +91,8 @@ int main(int argc, char **argv) {
   new StopsImportance(shell);
 
   new CompareGeoToLength(shell);
+
+  new CompareOneQuerySearchSpace(shell);
   shell.run();
   return 0;
 }

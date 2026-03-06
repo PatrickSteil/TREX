@@ -25,6 +25,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
+#include <unordered_set>
+
 #include "../../../DataStructures/Container/Set.h"
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
 #include "../../../DataStructures/RAPTOR/Entities/JourneyWithStopEvent.h"
@@ -102,7 +104,7 @@ public:
         routeLabels(data.numberOfRoutes()),
         eventLookup(data.numberOfStopEvents()),
         eventArrTimes(data.numberOfStopEvents()), sourceStop(noStop),
-        targetStop(noStop), sourceDepartureTime(never) {
+        targetStop(noStop), sourceDepartureTime(never), collectedStops() {
     reverseTransferGraph.revert();
 
 #pragma omp parallel for
@@ -155,6 +157,8 @@ public:
 
   inline void run(const StopId source, const int departureTime,
                   const StopId target) noexcept {
+    collectedStops.clear();
+
     profiler.start();
     clear();
     sourceStop = source;
@@ -164,6 +168,14 @@ public:
     evaluateInitialTransfers();
     scanTrips();
     profiler.done();
+
+    std::cout << "Id,Lat,Lon\n";
+    for (const std::uint32_t s : collectedStops) {
+      const StopId stop(s);
+      std::cout << stop.value() << ","
+                << data.raptorData.stopData[stop].coordinates.latitude << ","
+                << data.raptorData.stopData[stop].coordinates.longitude << "\n";
+    }
   }
 
   inline int getEarliestArrivalTime() const noexcept {
@@ -399,6 +411,12 @@ private:
     reachedIndex.update(trip, StopIndex(index));
 
     const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
+    {
+      const std::uint32_t currentStop = static_cast<std::uint32_t>(
+          data.getStopOfStopEvent(StopEventId(firstEvent + index)));
+      collectedStops.insert(currentStop);
+    }
+
     queue[queueSize] =
         std::move(TripLabel(StopEventId(firstEvent + index),
                             StopEventId(firstEvent + reachedTrip)));
@@ -414,6 +432,12 @@ private:
     if (reachedTrip <= uint8_t(label.getStopIndex()))
       return;
     reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
+
+    {
+      const std::uint32_t currentStop = static_cast<std::uint32_t>(
+          data.getStopOfStopEvent(label.getStopEvent()));
+      collectedStops.insert(currentStop);
+    }
 
     queue[queueSize] = std::move(
         TripLabel(label.getStopEvent(),
@@ -544,6 +568,8 @@ private:
   int sourceDepartureTime;
 
   Profiler profiler;
+
+  std::unordered_set<std::uint32_t> collectedStops;
 };
 
 } // namespace TripBased
