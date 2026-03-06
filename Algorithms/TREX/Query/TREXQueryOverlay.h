@@ -736,7 +736,7 @@ private:
 #endif
 
           // profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-          const EdgeLabel &edgeLabel = edgeLabelsPtr[edge];
+          const EdgeLabel edgeLabel = edgeLabelsPtr[edge];
           enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
                   edgeLabel.getFirstEvent(), i);
         }
