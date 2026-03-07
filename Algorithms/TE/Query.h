@@ -5,7 +5,7 @@
  MIT License
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
+this software and associated documentation files (the "Software"{), to deal in
 the Software without restriction, including without limitation the rights to
 use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
 the Software, and to permit persons to whom the Software is furnished to do so,
@@ -35,17 +35,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace TE {
 
+static constexpr uint64_t DIST_MASK = 0xffffffffull;
+
 template <typename PROFILER = NoProfiler, bool NODE_BLOCKING = false>
 class Query {
- public:
+public:
   using Profiler = PROFILER;
 
   Query(const Data &data)
-      : data(data),
-        weight(data.timeExpandedGraph[TravelTime]),
-        label(data.timeExpandedGraph.numVertices()),
-        Q(),
+      : data(data), weight(data.timeExpandedGraph[TravelTime]),
+        label(data.timeExpandedGraph.numVertices(), UINT64_MAX),
+        parent(data.timeExpandedGraph.numVertices(), noVertex), Q(),
         timeStamp(0) {
+
     profiler.registerPhases({PHASE_CLEAR, PHASE_FIND_FIRST_VERTEX, PHASE_RUN});
     profiler.registerMetrics({METRIC_SEETLED_VERTICES, METRIC_RELAXED_EDGES,
                               METRIC_FOUND_SOLUTIONS,
@@ -108,44 +110,30 @@ class Query {
 
   inline const Profiler &getProfiler() const noexcept { return profiler; }
 
- private:
-  struct VertexLabel {
-    std::uint32_t distance = -1;
-    Vertex parent = noVertex;
-    std::uint32_t timeStamp = -1;
-
-    void reset(std::uint32_t time) {
-      distance = -1;
-      parent = noVertex;
-      timeStamp = time;
-    }
-  };
-
+private:
   void clear() noexcept {
     Q.clear();
     timeStamp++;
   }
 
-  void addSource(Vertex source, std::uint32_t distance = 0) noexcept {
-    VertexLabel &sourceLabel = getLabel(source);
-    sourceLabel.distance = distance;
-    Q.push(static_cast<uint32_t>(source), distance);
+  void addSource(Vertex source, std::uint32_t dist = 0) noexcept {
+    setLabel(source, dist);
+    Q.push(static_cast<uint32_t>(source), dist);
   }
 
-  VertexLabel &getLabel(Vertex v) noexcept {
-    VertexLabel &lbl = label[v];
-    if (lbl.timeStamp != timeStamp) {
-      lbl.reset(timeStamp);
-    }
-    return lbl;
+  inline uint32_t getDistance(Vertex v) const noexcept {
+    uint64_t entry = label[v];
+    if ((entry >> 32) != timeStamp)
+      return UINT32_MAX;
+    return static_cast<uint32_t>(entry);
   }
 
-  bool visited(Vertex v) const noexcept {
-    return label[v].timeStamp == timeStamp;
+  inline void setLabel(Vertex v, uint32_t dist) noexcept {
+    label[v] = (uint64_t(timeStamp) << 32) | dist;
   }
 
-  std::uint32_t getDistance(Vertex v) const noexcept {
-    return visited(v) ? label[v].distance : -1;
+  inline bool visited(Vertex v) const noexcept {
+    return (label[v] >> 32) == timeStamp;
   }
 
   Vertex getQFront() noexcept {
@@ -156,40 +144,67 @@ class Query {
   void run(const SETTLE &settle, const STOP &stop,
            const PRUNE_EDGE &pruneEdge) noexcept {
     while (!Q.empty()) {
-      if (stop()) break;
+      if (stop())
+        break;
 
-      auto [uKey, dist] = Q.topAndPop();
-      Vertex u(uKey);
+      auto [u, dist] = Q.topAndPop();
 
-      VertexLabel &uLabel = getLabel(u);
-      if (dist != uLabel.distance) [[unlikely]] {
+      uint64_t uEntry = label[u];
+      uint32_t uDist = static_cast<uint32_t>(uEntry);
+
+      if (dist != uDist) [[unlikely]] {
         profiler.countMetric(METRIC_POPPED_BUT_IGNORED);
         continue;
       }
 
-      for (Edge e : data.timeExpandedGraph.edgesFrom(u)) {
-        Vertex v = data.timeExpandedGraph.get(ToVertex, e);
-        if (pruneEdge(u, e)) continue;
+      const Edge begin = data.timeExpandedGraph.beginEdgeFrom(Vertex(u));
+      const Edge end = data.timeExpandedGraph.beginEdgeFrom(Vertex(u + 1));
 
-        VertexLabel &vLabel = getLabel(v);
-        std::uint32_t alt = uLabel.distance + weight[e];
-        if (alt < vLabel.distance) {
-          vLabel.distance = alt;
-          vLabel.parent = u;
+      for (Edge e = begin; e < end; ++e) {
+#ifdef ENABLE_PREFETCH
+        constexpr int OFFSET = 16;
+        if (Edge(e + OFFSET < end)) {
+          Vertex next = data.timeExpandedGraph.get(ToVertex, Edge(e + OFFSET));
+          __builtin_prefetch(&label[next]);
+          __builtin_prefetch(&weight[e + OFFSET]);
+        }
+#endif
+
+        if (pruneEdge(Vertex(u), e))
+          continue;
+
+        Vertex v = data.timeExpandedGraph.get(ToVertex, e);
+
+        uint64_t entry = label[v];
+        uint32_t vTime = entry >> 32;
+        uint32_t vDist = static_cast<uint32_t>(entry);
+
+        if (vTime != timeStamp) {
+          vDist = UINT32_MAX;
+        }
+
+        uint32_t alt = uDist + weight[e];
+
+        if (alt < vDist) {
+          label[v] = (uint64_t(timeStamp) << 32) | alt;
+          parent[v] = Vertex(u);
           Q.push(static_cast<uint32_t>(v), alt);
         }
       }
 
-      settle(u);
+      settle(Vertex(u));
     }
   }
 
   const Data &data;
   std::vector<int> weight;
-  std::vector<VertexLabel> label;
+  std::vector<std::uint64_t> label;
+  std::vector<Vertex> parent;
+  std::vector<std::uint32_t> labelTimeStamp;
+
   radix_heap::pair_radix_heap<uint32_t, uint32_t> Q;
   std::uint32_t timeStamp;
   Profiler profiler;
 };
 
-}  // namespace TE
+} // namespace TE
