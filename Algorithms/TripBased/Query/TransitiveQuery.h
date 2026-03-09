@@ -374,8 +374,8 @@ private:
       // Relax the transfers for each trip
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&edgeRanges[i + 4]);
+        if (i + 8 < roundEnd) {
+          __builtin_prefetch(&edgeRanges[i + 8]);
         }
 #endif
         const EdgeRange &label = edgeRanges[i];
