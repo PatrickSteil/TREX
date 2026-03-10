@@ -182,8 +182,8 @@ private:
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&edgeLabels[edgeRanges[i + 4].begin]);
+        if (i + 16 < roundEnd) {
+          __builtin_prefetch(&edgeLabels[edgeRanges[i + 16].begin]);
         }
 #endif
 
