@@ -1333,107 +1333,6 @@ private:
   }
 };
 
-class RunGeoRankedRAPTORQueries : public ParameterizedCommand {
-public:
-  RunGeoRankedRAPTORQueries(BasicShell &shell)
-      : ParameterizedCommand(
-            shell, "runGeoRankedRAPTORQueries",
-            "Runs RAPTOR queries to the 2^r th stop, where r is the geo rank. "
-            "Source stops are chosen randomly.") {
-    addParameter("RAPTOR input file");
-    addParameter("Number of source stops");
-    addParameter("Output csv file");
-    addParameter("Lowest r");
-  }
-
-  virtual void execute() noexcept {
-    const std::string file = getParameter("Output csv file");
-    RAPTOR::Data raptor =
-        RAPTOR::Data::FromBinary(getParameter("RAPTOR input file"));
-    raptor.useImplicitDepartureBufferTimes();
-    raptor.printInfo();
-    RAPTOR::RAPTOR<true, RAPTOR::AggregateProfiler, true, false> algorithm(
-        raptor);
-
-    const size_t n = getParameter<size_t>("Number of source stops");
-    const int minR = getParameter<int>("Lowest r");
-
-    std::mt19937 randomGenerator(42);
-    std::uniform_int_distribution<> stopDistribution(0, raptor.numberOfStops() -
-                                                            1);
-    std::uniform_int_distribution<> timeDistribution(0, (24 * 60 * 60) - 1);
-
-    std::vector<StopId> sources;
-    sources.reserve(n);
-
-    for (size_t i = 0; i < n; i++) {
-      sources.emplace_back(stopDistribution(randomGenerator));
-    }
-
-    int maxR = std::floor(std::log2(raptor.numberOfStops()));
-
-    if (maxR <= minR) {
-      std::cout << "Too few stops; maxR <= minR!" << std::endl;
-      return;
-    }
-
-    std::vector<double> queryRunTimes;
-    queryRunTimes.reserve(n * (maxR - minR + 1));
-
-    for (auto &source : sources) {
-      std::vector<size_t> allStopsSorted(raptor.numberOfStops());
-      std::iota(allStopsSorted.begin(), allStopsSorted.end(), 0);
-
-      std::sort(allStopsSorted.begin(), allStopsSorted.end(),
-                [&](int i1, int i2) {
-                  return raptor.stopData[i1].dist(raptor.stopData[source]) <
-                         raptor.stopData[i2].dist(raptor.stopData[source]);
-                });
-
-      for (int r = minR; r <= maxR; ++r) {
-        if (static_cast<size_t>(1 << r) >= allStopsSorted.size()) {
-          std::cout << "TOOO MUCH!! r: " << r << " vs " << allStopsSorted.size()
-                    << std::endl;
-          break;
-        }
-        auto target = allStopsSorted[(1 << r)];
-
-        int depTime = timeDistribution(randomGenerator);
-
-        algorithm.run(static_cast<StopId>(source), depTime,
-                      static_cast<StopId>(target));
-        queryRunTimes.emplace_back(algorithm.getProfiler().totalTime);
-        algorithm.getProfiler().reset();
-      }
-    }
-
-    std::ofstream csv(file);
-    AssertMsg(csv, "Cannot create output stream for " << file);
-    AssertMsg(csv.is_open(), "Cannot open output stream for " << file);
-
-    csv << "Index";
-
-    for (int r = minR; r <= maxR; ++r) {
-      csv << "," << r;
-    }
-    csv << "\n";
-
-    size_t i = 0;
-
-    auto it = queryRunTimes.begin();
-
-    while (i < n) {
-      csv << i;
-      for (int r = minR; r <= maxR; ++r, ++it) {
-        assert(it != queryRunTimes.end());
-        csv << "," << (*it);
-      }
-      csv << "\n";
-      ++i;
-    }
-  }
-};
-
 class RunGeoRankedTripBasedQueries : public ParameterizedCommand {
 public:
   RunGeoRankedTripBasedQueries(BasicShell &shell)
@@ -1451,15 +1350,19 @@ public:
     const std::string file = getParameter("Output csv file");
     TripBased::Data tripBasedData(getParameter("TB input file"));
     tripBasedData.printInfo();
+
     TripBased::TransitiveQuery<TripBased::AggregateProfiler> algorithm(
         tripBasedData);
 
     const size_t n = getParameter<size_t>("Number of source stops");
     const int minR = getParameter<int>("Lowest r");
 
+    AssertMsg(minR >= 0, "Lowest r must be >= 0");
+
+    const size_t numStops = tripBasedData.numberOfStops();
+
     std::mt19937 randomGenerator(42);
-    std::uniform_int_distribution<> stopDistribution(
-        0, tripBasedData.numberOfStops() - 1);
+    std::uniform_int_distribution<> stopDistribution(0, numStops - 1);
     std::uniform_int_distribution<> timeDistribution(0, (24 * 60 * 60) - 1);
 
     std::vector<StopId> sources;
@@ -1469,22 +1372,27 @@ public:
       sources.emplace_back(stopDistribution(randomGenerator));
     }
 
-    int maxR = std::floor(std::log2(tripBasedData.numberOfStops()));
+    // largest r such that 2^r < numStops
+    int maxR = static_cast<int>(std::floor(std::log2(numStops - 1)));
 
-    if (maxR <= minR) {
-      std::cout << "Too few stops; maxR <= minR!" << std::endl;
+    if (maxR < minR) {
+      std::cout << "Too few stops; maxR < minR!" << std::endl;
       return;
     }
 
-    std::vector<double> queryRunTimes;
-    queryRunTimes.reserve(n * (maxR - minR + 1));
+    const size_t numRanks = maxR - minR + 1;
 
-    for (auto &source : sources) {
-      std::vector<size_t> allStopsSorted(tripBasedData.numberOfStops());
+    std::vector<double> queryRunTimes;
+    queryRunTimes.reserve(n * numRanks);
+
+    Progress progress(sources.size());
+
+    for (StopId source : sources) {
+      std::vector<size_t> allStopsSorted(numStops);
       std::iota(allStopsSorted.begin(), allStopsSorted.end(), 0);
 
       std::sort(allStopsSorted.begin(), allStopsSorted.end(),
-                [&](int i1, int i2) {
+                [&](size_t i1, size_t i2) {
                   return tripBasedData.raptorData.stopData[i1].dist(
                              tripBasedData.raptorData.stopData[source]) <
                          tripBasedData.raptorData.stopData[i2].dist(
@@ -1492,46 +1400,46 @@ public:
                 });
 
       for (int r = minR; r <= maxR; ++r) {
-        if (static_cast<size_t>(1 << r) >= allStopsSorted.size()) {
-          std::cout << "TOOO MUCH!! r: " << r << " vs " << allStopsSorted.size()
-                    << std::endl;
-          break;
-        }
-        auto target = allStopsSorted[(1 << r)];
+        const size_t idx = size_t(1) << r;
+        assert(idx < allStopsSorted.size());
+
+        StopId target = static_cast<StopId>(allStopsSorted[idx]);
 
         int depTime = timeDistribution(randomGenerator);
 
-        algorithm.run(static_cast<StopId>(source), depTime,
-                      static_cast<StopId>(target));
+        algorithm.run(source, depTime, target);
+
         queryRunTimes.emplace_back(algorithm.getProfiler().getTotalTime());
         algorithm.getProfiler().reset();
       }
+
+      progress++;
     }
+
+    progress.finished();
 
     std::ofstream csv(file);
     AssertMsg(csv, "Cannot create output stream for " << file);
     AssertMsg(csv.is_open(), "Cannot open output stream for " << file);
 
     csv << "Index";
-
     for (int r = minR; r <= maxR; ++r) {
       csv << "," << r;
     }
     csv << "\n";
 
-    size_t i = 0;
-
     auto it = queryRunTimes.begin();
 
-    while (i < n) {
+    for (size_t i = 0; i < n; ++i) {
       csv << i;
-      for (int r = minR; r <= maxR; ++r, ++it) {
+      for (size_t j = 0; j < numRanks; ++j, ++it) {
         assert(it != queryRunTimes.end());
-        csv << "," << (*it);
+        csv << "," << *it;
       }
       csv << "\n";
-      ++i;
     }
+
+    assert(it == queryRunTimes.end());
   }
 };
 

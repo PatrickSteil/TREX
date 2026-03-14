@@ -69,7 +69,6 @@ int main(int argc, char **argv) {
   new RunTransitiveCSAQueries(shell);
   new RunTransitiveProfileTripBasedQueries(shell);
 
-  new RunGeoRankedRAPTORQueries(shell);
   new RunGeoRankedTripBasedQueries(shell);
   new RunGeoRankedTREXQueries(shell);
 

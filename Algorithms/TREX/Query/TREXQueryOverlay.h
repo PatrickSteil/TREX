@@ -606,7 +606,7 @@ private:
     while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
       ++currentRoundNumber;
 
-      // profiler.countMetric(METRIC_ROUNDS);
+      profiler.countMetric(METRIC_ROUNDS);
       targetLabels.emplace_back(targetLabels.back());
 
       // loop over simple queue and split trip segments
@@ -655,7 +655,7 @@ private:
       const std::size_t targetCellQueueSize = targetCellQueue.size();
       for (std::size_t i = 0; i < targetCellQueueSize; ++i) {
         const QueueElementTargetCell &label = targetCellQueue[i];
-        // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
+        profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
 
 #ifdef ENABLE_PREFETCH
         if (i + 16 < targetCellQueueSize) {
@@ -664,7 +664,7 @@ private:
 #endif
 
         for (StopEventId j = label.begin; j < label.end;) {
-          // profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
+          profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
           if (eventLookupPtr[j].arrTime >=
               static_cast<uint32_t>(minArrivalTime))
             break;
@@ -694,14 +694,9 @@ private:
 #endif
 
         TripLabel &label = queue[i];
-        const StopEventId end = label.end();
-        for (StopEventId j = label.begin(); j < end; j++) {
-          // profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (eventArrTimesPtr[j] >= static_cast<uint32_t>(minArrivalTime)) {
-            label.setEnd(j);
-            break;
-          }
-        }
+        bool tooLate = (eventArrTimesPtr[label.begin()] >=
+                        static_cast<uint32_t>(minArrivalTime));
+        label.setEnd(tooLate ? label.begin() : label.end());
       }
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
@@ -712,8 +707,12 @@ private:
         }
 #endif
 
-        // profiler.countMetric(METRIC_SCANNED_TRIPS);
+        profiler.countMetric(METRIC_SCANNED_TRIPS);
         const TripLabel &label = queue[i];
+
+        if (label.begin() == label.end()) [[unlikely]] {
+          continue;
+        }
 
         AssertMsg(label.lcl() < overlayGraphs.size(),
                   "Label.lcl (" << (int)label.lcl() << ") is out of bounds!");
@@ -735,7 +734,7 @@ private:
           }
 #endif
 
-          // profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
           const EdgeLabel edgeLabel = edgeLabelsPtr[edge];
           enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
                   edgeLabel.getFirstEvent(), i);
@@ -748,7 +747,7 @@ private:
   inline void enqueue(const TripId trip, const StopIndex index,
                       const StopEventId firstEvent,
                       const std::uint32_t parent) noexcept {
-    // profiler.countMetric(METRIC_ENQUEUES);
+    profiler.countMetric(METRIC_ENQUEUES);
     const StopIndex endOfTripSeg = StopIndex(reachedIndex(trip));
 
     if (endOfTripSeg <= index) [[likely]] {
@@ -771,7 +770,7 @@ private:
 
   inline void addTargetLabel(const int newArrivalTime,
                              const uint32_t parent = -1) noexcept {
-    // profiler.countMetric(METRIC_ADD_JOURNEYS);
+    profiler.countMetric(METRIC_ADD_JOURNEYS);
     if (newArrivalTime < targetLabels.back().arrivalTime) {
       targetLabels.back() = TargetLabel(newArrivalTime, parent);
       minArrivalTime = newArrivalTime;
