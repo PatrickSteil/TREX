@@ -693,6 +693,7 @@ private:
         }
 #endif
 
+        profiler.countMetric(METRIC_SCANNED_STOPS);
         TripLabel &label = queue[i];
         bool tooLate = (eventArrTimesPtr[label.begin()] >=
                         static_cast<uint32_t>(minArrivalTime));
