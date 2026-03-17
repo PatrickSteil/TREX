@@ -232,6 +232,14 @@ public:
     return keptTransfers;
   }
 
+  inline const SimpleDynamicGraph &getGeneratedStopEventGraph() const noexcept {
+    return generatedTransfers;
+  }
+
+  inline SimpleDynamicGraph &getGeneratedStopEventGraph() noexcept {
+    return generatedTransfers;
+  }
+
 private:
   inline std::vector<RouteTransfer>
   generateRouteTransfers(const RouteId fromRoute) const noexcept {

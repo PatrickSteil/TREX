@@ -90,6 +90,8 @@ int main(int argc, char **argv) {
   new StopsImportance(shell);
 
   new CompareGeoToLength(shell);
+
+  new MeasureTransferGeneration(shell);
   shell.run();
   return 0;
 }
