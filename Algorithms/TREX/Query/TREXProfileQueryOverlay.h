@@ -24,7 +24,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
+#include "../../../DataStructures/Container/Queue.h"
 #include "../../../DataStructures/Container/Set.h"
+#include "../../../DataStructures/Graph/SimpleGraph.h"
 #include "../../../DataStructures/RAPTOR/Entities/ArrivalLabel.h"
 #include "../../../DataStructures/RAPTOR/Entities/Journey.h"
 #include "../../../DataStructures/RAPTOR/Entities/RouteSegment.h"
@@ -56,51 +58,6 @@ public:
   using Type = TREXProfileQueryOverlay<Profiler>;
 
 private:
-  struct EventLookup {
-    StopId stop;
-    uint32_t arrTime;
-
-    EventLookup(const StopId stop = noStop, uint32_t arrTime = 0)
-        : stop(stop), arrTime(arrTime) {}
-  };
-  struct TripLabel {
-    TripLabel(const StopEventId begin = noStopEvent,
-              const StopEventId end = noStopEvent, const u_int32_t parent = -1)
-        : begin(begin), end(end), parent(parent) {}
-    StopEventId begin;
-    StopEventId end;
-    u_int32_t parent;
-  };
-
-  struct EdgeRange {
-    EdgeRange() : begin(noEdge), end(noEdge) {}
-
-    Edge begin;
-    Edge end;
-  };
-
-  struct RouteLabel {
-    RouteLabel() : numberOfTrips(0) {}
-    inline StopIndex end() const noexcept {
-      return StopIndex(departureTimes.size() / numberOfTrips);
-    }
-    u_int32_t numberOfTrips;
-    std::vector<int> departureTimes;
-  };
-
-  struct TargetLabel {
-    TargetLabel(const int arrivalTime = INFTY, const u_int32_t parent = -1)
-        : arrivalTime(arrivalTime), parent(parent) {}
-
-    void clear() {
-      arrivalTime = INFTY;
-      parent = -1;
-    }
-
-    int arrivalTime;
-    u_int32_t parent;
-  };
-
   struct TripStopIndex {
     TripStopIndex(const TripId trip = noTripId,
                   const StopIndex stopIndex = StopIndex(-1),
@@ -112,26 +69,251 @@ private:
     int depTime;
   };
 
+  // compact information for an event
+  struct EventLookup {
+    StopId stop;
+    uint32_t arrTime;
+
+    EventLookup(const StopId stop = noStop, uint32_t arrTime = 0)
+        : stop(stop), arrTime(arrTime) {}
+  };
+
+  struct QueueElementTargetCell {
+    QueueElementTargetCell(const StopEventId begin = noStopEvent,
+                           const StopEventId end = noStopEvent,
+                           const uint32_t originalId = 0)
+        : begin(begin), end(end), originalId(originalId) {}
+    StopEventId begin;
+    StopEventId end;
+    uint32_t originalId;
+  };
+
+  struct TripLabel {
+  private:
+    // 8 bytes for hot scan data
+    uint32_t _begin;
+    uint32_t _end;
+
+    // 4 bytes for metadata (Total: 12 bytes)
+    // We pack boardingEvent, parent, and lcl into 64 bits internally
+    // to manage the 27-bit requirements.
+    struct Packed {
+      uint64_t boarding : 27;
+      uint64_t parent : 27;
+      uint64_t lcl : 10; // Extra room for levels or flags
+    } _meta;
+
+  public:
+    TripLabel(const StopEventId begin = noStopEvent,
+              const StopEventId end = noStopEvent, const uint32_t parent = -1,
+              const StopEventId boardingEvent = noStopEvent,
+              const uint8_t lcl = 0)
+        : _begin(begin), _end(end) {
+      setParent(parent);
+      setBoardingEvent(boardingEvent);
+      setLcl(lcl);
+    }
+
+    inline StopEventId begin() const noexcept { return StopEventId(_begin); }
+    inline StopEventId end() const noexcept { return StopEventId(_end); }
+
+    inline uint32_t parent() const noexcept {
+      return (_meta.parent == 0x7FFFFFF) ? uint32_t(-1)
+                                         : uint32_t(_meta.parent);
+    }
+
+    inline uint8_t lcl() const noexcept {
+      return static_cast<uint8_t>(_meta.lcl);
+    }
+
+    inline StopEventId boardingEvent() const noexcept {
+      return StopEventId(_meta.boarding);
+    }
+
+    inline void setBegin(const StopEventId val) noexcept { _begin = val; }
+    inline void setEnd(const StopEventId val) noexcept { _end = val; }
+
+    inline void setParent(const uint32_t val) noexcept {
+      if (val == uint32_t(-1)) {
+        _meta.parent = 0x7FFFFFF;
+      } else {
+        assert(val < (1 << 27));
+        _meta.parent = val;
+      }
+    }
+
+    inline void setLcl(const uint8_t val) noexcept { _meta.lcl = val; }
+
+    inline void setBoardingEvent(const StopEventId val) noexcept {
+      assert(val < (1 << 27) || val == noStopEvent);
+      _meta.boarding = val;
+    }
+  };
+
+  struct EdgeRange {
+    EdgeRange() : begin(noEdge), end(noEdge) {}
+    Edge begin;
+    Edge end;
+  };
+
+  struct RouteLabel {
+    RouteLabel() : numberOfTrips(0) {}
+    inline StopIndex end() const noexcept {
+      return StopIndex(departureTimes.size() / numberOfTrips);
+    }
+    uint32_t numberOfTrips;
+    std::vector<int> departureTimes;
+  };
+
+  struct TargetLabel {
+    TargetLabel(const int arrivalTime = INFTY, const uint32_t parent = -1)
+        : arrivalTime(arrivalTime), parent(parent) {}
+
+    void clear() {
+      arrivalTime = INFTY;
+      parent = -1;
+    }
+
+    int arrivalTime;
+    uint32_t parent;
+  };
+
 public:
   TREXProfileQueryOverlay(const TREXData &data)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
         lastTarget(StopId(0)), reachedRoutes(data.numberOfRoutes()),
-        queue(data.numberOfStopEvents()), edgeRanges(data.numberOfStopEvents()),
-        queueSize(0), reachedIndex(data), targetLabels(1),
-        minArrivalTimeFastLookUp(16, INFTY),
-        edgeLabels(data.stopEventGraph.numEdges()),
+        queue(data.numberOfStopEvents()), tmpQueue(data.numberOfStopEvents()),
+        targetCellQueue(data.numberOfStopEvents()),
+        edgeRanges(data.numberOfStopEvents()), reachedIndex(data),
+        targetLabels(1), minArrivalTimeFastLookUp(16, INFTY),
+        edgeLabels(data.numberOfLevels + 1, std::vector<EdgeLabel>()),
         eventLookup(data.numberOfStopEvents()),
         eventArrTimes(data.numberOfStopEvents()),
         cellIdOfEvent(data.numberOfStopEvents(), 0), sourceStop(noStop),
         targetStop(noStop), minDepartureTime(never), maxDepartureTime(never),
         targetLabelChanged(16, false),
-        routeLabels(data.stopEventGraph.numEdges()) {
+        routeLabels(data.stopEventGraph.numEdges()), overlayGraphs(),
+        edgeRangeLookup(data.numberOfStopEvents()) {
+    for (auto &a : edgeRangeLookup) {
+      a.fill(noStopEvent);
+    }
     collectedDepTimes.reserve(
         data.raptorData.numberOfTrips()); // can be adjusted
     allJourneys.reserve(32);
     reverseTransferGraph.revert();
+
+    // fill the overlayGraphs _per level_
+    int numOverlayGraphs = data.numberOfLevels + 1;
+    overlayGraphs.reserve(numOverlayGraphs);
+
+    for (int i = 0; i < numOverlayGraphs; ++i) {
+      overlayGraphs.emplace_back();
+    }
+
+    AssertMsg(overlayGraphs.size() ==
+                  static_cast<std::size_t>(numOverlayGraphs),
+              "The number of overlay graphs is off!");
+
+    std::vector<std::tuple<std::uint32_t, std::uint32_t, uint16_t>>
+        edgesToInsert;
+    edgesToInsert.reserve(data.stopEventGraph.numEdges());
+
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      edgesToInsert.emplace_back(
+          (std::uint32_t)from,
+          (std::uint32_t)data.stopEventGraph.get(ToVertex, edge),
+          data.stopEventGraph.get(LocalLevel, edge));
+    }
+
+    for (int i = 0; i < numOverlayGraphs; ++i) {
+      std::sort(std::execution::par, edgesToInsert.begin(),
+                edgesToInsert.end());
+      overlayGraphs[i].fromEdgeList(edgesToInsert,
+                                    data.stopEventGraph.numVertices());
+      edgeLabels[i].resize(edgesToInsert.size());
+
+      for (std::size_t edge = 0; edge < edgesToInsert.size(); ++edge) {
+        auto [from, to, rank] = edgesToInsert[edge];
+        AssertMsg(to < data.numberOfStopEvents(), "To StopEventId is invalid!");
+        AssertMsg(from < data.numberOfStopEvents(),
+                  "From StopEventId is invalid!");
+        AssertMsg(rank < 16, "Rank is invalid!");
+
+        edgeLabels[i][edge].setTrip(data.tripOfStopEvent[to]);
+        edgeLabels[i][edge].setFirstEvent(
+            data.firstStopEventOfTrip[edgeLabels[i][edge].getTrip()]);
+        edgeLabels[i][edge].setStopIndex(
+            StopIndex(to - edgeLabels[i][edge].getFirstEvent() + 1));
+      }
+
+      edgesToInsert.erase(std::remove_if(edgesToInsert.begin(),
+                                         edgesToInsert.end(),
+                                         [i](const auto &e) {
+                                           return std::get<2>(e) <= (uint16_t)i;
+                                         }),
+                          edgesToInsert.end());
+    }
+
+    AssertMsg(edgesToInsert.size() == 0, "The Edge Graph still has edges?");
+
+    for (int i = 0; i < numOverlayGraphs; ++i) {
+      std::cout << "Overlay Graph " << i << ": " << overlayGraphs[i].numEdges()
+                << "\n";
+    }
+
+    auto inSameCell = [&](const StopId a, const StopId b,
+                          const int level) -> bool {
+      assert(level >= 0 && level < 16);
+      return (data.getCellIdOfStop(a) >> level) ==
+             (data.getCellIdOfStop(b) >> level);
+    };
+
+    // fill the edge range lookup
+    for (const RouteId route : data.routes()) {
+      const StopId *stopsOfRoute = data.raptorData.stopArrayOfRoute(route);
+      const std::size_t nrStopsInRoute = data.numberOfStopsInRoute(route);
+
+      for (int level = 0; level < data.numberOfLevels + 1; ++level) {
+        std::vector<std::uint8_t> lengths(nrStopsInRoute, 1);
+
+        if (nrStopsInRoute > 1) {
+          std::size_t segmentEnd = nrStopsInRoute;
+
+          for (std::size_t i = nrStopsInRoute - 1; i-- > 0;) {
+            if (!inSameCell(stopsOfRoute[i], stopsOfRoute[i + 1], level)) {
+              segmentEnd = i + 1;
+            }
+
+            const std::size_t len = segmentEnd - i;
+
+            AssertMsg(len > 0, "Length must be >= 1");
+            AssertMsg(len <= nrStopsInRoute - i, "Length exceeds trip suffix");
+            AssertMsg(len < 256, "The length in a subtrip is larger than 255!");
+
+            lengths[i] = static_cast<std::uint8_t>(len);
+          }
+        }
+
+        for (std::size_t tripOffset = 0;
+             tripOffset < data.raptorData.numberOfTripsInRoute(route);
+             ++tripOffset) {
+          const std::size_t startIndex =
+              data.raptorData.firstStopEventOfRoute[route] +
+              tripOffset * nrStopsInRoute;
+          AssertMsg(startIndex < edgeRangeLookup.size(),
+                    "Start Index out of bounds!");
+
+          for (std::size_t i = 0; i < nrStopsInRoute; ++i) {
+            const StopEventId eventId(startIndex + i);
+            AssertMsg(eventId < edgeRangeLookup.size(),
+                      "EventId is out of range!");
+            edgeRangeLookup[eventId][level] = StopEventId(eventId + lengths[i]);
+          }
+        }
+      }
+    }
 
 #pragma omp parallel for
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
@@ -140,18 +322,6 @@ public:
       cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
     }
 
-    for (const Edge edge : data.stopEventGraph.edges()) {
-      edgeLabels[edge].setTrip(
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
-      edgeLabels[edge].setFirstEvent(
-          data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
-      edgeLabels[edge].setStopIndex(
-          StopIndex(data.stopEventGraph.get(ToVertex, edge) -
-                    edgeLabels[edge].getFirstEvent() + 1));
-      edgeLabels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge));
-      edgeLabels[edge].setCellId(
-          cellIdOfEvent[edgeLabels[edge].getStopEvent() - 1]);
-    }
 #pragma omp parallel for
     for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
       eventLookup[event] = EventLookup(data.arrivalEvents[event].stop,
@@ -175,7 +345,6 @@ public:
         }
       }
     }
-
     profiler.registerPhases(
         {PHASE_SCAN_INITIAL, PHASE_COLLECT_DEPTIMES, PHASE_SCAN_TRIPS});
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
@@ -210,9 +379,9 @@ public:
     computeInitialAndFinalTransfers();
     evaluateInitialTransfers();
     scanTrips();
-    journeyOfRound = getJourneys();
-    allJourneys.insert(allJourneys.end(), journeyOfRound.begin(),
-                       journeyOfRound.end());
+    /* journeyOfRound = getJourneys(); */
+    /* allJourneys.insert(allJourneys.end(), journeyOfRound.begin(), */
+    /*                    journeyOfRound.end()); */
     targetLabelChanged.assign(16, false);
 
     collectDepartures();
@@ -220,17 +389,19 @@ public:
     size_t i(0), j(0);
     while (i < collectedDepTimes.size()) {
       // perform one "normal" query
-      queueSize = 0;
+      queue.clear();
       while (j < collectedDepTimes.size() &&
              collectedDepTimes[i].depTime == collectedDepTimes[j].depTime) {
         enqueue(collectedDepTimes[j].trip,
-                StopIndex(collectedDepTimes[j].stopIndex + 1));
+                StopIndex(collectedDepTimes[j].stopIndex + 1),
+                data.firstStopEventOfTrip[collectedDepTimes[j].trip],
+                static_cast<std::uint32_t>(-1));
         ++j;
       }
       scanTrips();
-      journeyOfRound = getJourneys();
-      allJourneys.insert(allJourneys.end(), journeyOfRound.begin(),
-                         journeyOfRound.end());
+      /* journeyOfRound = getJourneys(); */
+      /* allJourneys.insert(allJourneys.end(), journeyOfRound.begin(), */
+      /*                    journeyOfRound.end()); */
       i = j;
       targetLabelChanged.assign(16, false);
     }
@@ -293,7 +464,10 @@ public:
             tripIndex--;
           }
         }
-        enqueue(firstTrip + tripIndex, StopIndex(stopIndex + 1));
+        const TripId thisTrip(firstTrip + tripIndex);
+        enqueue(thisTrip, StopIndex(stopIndex + 1),
+                data.firstStopEventOfTrip[thisTrip],
+                static_cast<std::uint32_t>(-1));
         if (tripIndex == 0)
           break;
       }
@@ -326,7 +500,10 @@ public:
 
 private:
   inline void clear() noexcept {
-    queueSize = 0;
+    queue.clear();
+    tmpQueue.clear();
+    targetCellQueue.clear();
+
     reachedIndex.clear();
     targetLabels.assign(16, TargetLabel());
     minArrivalTimeFastLookUp.assign(16, INFTY);
@@ -420,116 +597,184 @@ private:
     profiler.donePhase(PHASE_COLLECT_DEPTIMES);
   }
 
-  inline void scanTrips() noexcept {
+  inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
     profiler.startPhase();
-    size_t roundBegin = 0;
-    size_t roundEnd = queueSize;
-    u_int8_t n = 1;
+    uint8_t currentRoundNumber = 0;
+
+    std::size_t roundBegin = 0;
+    std::size_t roundEnd = 0;
 
     const EventLookup *RESTRICT eventLookupPtr = eventLookup.data();
     const std::uint32_t *RESTRICT eventArrTimesPtr = eventArrTimes.data();
+    const uint16_t *RESTRICT cellIdPtr = cellIdOfEvent.data();
+    const auto *RESTRICT edgeRangeLookupPtr = edgeRangeLookup.data();
 
-    while (roundBegin < roundEnd && n < 16) {
+    while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
+      ++currentRoundNumber;
+
       profiler.countMetric(METRIC_ROUNDS);
-      // Evaluate final transfers in order to check if the target is
-      // reachable
-      for (size_t i = roundBegin; i < roundEnd; i++) {
+      targetLabels.emplace_back(targetLabels.back());
+
+      // loop over simple queue and split trip segments
+      const std::size_t tmpQueueSize = tmpQueue.size();
+      for (std::size_t i = 0; i < tmpQueueSize; ++i) {
+
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&data.arrivalEvents[queue[i + 16].begin]);
+        if (i + 8 < tmpQueueSize) {
+          __builtin_prefetch(&edgeRangeLookupPtr[tmpQueue[i + 8].begin()]);
         }
 #endif
 
-        const TripLabel &label = queue[i];
-        profiler.countMetric(METRIC_SCANNED_TRIPS);
-        for (StopEventId j = label.begin; j < label.end; j++) {
-          profiler.countMetric(METRIC_SCANNED_STOPS);
-          if (eventLookupPtr[j].arrTime >= minArrivalTimeFastLookUp[n])
+        const auto &tripSegm = tmpQueue[i];
+        StopEventId runner(tripSegm.begin());
+        const StopEventId originalBoardingEvent = tripSegm.begin();
+
+        while (runner < tripSegm.end()) {
+          int lcl = static_cast<int>(std::min(
+              std::bit_width<uint16_t>(cellIdPtr[runner] ^ sourceCellId),
+              std::bit_width<uint16_t>(cellIdPtr[runner] ^ targetCellId)));
+
+          AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
+                    "LCL value ("
+                        << lcl
+                        << ") cannot be used as index into overlayGraphs!");
+          int lowerLcl = std::max(lcl - 1, 0);
+          const StopEventId nextStopEventOutside =
+              edgeRangeLookupPtr[runner][lowerLcl];
+
+          const StopEventId endOfConsecutiveLCL =
+              std::min(nextStopEventOutside, tripSegm.end());
+
+          queue.emplace(runner, endOfConsecutiveLCL, tripSegm.parent(),
+                        originalBoardingEvent, lcl);
+          if (cellIdPtr[runner] == targetCellId) [[unlikely]] {
+            const std::size_t idx = queue.size() - 1;
+            targetCellQueue.emplace(runner, endOfConsecutiveLCL, idx);
+          }
+
+          runner = endOfConsecutiveLCL;
+        }
+      }
+
+      // try to update arrival times by only processing level zero trip
+      // segments
+      const std::size_t targetCellQueueSize = targetCellQueue.size();
+      for (std::size_t i = 0; i < targetCellQueueSize; ++i) {
+        const QueueElementTargetCell &label = targetCellQueue[i];
+        profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_TRIPS);
+
+#ifdef ENABLE_PREFETCH
+        if (i + 16 < targetCellQueueSize) {
+          __builtin_prefetch(&eventLookupPtr[targetCellQueue[i + 16].begin]);
+        }
+#endif
+
+        for (StopEventId j = label.begin; j < label.end;) {
+          profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
+          if (eventLookupPtr[j].arrTime >=
+              static_cast<uint32_t>(
+                  minArrivalTimeFastLookUp[currentRoundNumber]))
             break;
           const int timeToTarget = transferToTarget[eventLookupPtr[j].stop];
           if (timeToTarget != INFTY) {
-            addTargetLabel(eventLookupPtr[j].arrTime + timeToTarget, i, n);
+            addTargetLabel(eventLookupPtr[j].arrTime + timeToTarget,
+                           label.originalId, currentRoundNumber);
           }
+          j++;
         }
       }
 
-      if (n == 15)
+      roundBegin = roundEnd;
+      roundEnd = queue.size();
+
+      tmpQueue.clear();
+      targetCellQueue.clear();
+
+      if (currentRoundNumber == MAX_ROUNDS)
         break;
 
-      // Find the range of transfers for each trip
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
-          __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin]);
-          data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].begin));
-          data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].end));
+        if (i + 16 < roundEnd) {
+          __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin()]);
         }
 #endif
 
+        profiler.countMetric(METRIC_SCANNED_STOPS);
         TripLabel &label = queue[i];
-        for (StopEventId j = label.begin; j < label.end; j++) {
-          if (eventArrTimesPtr[j] >= minArrivalTimeFastLookUp[n])
-            label.end = j;
-        }
-        edgeRanges[i].begin =
-            data.stopEventGraph.beginEdgeFrom(Vertex(label.begin));
-        edgeRanges[i].end =
-            data.stopEventGraph.beginEdgeFrom(Vertex(label.end));
+        bool tooLate = (eventArrTimesPtr[label.begin()] >=
+                        static_cast<uint32_t>(
+                            minArrivalTimeFastLookUp[currentRoundNumber]));
+        label.setEnd(tooLate ? label.begin() : label.end());
       }
-      // Relax the transfers for each trip
-      for (size_t i = roundBegin; i < roundEnd; i++) {
-        const EdgeRange &label = edgeRanges[i];
-        for (Edge edge = label.begin; edge < label.end; edge++) {
-          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
-          enqueue(edge, i, n);
-        }
-      }
-      roundBegin = roundEnd;
-      roundEnd = queueSize;
 
-      ++n;
+      for (size_t i = roundBegin; i < roundEnd; i++) {
+#ifdef ENABLE_PREFETCH
+        if (i + 16 < roundEnd) {
+          overlayGraphs[queue[i + 16].lcl()].prefetchAdj(queue[i + 16].begin());
+          overlayGraphs[queue[i + 16].lcl()].prefetchAdj(queue[i + 16].end());
+        }
+#endif
+
+        profiler.countMetric(METRIC_SCANNED_TRIPS);
+        const TripLabel &label = queue[i];
+
+        if (label.begin() == label.end()) [[unlikely]] {
+          continue;
+        }
+
+        AssertMsg(label.lcl() < overlayGraphs.size(),
+                  "Label.lcl (" << (int)label.lcl() << ") is out of bounds!");
+
+        const auto &currentGraph = overlayGraphs[label.lcl()];
+
+        const std::size_t beginEdgeRange =
+            currentGraph.beginEdge(Vertex(label.begin()));
+        const std::size_t endEdgeRange =
+            currentGraph.beginEdge(Vertex(label.end()));
+
+        const EdgeLabel *RESTRICT edgeLabelsPtr =
+            edgeLabels[label.lcl()].data();
+
+        for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
+#ifdef ENABLE_PREFETCH
+          if (edge + 16 < endEdgeRange) {
+            __builtin_prefetch(&edgeLabelsPtr[edge + 16]);
+          }
+#endif
+
+          profiler.countMetric(METRIC_RELAXED_TRANSFERS);
+          const EdgeLabel edgeLabel = edgeLabelsPtr[edge];
+          enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
+                  edgeLabel.getFirstEvent(), i, currentRoundNumber);
+        }
+      }
     }
     profiler.donePhase(PHASE_SCAN_TRIPS);
   }
 
-  inline void enqueue(const TripId trip, const StopIndex index) noexcept {
+  inline void enqueue(const TripId trip, const StopIndex index,
+                      const StopEventId firstEvent, const std::uint32_t parent,
+                      const int n = 0) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (reachedIndex.alreadyReached(trip, index, 1))
-      return;
-    const StopEventId firstEvent = data.firstStopEventOfTrip[trip];
-    queue[queueSize] =
-        TripLabel(StopEventId(firstEvent + index),
-                  StopEventId(firstEvent + reachedIndex(trip, 1)));
-    queueSize++;
-    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(trip, index, 1);
-  }
+    const StopIndex endOfTripSeg = StopIndex(reachedIndex(trip, n + 1));
 
-  inline void enqueue(const Edge edge, const size_t parent,
-                      const u_int8_t n) noexcept {
-    profiler.countMetric(METRIC_ENQUEUES);
-    const EdgeLabelCellId &label = edgeLabels[edge];
-
-    const uint8_t reachedTrip = reachedIndex(label.getTrip(), n + 1);
-    if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
-      return;
-
-    AssertMsg(0 < label.getStopEvent(), "StopEvent of label out of bounds!");
-    const std::uint16_t thisCellId = label.getCellId();
-    if ((thisCellId ^ sourceCellId) >> label.getRank() &&
-        ((thisCellId ^ targetCellId) >> label.getRank())) [[likely]] {
-      profiler.countMetric(DISCARDED_EDGE);
-      /* reachedIndex.update(label.getTrip(), label.getStopIndex(), n+1); */
+    if (endOfTripSeg <= index) [[likely]] {
       return;
     }
 
-    queue[queueSize] =
-        TripLabel(label.getStopEvent(),
-                  StopEventId(label.getFirstEvent() + reachedTrip), parent);
-    queueSize++;
-    AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-    reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()),
-                        n + 1);
+    reachedIndex.update(trip, index, n + 1);
+
+    const StopEventId beginStopEventId = StopEventId(firstEvent + index);
+    const StopEventId endStopEventId = StopEventId(firstEvent + endOfTripSeg);
+
+    AssertMsg(beginStopEventId < endStopEventId, "Begin should be < End!");
+    AssertMsg(beginStopEventId < data.numberOfStopEvents(),
+              "StopEvent out of bounds!");
+    AssertMsg(endStopEventId < data.numberOfStopEvents(),
+              "StopEvent out of bounds!");
+
+    tmpQueue.emplace(beginStopEventId, endStopEventId, parent);
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -573,7 +818,8 @@ private:
     Vertex departureStop = targetStop;
     int lastTime(minDepartureTime);
     while (parent != u_int32_t(-1)) {
-      AssertMsg(parent < queueSize, "Parent " << parent << " is out of range!");
+      AssertMsg(parent < queue.size(),
+                "Parent " << parent << " is out of range!");
       const TripLabel &label = queue[parent];
       StopEventId arrivalStopEvent;
       Edge edge;
@@ -592,7 +838,7 @@ private:
       result.emplace_back(arrivalStop, departureStop, arrivalTime,
                           transferArrivalTime, edge);
 
-      departureStopEvent = StopEventId(label.begin - 1);
+      departureStopEvent = StopEventId(label.begin() - 1);
       departureStop = data.getStopOfStopEvent(departureStopEvent);
       const RouteId route = data.getRouteOfStopEvent(departureStopEvent);
       const int departureTime =
@@ -601,7 +847,7 @@ private:
       result.emplace_back(departureStop, arrivalStop, departureTime,
                           arrivalTime, true, route);
 
-      parent = label.parent;
+      parent = label.parent();
     }
     const int timeFromSource = transferFromSource[departureStop];
     result.emplace_back(sourceStop, departureStop, lastTime - timeFromSource,
@@ -613,10 +859,18 @@ private:
   inline std::pair<StopEventId, Edge>
   getParent(const TripLabel &parentLabel,
             const StopEventId departureStopEvent) const noexcept {
-    for (StopEventId i = parentLabel.begin; i < parentLabel.end; i++) {
-      for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(i))) {
-        if (edgeLabels[edge].getStopEvent() == departureStopEvent)
-          return std::make_pair(i, edge);
+    int lcl = parentLabel.lcl();
+    AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
+              "LCL is out of bounds!");
+    const auto &currentGraph = overlayGraphs[lcl];
+
+    for (StopEventId i = parentLabel.begin(); i < parentLabel.end(); ++i) {
+      const std::size_t beginEdgeRange = currentGraph.beginEdge(Vertex(i));
+      const std::size_t endEdgeRange = currentGraph.beginEdge(Vertex(i + 1));
+
+      for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
+        if (edgeLabels[lcl][edge].getStopEvent() == departureStopEvent)
+          return std::make_pair(i, Edge(edge));
       }
     }
     Ensure(false, "Could not find parent stop event!");
@@ -628,13 +882,13 @@ private:
             const TargetLabel &targetLabel) const noexcept {
     // Final transfer to target may start exactly at parentLabel.end if it has
     // length 0
-    const TripId trip = data.tripOfStopEvent[parentLabel.begin];
+    const TripId trip = data.tripOfStopEvent[parentLabel.begin()];
     const StopEventId end = data.firstStopEventOfTrip[trip + 1];
-    for (StopEventId i = parentLabel.begin; i < end; i++) {
-      const int timeToTarget = transferToTarget[data.arrivalEvents[i].stop];
+    for (StopEventId i = parentLabel.begin(); i < end; ++i) {
+      const int timeToTarget = transferToTarget[eventLookup[i].stop];
       if (timeToTarget == INFTY)
         continue;
-      if (data.arrivalEvents[i].arrivalTime + timeToTarget ==
+      if ((int)(eventLookup[i].arrTime + timeToTarget) ==
           targetLabel.arrivalTime)
         return std::make_pair(i, noEdge);
     }
@@ -656,9 +910,11 @@ private:
 
   IndexedSet<false, RouteId> reachedRoutes;
 
-  std::vector<TripLabel> queue;
+  PreallocatedQueue<TripLabel> queue;
+  PreallocatedQueue<TripLabel> tmpQueue;
+  PreallocatedQueue<QueueElementTargetCell> targetCellQueue;
+
   std::vector<EdgeRange> edgeRanges;
-  size_t queueSize;
 
 #ifdef USE_SIMD
   ProfileReachedIndexSIMD reachedIndex;
@@ -669,8 +925,7 @@ private:
   std::vector<TargetLabel> targetLabels;
   std::vector<std::uint32_t> minArrivalTimeFastLookUp;
 
-  std::vector<EdgeLabelCellId> edgeLabels;
-
+  std::vector<std::vector<EdgeLabel>> edgeLabels;
   std::vector<EventLookup> eventLookup;
   std::vector<std::uint32_t> eventArrTimes;
   std::vector<uint16_t> cellIdOfEvent;
@@ -686,6 +941,10 @@ private:
 
   std::vector<RouteLabel> routeLabels;
   Profiler profiler;
+
+  std::vector<SimpleGraph<std::uint32_t>> overlayGraphs;
+
+  std::vector<std::array<StopEventId, 17>> edgeRangeLookup;
 };
 
 } // namespace TripBased
