@@ -389,6 +389,8 @@ public:
     while (i < collectedDepTimes.size()) {
       // perform one "normal" query
       queue.clear();
+      tmpQueue.clear();
+      targetCellQueue.clear();
       while (j < collectedDepTimes.size() &&
              collectedDepTimes[i].depTime == collectedDepTimes[j].depTime) {
         enqueue(collectedDepTimes[j].trip,
@@ -676,6 +678,10 @@ private:
             break;
           const int timeToTarget = transferToTarget[eventLookupPtr[j].stop];
           if (timeToTarget != INFTY) {
+            AssertMsg(label.originalId < queue.size(),
+                      "the stored original index ("
+                          << (int)label.originalId << ") is off (queue size "
+                          << (int)queue.size() << ")");
             addTargetLabel(eventLookupPtr[j].arrTime + timeToTarget,
                            label.originalId, n);
           }
@@ -797,12 +803,11 @@ private:
 // yes, i think
 #pragma omp simd
       for (int i = n + 1; i < 16; ++i) {
-        if (targetLabels[i].arrivalTime > targetLabels[n].arrivalTime) {
+        if (targetLabels[i].arrivalTime >= targetLabels[n].arrivalTime) {
           targetLabels[i].clear();
         }
-        if (minArrivalTimeFastLookUp[i] > (uint32_t)newArrivalTime) {
-          minArrivalTimeFastLookUp[i] = (uint32_t)newArrivalTime;
-        }
+        minArrivalTimeFastLookUp[i] =
+            std::min(minArrivalTimeFastLookUp[i], (uint32_t)newArrivalTime);
       }
     }
   }
