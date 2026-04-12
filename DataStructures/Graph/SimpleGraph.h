@@ -55,7 +55,6 @@ template <typename VertexType = std::size_t> struct SimpleGraph {
   }
 
   std::size_t beginEdge(const VertexType v) const {
-    assert(isValid(v));
     assert(v < adjArray.size());
     return adjArray[v];
   }
@@ -124,13 +123,11 @@ template <typename VertexType = std::size_t> struct SimpleGraph {
   }
 
   void prefetchAdj(const VertexType v) {
-    assert(isValid(v));
-    assert(v + 1 < adjArray.size());
+    assert(v < adjArray.size());
     __builtin_prefetch(&adjArray[v]);
   }
   void prefetchEdges(const VertexType v) {
     assert(isValid(v));
-    assert(v + 1 < adjArray.size());
     __builtin_prefetch(&toVertex[adjArray[v]]);
   }
 };

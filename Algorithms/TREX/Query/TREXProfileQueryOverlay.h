@@ -488,8 +488,8 @@ public:
     int bestArrivalTime = INFTY;
     int counter(0);
     AssertMsg(targetLabels.size() <= 16, "TargetLabel Size "
-                                            << (int)targetLabels.size()
-                                            << " is out of bounds!");
+                                             << (int)targetLabels.size()
+                                             << " is out of bounds!");
     for (const TargetLabel &label : targetLabels) {
       AssertMsg(counter < (int)targetLabelChanged.size(),
                 "Counter " << counter << " is out of bounds!");
@@ -771,7 +771,7 @@ private:
     AssertMsg(beginStopEventId < endStopEventId, "Begin should be < End!");
     AssertMsg(beginStopEventId < data.numberOfStopEvents(),
               "StopEvent out of bounds!");
-    AssertMsg(endStopEventId < data.numberOfStopEvents(),
+    AssertMsg(endStopEventId <= data.numberOfStopEvents(),
               "StopEvent out of bounds!");
 
     tmpQueue.emplace(beginStopEventId, endStopEventId, parent);
@@ -858,32 +858,28 @@ private:
     return result;
   }
 
-  /* inline std::pair<StopEventId, Edge> */
-  /* getParent(const TripLabel &parentLabel, */
-  /*           const StopEventId departureStopEvent) const noexcept { */
-  /*   int lcl = parentLabel.lcl(); */
-  /*   AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(), */
-  /*             "LCL is out of bounds!"); */
-  /*   const auto &currentGraph = overlayGraphs[lcl]; */
+  inline std::pair<StopEventId, Edge>
+  getParent(const TripLabel &parentLabel,
+            const StopEventId departureStopEvent) const noexcept {
+    int lcl = parentLabel.lcl();
+    AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
+              "LCL is out of bounds!");
+    const auto &currentGraph = overlayGraphs[lcl];
 
-  /*   for (StopEventId i = parentLabel.begin(); i < parentLabel.end(); ++i) {
-   */
-  /*     const std::size_t beginEdgeRange = currentGraph.beginEdge(Vertex(i));
-   */
-  /*     const std::size_t endEdgeRange = currentGraph.beginEdge(Vertex(i + 1));
-   */
+    for (StopEventId i = parentLabel.begin(); i < parentLabel.end(); ++i) {
+      const std::size_t beginEdgeRange = currentGraph.beginEdge(Vertex(i));
+      const std::size_t endEdgeRange = currentGraph.beginEdge(Vertex(i + 1));
 
-  /*     for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
-   */
-  /*       if (edgeLabels[lcl][edge].getStopEvent() == departureStopEvent) */
-  /*         return std::make_pair(i, Edge(edge)); */
-  /*     } */
-  /*   } */
-  /*   Ensure(false, "Could not find parent stop event using
-   * departureStopEvent!"); */
-  /*   return std::make_pair(noStopEvent, noEdge); */
-  /* } */
+      for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
+        if (edgeLabels[lcl][edge].getStopEvent() == departureStopEvent)
+          return std::make_pair(i, Edge(edge));
+      }
+    }
+    Ensure(false, "Could not find parent stop event using departureStopEvent!");
+    return std::make_pair(noStopEvent, noEdge);
+  }
 
+  /*
   inline std::pair<StopEventId, Edge>
   getParent(const TripLabel &parentLabel,
             const StopEventId departureStopEvent) const noexcept {
@@ -906,6 +902,7 @@ private:
     Ensure(false, "Could not find parent stop event using departureStopEvent!");
     return std::make_pair(noStopEvent, noEdge);
   }
+  */
 
   inline std::pair<StopEventId, Edge>
   getParent(const TripLabel &parentLabel,
