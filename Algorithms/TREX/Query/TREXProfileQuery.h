@@ -435,7 +435,7 @@ private:
       // reachable
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
+        if (i + 16 < roundEnd) {
           __builtin_prefetch(&data.arrivalEvents[queue[i + 16].begin]);
         }
 #endif
@@ -459,7 +459,7 @@ private:
       // Find the range of transfers for each trip
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
-        if (i + 4 < roundEnd) {
+        if (i + 16 < roundEnd) {
           __builtin_prefetch(&eventArrTimesPtr[queue[i + 16].begin]);
           data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].begin));
           data.stopEventGraph.prefetchBeginOut(Vertex(queue[i + 16].end));

@@ -228,8 +228,7 @@ public:
     }
 
     for (int i = 0; i < numOverlayGraphs; ++i) {
-      std::sort(std::execution::par, edgesToInsert.begin(),
-                edgesToInsert.end());
+      std::sort(edgesToInsert.begin(), edgesToInsert.end());
       overlayGraphs[i].fromEdgeList(edgesToInsert,
                                     data.stopEventGraph.numVertices());
       edgeLabels[i].resize(edgesToInsert.size());
@@ -379,9 +378,9 @@ public:
     computeInitialAndFinalTransfers();
     evaluateInitialTransfers();
     scanTrips();
-    /* journeyOfRound = getJourneys(); */
-    /* allJourneys.insert(allJourneys.end(), journeyOfRound.begin(), */
-    /*                    journeyOfRound.end()); */
+    journeyOfRound = getJourneys();
+    allJourneys.insert(allJourneys.end(), journeyOfRound.begin(),
+                       journeyOfRound.end());
     targetLabelChanged.assign(16, false);
 
     collectDepartures();
@@ -399,9 +398,9 @@ public:
         ++j;
       }
       scanTrips();
-      /* journeyOfRound = getJourneys(); */
-      /* allJourneys.insert(allJourneys.end(), journeyOfRound.begin(), */
-      /*                    journeyOfRound.end()); */
+      journeyOfRound = getJourneys();
+      allJourneys.insert(allJourneys.end(), journeyOfRound.begin(),
+                         journeyOfRound.end());
       i = j;
       targetLabelChanged.assign(16, false);
     }
@@ -427,9 +426,9 @@ public:
 
     for (size_t i = 0; i < valuesToLoopOver.size(); ++i) {
 #ifdef ENABLE_PREFETCH
-      if (i + 4 < valuesToLoopOver.size()) {
-        __builtin_prefetch(&(routeLabels[valuesToLoopOver[i + 4]]));
-        __builtin_prefetch(&(data.firstTripOfRoute[valuesToLoopOver[i + 4]]));
+      if (i + 16 < valuesToLoopOver.size()) {
+        __builtin_prefetch(&(routeLabels[valuesToLoopOver[i + 16]]));
+        __builtin_prefetch(&(data.firstTripOfRoute[valuesToLoopOver[i + 16]]));
       }
 #endif
 
@@ -488,7 +487,12 @@ public:
     std::vector<RAPTOR::Journey> result;
     int bestArrivalTime = INFTY;
     int counter(0);
+    AssertMsg(targetLabels.size() <= 16, "TargetLabel Size "
+                                            << (int)targetLabels.size()
+                                            << " is out of bounds!");
     for (const TargetLabel &label : targetLabels) {
+      AssertMsg(counter < (int)targetLabelChanged.size(),
+                "Counter " << counter << " is out of bounds!");
       if ((!targetLabelChanged[counter++]) ||
           label.arrivalTime >= bestArrivalTime)
         continue;
@@ -597,23 +601,19 @@ private:
     profiler.donePhase(PHASE_COLLECT_DEPTIMES);
   }
 
-  inline void scanTrips(const uint8_t MAX_ROUNDS = 16) noexcept {
+  inline void scanTrips() noexcept {
     profiler.startPhase();
-    uint8_t currentRoundNumber = 0;
-
     std::size_t roundBegin = 0;
     std::size_t roundEnd = 0;
+    uint8_t n = 1;
 
     const EventLookup *RESTRICT eventLookupPtr = eventLookup.data();
     const std::uint32_t *RESTRICT eventArrTimesPtr = eventArrTimes.data();
     const uint16_t *RESTRICT cellIdPtr = cellIdOfEvent.data();
     const auto *RESTRICT edgeRangeLookupPtr = edgeRangeLookup.data();
 
-    while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
-      ++currentRoundNumber;
-
+    while (!tmpQueue.empty() && n < 16) {
       profiler.countMetric(METRIC_ROUNDS);
-      targetLabels.emplace_back(targetLabels.back());
 
       // loop over simple queue and split trip segments
       const std::size_t tmpQueueSize = tmpQueue.size();
@@ -672,26 +672,25 @@ private:
         for (StopEventId j = label.begin; j < label.end;) {
           profiler.countMetric(METRIC_SCANNED_LEVEL_ZERO_STOPS);
           if (eventLookupPtr[j].arrTime >=
-              static_cast<uint32_t>(
-                  minArrivalTimeFastLookUp[currentRoundNumber]))
+              static_cast<uint32_t>(minArrivalTimeFastLookUp[n]))
             break;
           const int timeToTarget = transferToTarget[eventLookupPtr[j].stop];
           if (timeToTarget != INFTY) {
             addTargetLabel(eventLookupPtr[j].arrTime + timeToTarget,
-                           label.originalId, currentRoundNumber);
+                           label.originalId, n);
           }
           j++;
         }
       }
+
+      if (n == 15)
+        break;
 
       roundBegin = roundEnd;
       roundEnd = queue.size();
 
       tmpQueue.clear();
       targetCellQueue.clear();
-
-      if (currentRoundNumber == MAX_ROUNDS)
-        break;
 
       for (size_t i = roundBegin; i < roundEnd; i++) {
 #ifdef ENABLE_PREFETCH
@@ -703,8 +702,7 @@ private:
         profiler.countMetric(METRIC_SCANNED_STOPS);
         TripLabel &label = queue[i];
         bool tooLate = (eventArrTimesPtr[label.begin()] >=
-                        static_cast<uint32_t>(
-                            minArrivalTimeFastLookUp[currentRoundNumber]));
+                        static_cast<uint32_t>(minArrivalTimeFastLookUp[n]));
         label.setEnd(tooLate ? label.begin() : label.end());
       }
 
@@ -746,9 +744,11 @@ private:
           profiler.countMetric(METRIC_RELAXED_TRANSFERS);
           const EdgeLabel edgeLabel = edgeLabelsPtr[edge];
           enqueue(edgeLabel.getTrip(), edgeLabel.getStopIndex(),
-                  edgeLabel.getFirstEvent(), i, currentRoundNumber);
+                  edgeLabel.getFirstEvent(), i, n);
         }
       }
+
+      ++n;
     }
     profiler.donePhase(PHASE_SCAN_TRIPS);
   }
@@ -781,6 +781,8 @@ private:
                              const u_int32_t parent = -1,
                              const u_int8_t n = 0) noexcept {
     profiler.countMetric(METRIC_ADD_JOURNEYS);
+    AssertMsg(n < minArrivalTimeFastLookUp.size(),
+              "n " << (int)n << " is out of bounds!");
     if ((uint32_t)newArrivalTime < minArrivalTimeFastLookUp[n]) {
       targetLabels[n].arrivalTime = newArrivalTime;
       targetLabels[n].parent = parent;
@@ -838,7 +840,7 @@ private:
       result.emplace_back(arrivalStop, departureStop, arrivalTime,
                           transferArrivalTime, edge);
 
-      departureStopEvent = StopEventId(label.begin() - 1);
+      departureStopEvent = StopEventId(label.boardingEvent() - 1);
       departureStop = data.getStopOfStopEvent(departureStopEvent);
       const RouteId route = data.getRouteOfStopEvent(departureStopEvent);
       const int departureTime =
@@ -856,15 +858,43 @@ private:
     return result;
   }
 
+  /* inline std::pair<StopEventId, Edge> */
+  /* getParent(const TripLabel &parentLabel, */
+  /*           const StopEventId departureStopEvent) const noexcept { */
+  /*   int lcl = parentLabel.lcl(); */
+  /*   AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(), */
+  /*             "LCL is out of bounds!"); */
+  /*   const auto &currentGraph = overlayGraphs[lcl]; */
+
+  /*   for (StopEventId i = parentLabel.begin(); i < parentLabel.end(); ++i) {
+   */
+  /*     const std::size_t beginEdgeRange = currentGraph.beginEdge(Vertex(i));
+   */
+  /*     const std::size_t endEdgeRange = currentGraph.beginEdge(Vertex(i + 1));
+   */
+
+  /*     for (std::size_t edge = beginEdgeRange; edge < endEdgeRange; ++edge) {
+   */
+  /*       if (edgeLabels[lcl][edge].getStopEvent() == departureStopEvent) */
+  /*         return std::make_pair(i, Edge(edge)); */
+  /*     } */
+  /*   } */
+  /*   Ensure(false, "Could not find parent stop event using
+   * departureStopEvent!"); */
+  /*   return std::make_pair(noStopEvent, noEdge); */
+  /* } */
+
   inline std::pair<StopEventId, Edge>
   getParent(const TripLabel &parentLabel,
             const StopEventId departureStopEvent) const noexcept {
     int lcl = parentLabel.lcl();
-    AssertMsg(static_cast<std::size_t>(lcl) < overlayGraphs.size(),
-              "LCL is out of bounds!");
     const auto &currentGraph = overlayGraphs[lcl];
 
-    for (StopEventId i = parentLabel.begin(); i < parentLabel.end(); ++i) {
+    // Use full trip extent, not the trimmed label.end()
+    const TripId trip = data.tripOfStopEvent[parentLabel.begin()];
+    const StopEventId fullEnd = data.firstStopEventOfTrip[trip + 1];
+
+    for (StopEventId i = parentLabel.begin(); i < fullEnd; ++i) {
       const std::size_t beginEdgeRange = currentGraph.beginEdge(Vertex(i));
       const std::size_t endEdgeRange = currentGraph.beginEdge(Vertex(i + 1));
 
@@ -873,7 +903,7 @@ private:
           return std::make_pair(i, Edge(edge));
       }
     }
-    Ensure(false, "Could not find parent stop event!");
+    Ensure(false, "Could not find parent stop event using departureStopEvent!");
     return std::make_pair(noStopEvent, noEdge);
   }
 
@@ -892,7 +922,7 @@ private:
           targetLabel.arrivalTime)
         return std::make_pair(i, noEdge);
     }
-    Ensure(false, "Could not find parent stop event!");
+    Ensure(false, "Could not find parent stop event using TargetLabel!");
     return std::make_pair(noStopEvent, noEdge);
   }
 
