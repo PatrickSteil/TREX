@@ -130,4 +130,8 @@ template <typename VertexType = std::size_t> struct SimpleGraph {
     assert(isValid(v));
     __builtin_prefetch(&toVertex[adjArray[v]]);
   }
+  std::size_t memoryConsumption() const {
+    return adjArray.capacity() * sizeof(std::size_t) +
+           toVertex.capacity() * sizeof(VertexType);
+  }
 };

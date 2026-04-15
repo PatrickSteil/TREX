@@ -52,7 +52,7 @@ class StaticGraphImplementation {
       "A static graph requires an edge attribute named ToVertex of type "
       "Vertex!");
 
- public:
+public:
   using ListOfVertexAttributes = LIST_OF_VERTEX_ATTRIBUTES;
   using ListOfEdgeAttributes = LIST_OF_EDGE_ATTRIBUTES;
   using Type =
@@ -79,46 +79,46 @@ class StaticGraphImplementation {
             typename VERTEX_ATTRIBUTES_TO, typename EDGE_ATTRIBUTES_TO,
             typename... ATTRIBUTE_NAME_CHANGES>
   friend inline void Graph::move(
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>&&
-          from,
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO>& to,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>
+          &&from,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO> &to,
       const ATTRIBUTE_NAME_CHANGES... attributeNameChanges);
   template <typename VERTEX_ATTRIBUTES_FROM, typename EDGE_ATTRIBUTES_FROM,
             typename VERTEX_ATTRIBUTES_TO, typename EDGE_ATTRIBUTES_TO,
             typename... ATTRIBUTE_NAME_CHANGES>
   friend inline void Graph::move(
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>&&
-          from,
-      DynamicGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO>& to,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>
+          &&from,
+      DynamicGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO> &to,
       const ATTRIBUTE_NAME_CHANGES... attributeNameChanges);
   template <typename VERTEX_ATTRIBUTES_FROM, typename EDGE_ATTRIBUTES_FROM,
             typename VERTEX_ATTRIBUTES_TO, typename EDGE_ATTRIBUTES_TO,
             typename... ATTRIBUTE_NAME_CHANGES>
   friend inline void Graph::move(
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>&&
-          from,
-      EdgeListImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO>& to,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>
+          &&from,
+      EdgeListImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO> &to,
       const ATTRIBUTE_NAME_CHANGES... attributeNameChanges);
   template <typename VERTEX_ATTRIBUTES_FROM, typename EDGE_ATTRIBUTES_FROM,
             typename VERTEX_ATTRIBUTES_TO, typename EDGE_ATTRIBUTES_TO,
             typename... ATTRIBUTE_NAME_CHANGES>
   friend inline void Graph::move(
-      DynamicGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>&&
-          from,
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO>& to,
+      DynamicGraphImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>
+          &&from,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO> &to,
       const ATTRIBUTE_NAME_CHANGES... attributeNameChanges);
   template <typename VERTEX_ATTRIBUTES_FROM, typename EDGE_ATTRIBUTES_FROM,
             typename VERTEX_ATTRIBUTES_TO, typename EDGE_ATTRIBUTES_TO,
             typename... ATTRIBUTE_NAME_CHANGES>
   friend inline void Graph::move(
-      EdgeListImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>&&
-          from,
-      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO>& to,
+      EdgeListImplementation<VERTEX_ATTRIBUTES_FROM, EDGE_ATTRIBUTES_FROM>
+          &&from,
+      StaticGraphImplementation<VERTEX_ATTRIBUTES_TO, EDGE_ATTRIBUTES_TO> &to,
       const ATTRIBUTE_NAME_CHANGES... attributeNameChanges);
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline constexpr static bool HasVertexAttribute(
-      const AttributeNameWrapper<ATTRIBUTE_NAME>) noexcept {
+  inline constexpr static bool
+  HasVertexAttribute(const AttributeNameWrapper<ATTRIBUTE_NAME>) noexcept {
     return VertexAttributes::HasAttribute(
         AttributeNameWrapper<ATTRIBUTE_NAME>());
   }
@@ -128,8 +128,8 @@ class StaticGraphImplementation {
       typename VertexAttributes::template AttributeType<ATTRIBUTE_NAME>;
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline constexpr static bool HasEdgeAttribute(
-      const AttributeNameWrapper<ATTRIBUTE_NAME>) noexcept {
+  inline constexpr static bool
+  HasEdgeAttribute(const AttributeNameWrapper<ATTRIBUTE_NAME>) noexcept {
     return EdgeAttributes::HasAttribute(AttributeNameWrapper<ATTRIBUTE_NAME>());
   }
 
@@ -150,20 +150,20 @@ class StaticGraphImplementation {
       typename std::vector<Meta::FindAttributeType<
           ATTRIBUTE_NAME, ListOfAllAttributes>>::const_reference;
 
- public:
+public:
   StaticGraphImplementation() { beginOut.emplace_back(Edge(0)); }
 
-  StaticGraphImplementation(const std::string& fileName,
-                            const std::string& separator = ".",
+  StaticGraphImplementation(const std::string &fileName,
+                            const std::string &separator = ".",
                             const bool debug = true) {
     readBinary(fileName, separator, debug);
   }
 
-  StaticGraphImplementation(const Type&) = default;
-  StaticGraphImplementation(Type&&) = default;
+  StaticGraphImplementation(const Type &) = default;
+  StaticGraphImplementation(Type &&) = default;
 
-  Type& operator=(const Type&) = default;
-  Type& operator=(Type&&) = default;
+  Type &operator=(const Type &) = default;
+  Type &operator=(Type &&) = default;
 
   // Access
   inline size_t numVertices() const noexcept { return beginOut.size() - 1; }
@@ -213,17 +213,19 @@ class StaticGraphImplementation {
     return IndirectEdgeRange<Type>(*this);
   }
 
-  inline SubRange<std::vector<Vertex>> outgoingNeighbors(
-      const Vertex vertex) const noexcept {
+  inline SubRange<std::vector<Vertex>>
+  outgoingNeighbors(const Vertex vertex) const noexcept {
     AssertMsg(isVertex(vertex), vertex << " is not a valid vertex!");
     return SubRange<std::vector<Vertex>>(get(ToVertex), beginOut[vertex],
                                          beginOut[vertex + 1]);
   }
 
   inline Edge findEdge(const Vertex from, const Vertex to) const noexcept {
-    if (!isVertex(from)) return noEdge;
+    if (!isVertex(from))
+      return noEdge;
     for (const Edge edge : edgesFrom(from)) {
-      if (get(ToVertex, edge) == to) return edge;
+      if (get(ToVertex, edge) == to)
+        return edge;
     }
     return noEdge;
   }
@@ -275,12 +277,12 @@ class StaticGraphImplementation {
     vertexAttributes.resize(vertexAttributes.size() + n);
   }
 
-  inline Vertex addVertex(const VertexRecord& record) noexcept {
+  inline Vertex addVertex(const VertexRecord &record) noexcept {
     addVertices(1, record);
     return Vertex(numVertices() - 1);
   }
 
-  inline void addVertices(const size_t n, const VertexRecord& record) noexcept {
+  inline void addVertices(const size_t n, const VertexRecord &record) noexcept {
     beginOut.resize(beginOut.size() + n, beginOut.back());
     vertexAttributes.resize(vertexAttributes.size() + n, record);
   }
@@ -288,7 +290,8 @@ class StaticGraphImplementation {
   inline EdgeHandle addEdge(const Vertex from, const Vertex to) noexcept {
     AssertMsg(from == numVertices() - 1,
               "Can only add outgoing edges to last vertex!");
-    if (from != numVertices() - 1) return EdgeHandle(edgeAttributes, noEdge);
+    if (from != numVertices() - 1)
+      return EdgeHandle(edgeAttributes, noEdge);
     beginOut.back()++;
     const Edge newEdge(edgeAttributes.size());
     edgeAttributes.emplaceBack();
@@ -307,7 +310,7 @@ class StaticGraphImplementation {
   }
 
   inline EdgeHandle addEdge(const Vertex from, const Vertex to,
-                            const EdgeRecord& record) noexcept {
+                            const EdgeRecord &record) noexcept {
     return addEdge(from, to).set(record);
   }
 
@@ -333,7 +336,7 @@ class StaticGraphImplementation {
   }
 
   template <typename DELETE_VERTEX>
-  inline void deleteVertices(const DELETE_VERTEX& deleteVertex) noexcept {
+  inline void deleteVertices(const DELETE_VERTEX &deleteVertex) noexcept {
     size_t vertexCount = 0;
     size_t edgeCount = 0;
     Permutation vertexPerm(numVertices());
@@ -359,19 +362,19 @@ class StaticGraphImplementation {
       }
     }
 
-    vertexAttributes.forEach([&](std::vector<Vertex>& values) {
+    vertexAttributes.forEach([&](std::vector<Vertex> &values) {
       vertexPerm.mapPermutation(values);
     });
     vertexAttributes.forEach(
-        [&](std::vector<Edge>& values) { edgePerm.mapPermutation(values); });
-    edgeAttributes.forEach([&](std::vector<Vertex>& values) {
+        [&](std::vector<Edge> &values) { edgePerm.mapPermutation(values); });
+    edgeAttributes.forEach([&](std::vector<Vertex> &values) {
       vertexPerm.mapPermutation(values);
     });
     edgeAttributes.forEach(
-        [&](std::vector<Edge>& values) { edgePerm.mapPermutation(values); });
+        [&](std::vector<Edge> &values) { edgePerm.mapPermutation(values); });
     vertexAttributes.forEach(
-        [&](auto& values) { vertexPerm.permutate(values); });
-    edgeAttributes.forEach([&](auto& values) { edgePerm.permutate(values); });
+        [&](auto &values) { vertexPerm.permutate(values); });
+    edgeAttributes.forEach([&](auto &values) { edgePerm.permutate(values); });
 
     vertexAttributes.resize(vertexCount);
     edgeAttributes.resize(edgeCount);
@@ -379,52 +382,55 @@ class StaticGraphImplementation {
   }
 
   template <typename T>
-  inline void deleteVertices(const std::vector<T>& vertexMap,
-                             const T& deleteValue) noexcept {
+  inline void deleteVertices(const std::vector<T> &vertexMap,
+                             const T &deleteValue) noexcept {
     deleteVertices(
         [&](const Vertex vertex) { return vertexMap[vertex] == deleteValue; });
   }
 
-  inline void deleteVertices(const std::vector<Vertex>& vertexList) noexcept {
+  inline void deleteVertices(const std::vector<Vertex> &vertexList) noexcept {
     std::vector<bool> deleteVertex(numVertices(), false);
-    for (const Vertex vertex : vertexList) deleteVertex[vertex] = true;
+    for (const Vertex vertex : vertexList)
+      deleteVertex[vertex] = true;
     deleteVertices([&](const Vertex vertex) { return deleteVertex[vertex]; });
   }
 
   template <typename DELETE_EDGE>
-  inline void deleteEdges(const DELETE_EDGE& deleteEdge) noexcept {
+  inline void deleteEdges(const DELETE_EDGE &deleteEdge) noexcept {
     size_t edgeCount = 0;
     Permutation edgePerm(numEdges());
     std::vector<Edge> newBeginOut;
     for (const Vertex vertex : vertices()) {
       newBeginOut.emplace_back(Edge(edgeCount));
       for (const Edge edge : edgesFrom(vertex)) {
-        if (deleteEdge(edge)) continue;
+        if (deleteEdge(edge))
+          continue;
         edgePerm[edge] = edgeCount++;
       }
     }
     newBeginOut.emplace_back(Edge(edgeCount));
 
     vertexAttributes.forEach(
-        [&](std::vector<Edge>& values) { edgePerm.mapPermutation(values); });
+        [&](std::vector<Edge> &values) { edgePerm.mapPermutation(values); });
     edgeAttributes.forEach(
-        [&](std::vector<Edge>& values) { edgePerm.mapPermutation(values); });
-    edgeAttributes.forEach([&](auto& values) { edgePerm.permutate(values); });
+        [&](std::vector<Edge> &values) { edgePerm.mapPermutation(values); });
+    edgeAttributes.forEach([&](auto &values) { edgePerm.permutate(values); });
 
     edgeAttributes.resize(edgeCount);
     beginOut.swap(newBeginOut);
   }
 
-  inline void applyVertexPermutation(const Permutation& permutation) noexcept {
+  inline void applyVertexPermutation(const Permutation &permutation) noexcept {
     changeVertexIds(Order(Construct::Invert, permutation), permutation);
   }
 
-  inline void applyVertexOrder(const Order& order) noexcept {
+  inline void applyVertexOrder(const Order &order) noexcept {
     changeVertexIds(order, Permutation(Construct::Invert, order));
   }
 
   inline void revert() noexcept {
-    if (numEdges() == 0) return;
+    if (numEdges() == 0)
+      return;
     std::vector<Edge> newBeginOut(beginOut.size(), Edge(0));
     std::vector<Vertex> fromVertex(numEdges());
     for (const auto [edge, from] : edgesWithFromVertex()) {
@@ -445,25 +451,26 @@ class StaticGraphImplementation {
     } else {
       get(ToVertex).swap(fromVertex);
     }
-    vertexAttributes.forEach([&](std::vector<Edge>& values) {
+    vertexAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
-    edgeAttributes.forEach([&](std::vector<Edge>& values) {
+    edgeAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
     edgeAttributes.forEach(
-        [&](auto& values) { edgePermutation.permutate(values); });
+        [&](auto &values) { edgePermutation.permutate(values); });
     beginOut.swap(newBeginOut);
     checkVectorSize();
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline void sortEdges(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) noexcept {
+  inline void
+  sortEdges(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) noexcept {
     std::vector<Edge> edgeOrder = Vector::id<Edge>(numEdges());
     for (const Vertex vertex : vertices()) {
-      if (beginOut[vertex] >= beginOut[vertex + 1]) continue;
+      if (beginOut[vertex] >= beginOut[vertex + 1])
+        continue;
       std::stable_sort(edgeOrder.begin() + beginOut[vertex],
                        edgeOrder.begin() + beginOut[vertex + 1],
                        [&](const Edge a, const Edge b) {
@@ -471,33 +478,33 @@ class StaticGraphImplementation {
                        });
     }
     Permutation edgePermutation(Construct::Invert, Order(edgeOrder));
-    vertexAttributes.forEach([&](std::vector<Edge>& values) {
+    vertexAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
-    edgeAttributes.forEach([&](std::vector<Edge>& values) {
+    edgeAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
     edgeAttributes.forEach(
-        [&](auto& values) { edgePermutation.permutate(values); });
+        [&](auto &values) { edgePermutation.permutate(values); });
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
   // Attributes:
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline std::vector<AttributeType<ATTRIBUTE_NAME>>& operator[](
+  inline std::vector<AttributeType<ATTRIBUTE_NAME>> &operator[](
       const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) noexcept {
     return get(attributeName);
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline const std::vector<AttributeType<ATTRIBUTE_NAME>>& operator[](
+  inline const std::vector<AttributeType<ATTRIBUTE_NAME>> &operator[](
       const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) const noexcept {
     return get(attributeName);
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline std::vector<AttributeType<ATTRIBUTE_NAME>>& get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) noexcept {
+  inline std::vector<AttributeType<ATTRIBUTE_NAME>> &
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) noexcept {
     if constexpr (HasVertexAttribute(attributeName)) {
       return vertexAttributes.get(attributeName);
     } else {
@@ -506,8 +513,8 @@ class StaticGraphImplementation {
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline const std::vector<AttributeType<ATTRIBUTE_NAME>>& get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) const noexcept {
+  inline const std::vector<AttributeType<ATTRIBUTE_NAME>> &
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName) const noexcept {
     if constexpr (HasVertexAttribute(attributeName)) {
       return vertexAttributes.get(attributeName);
     } else {
@@ -516,39 +523,39 @@ class StaticGraphImplementation {
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline AttributeReferenceType<ATTRIBUTE_NAME> get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
+  inline AttributeReferenceType<ATTRIBUTE_NAME>
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
       const Vertex vertex) noexcept {
     AssertMsg(isVertex(vertex), vertex << " is not a valid vertex!");
     return vertexAttributes.get(attributeName, vertex);
   }
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline AttributeReferenceType<ATTRIBUTE_NAME> get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
+  inline AttributeReferenceType<ATTRIBUTE_NAME>
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
       const Edge edge) noexcept {
     AssertMsg(isEdge(edge), edge << " is not a valid edge!");
     return edgeAttributes.get(attributeName, edge);
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline AttributeConstReferenceType<ATTRIBUTE_NAME> get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
+  inline AttributeConstReferenceType<ATTRIBUTE_NAME>
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
       const Vertex vertex) const noexcept {
     AssertMsg(isVertex(vertex), vertex << " is not a valid vertex!");
     return vertexAttributes.get(attributeName, vertex);
   }
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline AttributeConstReferenceType<ATTRIBUTE_NAME> get(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
+  inline AttributeConstReferenceType<ATTRIBUTE_NAME>
+  get(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
       const Edge edge) const noexcept {
     AssertMsg(isEdge(edge), edge << " is not a valid edge!");
     return edgeAttributes.get(attributeName, edge);
   }
 
   template <AttributeNameType ATTRIBUTE_NAME>
-  inline void set(
-      const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
-      const std::vector<VertexAttributeType<ATTRIBUTE_NAME>>& values) noexcept {
+  inline void
+  set(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
+      const std::vector<VertexAttributeType<ATTRIBUTE_NAME>> &values) noexcept {
     if constexpr (HasVertexAttribute(attributeName)) {
       return vertexAttributes.set(attributeName, values);
     } else {
@@ -559,14 +566,14 @@ class StaticGraphImplementation {
   template <AttributeNameType ATTRIBUTE_NAME>
   inline void set(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
                   const Vertex vertex,
-                  const VertexAttributeType<ATTRIBUTE_NAME>& value) noexcept {
+                  const VertexAttributeType<ATTRIBUTE_NAME> &value) noexcept {
     AssertMsg(isVertex(vertex), vertex << " is not a valid vertex!");
     return vertexAttributes.set(attributeName, vertex, value);
   }
   template <AttributeNameType ATTRIBUTE_NAME>
   inline void set(const AttributeNameWrapper<ATTRIBUTE_NAME> attributeName,
                   const Edge edge,
-                  const EdgeAttributeType<ATTRIBUTE_NAME>& value) noexcept {
+                  const EdgeAttributeType<ATTRIBUTE_NAME> &value) noexcept {
     AssertMsg(isEdge(edge), edge << " is not a valid edge!");
     return edgeAttributes.set(attributeName, edge, value);
   }
@@ -582,13 +589,13 @@ class StaticGraphImplementation {
   }
 
   inline void setVertexAttributes(const Vertex vertex,
-                                  const VertexRecord& record) noexcept {
+                                  const VertexRecord &record) noexcept {
     AssertMsg(isVertex(vertex), vertex << " is not a valid vertex!");
     vertexAttributes.set(vertex, record);
   }
 
   inline void setEdgeAttributes(const Edge edge,
-                                const EdgeRecord& record) noexcept {
+                                const EdgeRecord &record) noexcept {
     AssertMsg(isEdge(edge), edge << " is not a valid edge!");
     edgeAttributes.set(edge, record);
   }
@@ -604,36 +611,36 @@ class StaticGraphImplementation {
   }
 
   // IO:
-  inline void serialize(IO::Serialization& serialize) const {
+  inline void serialize(IO::Serialization &serialize) const {
     serialize(beginOut, vertexAttributes, edgeAttributes);
   }
 
-  inline void deserialize(IO::Deserialization& deserialize) {
+  inline void deserialize(IO::Deserialization &deserialize) {
     clear();
     deserialize(beginOut, vertexAttributes, edgeAttributes);
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
-  inline void serialize(const std::string& fileName) const {
+  inline void serialize(const std::string &fileName) const {
     IO::serialize(fileName, beginOut, vertexAttributes, edgeAttributes);
   }
 
-  inline void deserialize(const std::string& fileName) {
+  inline void deserialize(const std::string &fileName) {
     clear();
     IO::deserialize(fileName, beginOut, vertexAttributes, edgeAttributes);
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
-  inline void writeBinary(const std::string& fileName,
-                          const std::string& separator = ".") const noexcept {
+  inline void writeBinary(const std::string &fileName,
+                          const std::string &separator = ".") const noexcept {
     IO::serialize(fileName + separator + "beginOut", beginOut);
     vertexAttributes.serialize(fileName, separator);
     edgeAttributes.serialize(fileName, separator);
     // Graph::writeStatisticsFile(*this, fileName, separator);
   }
 
-  inline void readBinary(const std::string& fileName,
-                         const std::string& separator = ".",
+  inline void readBinary(const std::string &fileName,
+                         const std::string &separator = ".",
                          const bool debug = true) noexcept {
     clear();
     if (debug)
@@ -644,7 +651,7 @@ class StaticGraphImplementation {
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
-  inline void printAnalysis(std::ostream& out = std::cout) const noexcept {
+  inline void printAnalysis(std::ostream &out = std::cout) const noexcept {
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
     size_t vertexCount = 0;
     size_t isolatedVertexCount = 0;
@@ -686,15 +693,19 @@ class StaticGraphImplementation {
         inDegree[u]++;
         hash += u;
         edgeCount++;
-        if (u == v) loopEdgeCount++;
-        if (neighbors.contains(u)) multiEdgeCount++;
+        if (u == v)
+          loopEdgeCount++;
+        if (neighbors.contains(u))
+          multiEdgeCount++;
         neighbors.insert(u);
         if constexpr (HasEdgeAttribute(FromVertex)) {
           hash += get(FromVertex, e);
-          if (get(FromVertex, e) != v) fromVertexErrorCount++;
+          if (get(FromVertex, e) != v)
+            fromVertexErrorCount++;
         }
         if constexpr (HasEdgeAttribute(ViaVertex)) {
-          if (isVertex(get(ViaVertex, e))) edgeWithViaVertexCount++;
+          if (isVertex(get(ViaVertex, e)))
+            edgeWithViaVertexCount++;
           hash += get(ViaVertex, e);
         }
         if constexpr (HasEdgeAttribute(TravelTime) &&
@@ -705,19 +716,24 @@ class StaticGraphImplementation {
             const double speed = (dist * 0.036) / get(TravelTime, e);
             graphDistance += dist;
             avgSpeed += (dist * speed);
-            if (minSpeed > speed) minSpeed = speed;
-            if (maxSpeed < speed) maxSpeed = speed;
+            if (minSpeed > speed)
+              minSpeed = speed;
+            if (maxSpeed < speed)
+              maxSpeed = speed;
           }
         }
         if constexpr (HasEdgeAttribute(ReverseEdge)) {
           if (isEdge(get(ReverseEdge, e))) {
             reverseEdgeEntryCount++;
             const Edge f = get(ReverseEdge, e);
-            if (get(ReverseEdge, f) != e) reverseEdgeErrorCount++;
+            if (get(ReverseEdge, f) != e)
+              reverseEdgeErrorCount++;
             if constexpr (HasEdgeAttribute(FromVertex)) {
-              if (get(FromVertex, f) != u) reverseEdgeErrorCount++;
+              if (get(FromVertex, f) != u)
+                reverseEdgeErrorCount++;
             }
-            if (get(ToVertex, f) != v) reverseEdgeErrorCount++;
+            if (get(ToVertex, f) != v)
+              reverseEdgeErrorCount++;
           }
         }
       }
@@ -727,13 +743,20 @@ class StaticGraphImplementation {
       const size_t outDeg = outDegree(v);
       const size_t deg = inDeg + outDeg;
       hash += deg;
-      if (deg == 0) isolatedVertexCount++;
-      if (outDeg == 0 && inDeg > 0) sinkCount++;
-      if (outDeg > 0 && inDeg == 0) sourceCount++;
-      if (inDeg < minInDegree) minInDegree = inDeg;
-      if (inDeg > maxInDegree) maxInDegree = inDeg;
-      if (outDeg < minOutDegree) minOutDegree = outDeg;
-      if (outDeg > maxOutDegree) maxOutDegree = outDeg;
+      if (deg == 0)
+        isolatedVertexCount++;
+      if (outDeg == 0 && inDeg > 0)
+        sinkCount++;
+      if (outDeg > 0 && inDeg == 0)
+        sourceCount++;
+      if (inDeg < minInDegree)
+        minInDegree = inDeg;
+      if (inDeg > maxInDegree)
+        maxInDegree = inDeg;
+      if (outDeg < minOutDegree)
+        minOutDegree = outDeg;
+      if (outDeg > maxOutDegree)
+        maxOutDegree = outDeg;
     }
     const int tabSize = 18;
     out << std::right;
@@ -771,7 +794,7 @@ class StaticGraphImplementation {
         << String::prettyInt(multiEdgeCount) << "  ("
         << String::percent(multiEdgeCount / (double)edgeCount) << ")"
         << std::endl;
-    edgeAttributes.forEach([&](const auto& values,
+    edgeAttributes.forEach([&](const auto &values,
                                const AttributeNameType attribute) {
       using ValueType =
           typename Meta::RemoveReference<decltype(values)>::value_type;
@@ -783,9 +806,12 @@ class StaticGraphImplementation {
         size_t negativeWeightCount = 0;
         for (size_t e = 0; e < values.size(); e++) {
           hash += values[e];
-          if (values[e] < minWeight) minWeight = values[e];
-          if (values[e] > maxWeight) maxWeight = values[e];
-          if (values[e] < 0) negativeWeightCount++;
+          if (values[e] < minWeight)
+            minWeight = values[e];
+          if (values[e] > maxWeight)
+            maxWeight = values[e];
+          if (values[e] < 0)
+            negativeWeightCount++;
         }
         out << std::setw(27 - attributeName.size()) << "min" << attributeName
             << " : " << std::setw(tabSize) << minWeight << std::endl;
@@ -843,7 +869,7 @@ class StaticGraphImplementation {
         << String::prettyInt(hash) << std::endl;
   }
 
-  inline void printAdjacencyList(std::ostream& out = std::cout) const noexcept {
+  inline void printAdjacencyList(std::ostream &out = std::cout) const noexcept {
     for (const Vertex vertex : vertices()) {
       out << std::setw(log10(numVertices()) + 1) << std::left << vertex
           << std::right << " -> ";
@@ -855,9 +881,9 @@ class StaticGraphImplementation {
     }
   }
 
- private:
-  inline void changeVertexIds(const Order& vertexOrder,
-                              const Permutation& vertexPermutation) noexcept {
+private:
+  inline void changeVertexIds(const Order &vertexOrder,
+                              const Permutation &vertexPermutation) noexcept {
     Order edgeOrder;
     std::vector<Edge> newBeginOut;
     edgeOrder.reserve(numEdges());
@@ -873,27 +899,27 @@ class StaticGraphImplementation {
 
     const Permutation edgePermutation(Construct::Invert, edgeOrder);
 
-    vertexAttributes.forEach([&](std::vector<Vertex>& values) {
+    vertexAttributes.forEach([&](std::vector<Vertex> &values) {
       vertexPermutation.mapPermutation(values);
     });
-    vertexAttributes.forEach([&](std::vector<Edge>& values) {
+    vertexAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
-    edgeAttributes.forEach([&](std::vector<Vertex>& values) {
+    edgeAttributes.forEach([&](std::vector<Vertex> &values) {
       vertexPermutation.mapPermutation(values);
     });
-    edgeAttributes.forEach([&](std::vector<Edge>& values) {
+    edgeAttributes.forEach([&](std::vector<Edge> &values) {
       edgePermutation.mapPermutation(values);
     });
-    vertexAttributes.forEach([&](auto& values) { vertexOrder.order(values); });
-    edgeAttributes.forEach([&](auto& values) { edgeOrder.order(values); });
+    vertexAttributes.forEach([&](auto &values) { vertexOrder.order(values); });
+    edgeAttributes.forEach([&](auto &values) { edgeOrder.order(values); });
 
     beginOut.swap(newBeginOut);
     checkVectorSize();
     AssertMsg(satisfiesInvariants(), "Invariants not satisfied!");
   }
 
- public:
+public:
   inline void checkVectorSize() const noexcept {
     AssertMsg(beginOut.size() > 0, "Adjacency structure is empty!");
     AssertMsg(vertexAttributes.hasSize(beginOut.size() - 1),
@@ -908,40 +934,50 @@ class StaticGraphImplementation {
                 "beginOut[" << v << "] (" << beginOut[v] << ") < "
                             << "beginOut[" << v + 1 << "] (" << beginOut[v + 1]
                             << ")");
-      if (beginOut[v] > beginOut[v + 1]) return false;
+      if (beginOut[v] > beginOut[v + 1])
+        return false;
       if constexpr (HasEdgeAttribute(FromVertex)) {
         for (const Edge e : edgesFrom(v)) {
           AssertMsg(get(FromVertex, e) == v,
                     "From vertex of " << e << " should be " << v << " but is "
                                       << get(FromVertex, e));
-          if (get(FromVertex, e) != v) return false;
+          if (get(FromVertex, e) != v)
+            return false;
         }
       }
       if constexpr (HasEdgeAttribute(ReverseEdge)) {
         for (const Edge e : edgesFrom(v)) {
-          if (!isEdge(get(ReverseEdge, e))) continue;
+          if (!isEdge(get(ReverseEdge, e)))
+            continue;
           AssertMsg(get(ReverseEdge, get(ReverseEdge, e)) == e,
                     "Reverse edge of "
                         << e << " is inconsistent: " << get(ReverseEdge, e)
                         << ", " << get(ReverseEdge, get(ReverseEdge, e)));
-          if (get(ReverseEdge, get(ReverseEdge, e)) != e) return false;
+          if (get(ReverseEdge, get(ReverseEdge, e)) != e)
+            return false;
         }
       }
     }
     return true;
   }
 
-  inline VertexAttributes& getVertexAttributes() { return vertexAttributes; }
+  inline VertexAttributes &getVertexAttributes() { return vertexAttributes; }
 
-  inline EdgeAttributes& getEdgeAttributes() { return edgeAttributes; }
+  inline EdgeAttributes &getEdgeAttributes() { return edgeAttributes; }
 
-  inline std::vector<Edge>& getBeginOut() { return beginOut; }
+  inline std::vector<Edge> &getBeginOut() { return beginOut; }
 
   inline void prefetchBeginOut(const Vertex vertex) const noexcept {
     __builtin_prefetch(&beginOut[vertex]);
   }
 
- private:
+  inline std::size_t memoryConsumption() const noexcept {
+    return beginOut.capacity() * sizeof(Edge) +
+           static_cast<std::size_t>(vertexAttributes.memoryUsageInBytes()) +
+           static_cast<std::size_t>(edgeAttributes.memoryUsageInBytes());
+  }
+
+private:
   std::vector<Edge> beginOut;
   VertexAttributes vertexAttributes;
 
