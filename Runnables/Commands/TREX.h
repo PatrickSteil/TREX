@@ -324,6 +324,7 @@ public:
     size_t numberOfJourneys = 0;
 
     auto run = [&](auto &algo) {
+      algo.printMemoryConsumption();
       size_t i(0);
       for (const StopQuery &query : queries) {
         if (verbose)

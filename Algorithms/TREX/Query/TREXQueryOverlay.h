@@ -324,8 +324,6 @@ public:
       }
     }
 
-    printMemoryConsumption();
-
     profiler.registerPhases({PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL,
                              PHASE_SCAN_TRIPS, PHASE_GET_JOURNEYS});
     profiler.registerMetrics(
@@ -765,7 +763,7 @@ private:
     AssertMsg(beginStopEventId < endStopEventId, "Begin should be < End!");
     AssertMsg(beginStopEventId < data.numberOfStopEvents(),
               "StopEvent out of bounds!");
-    AssertMsg(endStopEventId < data.numberOfStopEvents(),
+    AssertMsg(endStopEventId <= data.numberOfStopEvents(),
               "StopEvent out of bounds!");
 
     tmpQueue.emplace(beginStopEventId, endStopEventId, parent);
@@ -780,6 +778,7 @@ private:
     }
   }
 
+public:
   inline void printMemoryConsumption() const noexcept {
     auto row = [](const std::string &name, std::size_t bytes) {
       const double kb = bytes / 1024.0;
@@ -825,6 +824,8 @@ private:
 
     row("transferPerLevel", transferPerLevel.capacity() * sizeof(uint64_t));
 
+    row("tripdata (w/o transfergraph)", data.memoryConsumption());
+
     const std::size_t total =
         queue.capacity() * sizeof(TripLabel) +
         tmpQueue.capacity() * sizeof(TripLabel) +
@@ -839,7 +840,8 @@ private:
         overlayBytes + edgeLabelBytes + routeLabelBytes +
         targetLabels.capacity() * sizeof(TargetLabel) +
         reverseTransferGraph.memoryConsumption() +
-        transferPerLevel.capacity() * sizeof(uint64_t);
+        transferPerLevel.capacity() * sizeof(uint64_t) +
+        data.memoryConsumption();
 
     row("TOTAL", total);
   }

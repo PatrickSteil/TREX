@@ -562,6 +562,57 @@ private:
     return std::make_pair(noStopEvent, noEdge);
   }
 
+public:
+  inline void printMemoryConsumption() const noexcept {
+    auto row = [](const std::string &name, std::size_t bytes) {
+      const double kb = bytes / 1024.0;
+      const double mb = kb / 1024.0;
+      std::printf("%s,%zu,%.2f,%.2f\n", name.c_str(), bytes, kb, mb);
+    };
+
+    std::printf("DataStructure,Bytes,KB,MB\n");
+
+    row("queue", queue.capacity() * sizeof(TripLabel));
+
+    row("transferFromSource", transferFromSource.capacity() * sizeof(int));
+    row("transferToTarget", transferToTarget.capacity() * sizeof(int));
+
+    row("eventLookup", eventLookup.capacity() * sizeof(EventLookup));
+    row("eventArrTimes", eventArrTimes.capacity() * sizeof(uint32_t));
+    row("cellIdOfEvent", cellIdOfEvent.capacity() * sizeof(uint16_t));
+
+    std::size_t edgeLabelBytes = edgeLabels.capacity() * sizeof(EdgeLabel);
+    row("edgeLabels", edgeLabelBytes);
+
+    std::size_t routeLabelBytes = routeLabels.capacity() * sizeof(RouteLabel);
+    for (const auto &rl : routeLabels)
+      routeLabelBytes += rl.departureTimes.capacity() * sizeof(int);
+    row("routeLabels", routeLabelBytes);
+
+    row("targetLabels", targetLabels.capacity() * sizeof(TargetLabel));
+
+    row("reverseTransferGraph", reverseTransferGraph.memoryConsumption());
+
+    row("transferPerLevel", transferPerLevel.capacity() * sizeof(uint64_t));
+
+    row("tripdata",
+        data.memoryConsumption() + data.stopEventGraph.memoryConsumption());
+
+    const std::size_t total =
+        queue.capacity() * sizeof(TripLabel) +
+        transferFromSource.capacity() * sizeof(int) +
+        transferToTarget.capacity() * sizeof(int) +
+        eventLookup.capacity() * sizeof(EventLookup) +
+        eventArrTimes.capacity() * sizeof(uint32_t) +
+        cellIdOfEvent.capacity() * sizeof(uint16_t) + edgeLabelBytes +
+        routeLabelBytes + targetLabels.capacity() * sizeof(TargetLabel) +
+        reverseTransferGraph.memoryConsumption() +
+        transferPerLevel.capacity() * sizeof(uint64_t) +
+        data.memoryConsumption() + data.stopEventGraph.memoryConsumption();
+
+    row("TOTAL", total);
+  }
+
 private:
   TREXData &data;
 
