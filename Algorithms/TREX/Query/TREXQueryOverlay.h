@@ -158,8 +158,6 @@ public:
           sourceStop(noStop),
           targetStop(noStop),
           sourceDepartureTime(never),
-          transferPerLevel(data.getNumberOfLevels() + 1, 0),
-          numQueries(0),
           overlayGraphs(),
           edgeRangeLookup(data.numberOfStopEvents()) {
         for (auto& a : edgeRangeLookup) {
@@ -421,7 +419,6 @@ private:
         targetLabels.resize(1);
         targetLabels[0] = TargetLabel();
         minArrivalTime = INFTY;
-        ++numQueries;
     }
 
     inline void computeInitialAndFinalTransfers() noexcept {
@@ -715,8 +712,6 @@ public:
 
         row("reverseTransferGraph", reverseTransferGraph.memoryConsumption());
 
-        row("transferPerLevel", transferPerLevel.capacity() * sizeof(uint64_t));
-
         row("tripdata (w/o transfergraph)", data.memoryConsumption());
 
         const std::size_t total =
@@ -726,7 +721,7 @@ public:
             eventArrTimes.capacity() * sizeof(uint32_t) + cellIdOfEvent.capacity() * sizeof(uint16_t) +
             edgeRangeLookup.capacity() * sizeof(std::array<StopEventId, MAX_LEVELS>) + overlayBytes + edgeLabelBytes +
             routeLabelBytes + targetLabels.capacity() * sizeof(TargetLabel) + reverseTransferGraph.memoryConsumption() +
-            transferPerLevel.capacity() * sizeof(uint64_t) + data.memoryConsumption();
+            data.memoryConsumption();
 
         row("TOTAL", total);
     }
@@ -765,8 +760,6 @@ private:
     int sourceDepartureTime;
 
     Profiler profiler;
-    std::vector<uint64_t> transferPerLevel;
-    size_t numQueries;
 
     std::vector<SimpleGraph<std::uint32_t>> overlayGraphs;
 

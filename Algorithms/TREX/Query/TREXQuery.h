@@ -97,9 +97,7 @@ public:
           cellIdOfEvent(data.numberOfStopEvents(), 0),
           sourceStop(noStop),
           targetStop(noStop),
-          sourceDepartureTime(never),
-          transferPerLevel(data.getNumberOfLevels() + 1, 0),
-          numQueries(0) {
+          sourceDepartureTime(never) {
         reverseTransferGraph.revert();
 
 #pragma omp parallel for
@@ -215,16 +213,6 @@ public:
 
     inline Profiler& getProfiler() noexcept { return profiler; }
 
-    inline void showTransferLevels() noexcept {
-        std::cout << "# of relaxed transfers per level" << std::endl;
-
-        for (size_t level(0); level < transferPerLevel.size(); ++level)
-            std::cout << level << "\t" << (double)transferPerLevel[level] / (double)numQueries << std::endl;
-
-        /* std::cout << "# of irrelvant events: " << irrelevantEvents /
-         * (double)numQueries << std::endl; */
-    }
-
 private:
     inline void clear() noexcept {
         queue.clear();
@@ -233,8 +221,6 @@ private:
         targetLabels.resize(1);
         targetLabels[0] = TargetLabel();
         minArrivalTime = INFTY;
-
-        ++numQueries;
     }
 
     inline void computeInitialAndFinalTransfers() noexcept {
@@ -518,8 +504,6 @@ public:
 
         row("reverseTransferGraph", reverseTransferGraph.memoryConsumption());
 
-        row("transferPerLevel", transferPerLevel.capacity() * sizeof(uint64_t));
-
         row("tripdata", data.memoryConsumption() + data.stopEventGraph.memoryConsumption());
 
         const std::size_t total =
@@ -527,8 +511,7 @@ public:
             transferToTarget.capacity() * sizeof(int) + eventLookup.capacity() * sizeof(EventLookup) +
             eventArrTimes.capacity() * sizeof(uint32_t) + cellIdOfEvent.capacity() * sizeof(uint16_t) + edgeLabelBytes +
             routeLabelBytes + targetLabels.capacity() * sizeof(TargetLabel) + reverseTransferGraph.memoryConsumption() +
-            transferPerLevel.capacity() * sizeof(uint64_t) + data.memoryConsumption() +
-            data.stopEventGraph.memoryConsumption();
+            data.memoryConsumption() + data.stopEventGraph.memoryConsumption();
 
         row("TOTAL", total);
     }
@@ -566,8 +549,6 @@ private:
     int sourceDepartureTime;
 
     Profiler profiler;
-    std::vector<uint64_t> transferPerLevel;
-    size_t numQueries;
 };
 
 }  // namespace TripBased
