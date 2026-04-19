@@ -92,6 +92,8 @@ public:
           sourceStop(noStop),
           targetStop(noStop),
           sourceDepartureTime(never) {
+        printMemoryConsumption();
+
         profiler.registerPhases({PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL, PHASE_SCAN_TRIPS});
         profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS, METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
                                   METRIC_ENQUEUES, METRIC_ADD_JOURNEYS, METRIC_COUNT_DISTANCE});
@@ -407,6 +409,52 @@ private:
         }
         Ensure(false, "Could not find parent stop event!");
         return std::make_pair(noStopEvent, noEdge);
+    }
+
+    inline void printMemoryConsumption() const noexcept {
+        std::cout << "DataStructure,Bytes,KB,MB" << std::endl;
+
+        long long total = 0;
+        auto row = [&](const std::string& name, long long bytes, const bool addToTotal = true) {
+            if (addToTotal) total += bytes;
+            const double kb = bytes / 1024.0;
+            const double mb = kb / 1024.0;
+            std::cout << name << "," << bytes << "," << kb << "," << mb << std::endl;
+        };
+
+        row("data.transferGraph", data.transferGraph.memoryUsageInBytes());
+        row("data.reverseTransferGraph", data.reverseTransferGraph.memoryUsageInBytes());
+        row("data.eventLookup", Vector::memoryUsageInBytes(data.eventLookup));
+        row("data.eventArrTimes", Vector::memoryUsageInBytes(data.eventArrTimes));
+        row("data.eventDepTimes", Vector::memoryUsageInBytes(data.eventDepTimes));
+        row("data.tripOfStopEvent", Vector::memoryUsageInBytes(data.tripOfStopEvent));
+        row("data.routeOfTrip", Vector::memoryUsageInBytes(data.routeOfTrip));
+        row("data.firstStopEventOfTrip", Vector::memoryUsageInBytes(data.firstStopEventOfTrip));
+        row("data.firstTripOfRoute", Vector::memoryUsageInBytes(data.firstTripOfRoute));
+        row("data.firstRouteSegmentOfStop", Vector::memoryUsageInBytes(data.firstRouteSegmentOfStop));
+        row("data.routeSegments", Vector::memoryUsageInBytes(data.routeSegments));
+        row("data.firstStopIdOfRoute", Vector::memoryUsageInBytes(data.firstStopIdOfRoute));
+        row("data.routeStopSequences", Vector::memoryUsageInBytes(data.routeStopSequences));
+        long long routeLabelBytes = Vector::memoryUsageInBytes(data.routeLabels);
+        for (const auto& rl : data.routeLabels) routeLabelBytes += Vector::memoryUsageInBytes(rl.departureTimes);
+        row("data.routeLabels", routeLabelBytes);
+
+        row("transfers.beginOut", Vector::memoryUsageInBytes(transfers.beginOut));
+        row("transfers.labels", Vector::memoryUsageInBytes(transfers.labels));
+        row("transfers.travelTime", Vector::memoryUsageInBytes(transfers.travelTime));
+
+        row("transferFromSource", Vector::memoryUsageInBytes(transferFromSource));
+        row("transferToTarget", Vector::memoryUsageInBytes(transferToTarget));
+        row("reachedRoutes", reachedRoutes.memoryUsageInBytes());
+        row("queue", Vector::memoryUsageInBytes(queue));
+        row("edgeRanges", Vector::memoryUsageInBytes(edgeRanges));
+        row("reachedIndex", reachedIndex.memoryUsageInBytes());
+        row("targetLabels", Vector::memoryUsageInBytes(targetLabels));
+
+        long long otherStuff = 4 * sizeof(StopId) + sizeof(size_t) + 2 * sizeof(int) + sizeof(uint32_t);
+        row("rest", otherStuff);
+
+        row("TOTAL", total, false);
     }
 
 private:

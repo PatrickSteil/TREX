@@ -162,6 +162,8 @@ public:
             cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
         }
 
+        printMemoryConsumption();
+
         profiler.registerPhases({PHASE_SCAN_INITIAL, PHASE_EVALUATE_INITIAL, PHASE_SCAN_TRIPS, PHASE_GET_JOURNEYS});
         profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS, METRIC_SCANNED_LEVEL_ZERO_TRIPS,
                                   METRIC_SCANNED_STOPS, METRIC_SCANNED_LEVEL_ZERO_STOPS, METRIC_RELAXED_TRANSFERS,
@@ -563,7 +565,7 @@ public:
         row("data.routeSegments", Vector::memoryUsageInBytes(data.routeSegments));
         row("data.firstStopIdOfRoute", Vector::memoryUsageInBytes(data.firstStopIdOfRoute));
         row("data.routeStopSequences", Vector::memoryUsageInBytes(data.routeStopSequences));
-        std::size_t routeLabelBytes = Vector::memoryUsageInBytes(data.routeLabels);
+        long long routeLabelBytes = Vector::memoryUsageInBytes(data.routeLabels);
         for (const auto& rl : data.routeLabels) routeLabelBytes += Vector::memoryUsageInBytes(rl.departureTimes);
         row("data.routeLabels", routeLabelBytes);
 
