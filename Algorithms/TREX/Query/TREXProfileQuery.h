@@ -396,14 +396,14 @@ private:
 
     inline void enqueue(const Edge edge, const size_t parent, const u_int8_t n) noexcept {
         profiler.countMetric(METRIC_ENQUEUES);
-        const EdgeLabelCellId& label = transfers.labels[edge];
+        const EdgeLabel& label = transfers.labels[edge];
 
         const uint8_t reachedTrip = reachedIndex(label.getTrip(), n + 1);
         if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
             return;
 
         AssertMsg(0 < label.getStopEvent(), "StopEvent of label out of bounds!");
-        const std::uint16_t thisCellId = label.getCellId();
+        const std::uint16_t thisCellId = transfers.edgeCellId[edge];
         if ((thisCellId ^ sourceCellId) >> label.getRank() && ((thisCellId ^ targetCellId) >> label.getRank()))
             [[likely]] {
             profiler.countMetric(DISCARDED_EDGE);

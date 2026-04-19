@@ -27,9 +27,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <execution>
 #include <vector>
 
-#include "../../TripBased/Query/Types.h"
 #include "../../../DataStructures/Graph/SimpleGraph.h"
 #include "../../../DataStructures/TREX/TREXData.h"
+#include "../../TripBased/Query/Types.h"
 
 namespace TripBased {
 
@@ -37,6 +37,7 @@ struct TransfersWithoutOverlays {
     TransfersWithoutOverlays(const TREXData& data)
         : beginOut(data.stopEventGraph.getBeginOut()),
           labels(data.stopEventGraph.numEdges()),
+          edgeCellId(data.stopEventGraph.numEdges()),
           travelTime(data.stopEventGraph.get(TravelTime)) {
         std::vector<uint16_t> cellIdOfEvent(data.numberOfStopEvents(), 0);
 #pragma omp parallel for
@@ -66,7 +67,6 @@ struct TransfersWithoutOverlays {
             labels[edge].setTrip(trip);
             labels[edge].setFirstEvent(firstEvent);
             labels[edge].setStopIndex(StopIndex(toVertex - firstEvent + 1));
-            labels[edge].setCellId(cellIdOfEvent[labels[edge].getStopEvent() - 1]);
             // set different ranks
             /* labels[edge].setRank( */
             /*     rankOfRoute[data.routeOfTrip[data.tripOfStopEvent[from]]]);
@@ -75,11 +75,14 @@ struct TransfersWithoutOverlays {
              */
             /* labels[edge].setRank(rankOfEvent[from]); */
             labels[edge].setRank(data.stopEventGraph.get(LocalLevel, edge));
+
+            edgeCellId[edge] = cellIdOfEvent[labels[edge].getStopEvent() - 1];
         }
     }
 
     std::vector<Edge> beginOut;
-    std::vector<EdgeLabelCellId> labels;
+    std::vector<EdgeLabel> labels;
+    std::vector<std::uint16_t> edgeCellId;
     std::vector<int> travelTime;
 };
 
@@ -153,11 +156,7 @@ struct EdgeRangeLookup {
     static constexpr int MAX_LEVELS = 17;
 
     EdgeRangeLookup(const TREXData& data)
-        : nextEvent(data.numberOfStopEvents()) {
-        for (auto& a : nextEvent) {
-            a.fill(noStopEvent);
-        }
-
+        : nextEvent(data.numberOfStopEvents(), std::vector<StopEventId>(data.numberOfLevels + 1, noStopEvent)) {
         auto inSameCell = [&](const StopId a, const StopId b, const int level) -> bool {
             assert(level >= 0 && level < 16);
             return (data.getCellIdOfStop(a) >> level) == (data.getCellIdOfStop(b) >> level);
@@ -204,7 +203,7 @@ struct EdgeRangeLookup {
         }
     }
 
-    std::vector<std::array<StopEventId, MAX_LEVELS>> nextEvent;
+    std::vector<std::vector<StopEventId>> nextEvent;
 };
 
 }  // namespace TripBased

@@ -187,7 +187,8 @@ private:
         if (sourceStop == targetStop) addTargetLabel(sourceDepartureTime);
         for (const Edge edge : data.reverseTransferGraph.edgesFrom(targetStop)) {
             const Vertex stop = data.reverseTransferGraph.get(ToVertex, edge);
-            if (stop == sourceStop) addTargetLabel(sourceDepartureTime + data.reverseTransferGraph.get(TravelTime, edge));
+            if (stop == sourceStop)
+                addTargetLabel(sourceDepartureTime + data.reverseTransferGraph.get(TravelTime, edge));
             transferToTarget[stop] = data.reverseTransferGraph.get(TravelTime, edge);
         }
         lastSource = sourceStop;
@@ -323,14 +324,14 @@ private:
 
     inline void enqueue(const std::size_t edge, const size_t parent) noexcept {
         profiler.countMetric(METRIC_ENQUEUES);
-        const EdgeLabelCellId& label = transfers.labels[edge];
+        const EdgeLabel& label = transfers.labels[edge];
 
         const uint8_t reachedTrip = reachedIndex(label.getTrip());
         if (reachedTrip <= uint8_t(label.getStopIndex())) [[likely]]
             return;
 
         AssertMsg(0 < label.getStopEvent(), "StopEvent of label out of bounds!");
-        const std::uint16_t thisCellId = label.getCellId();
+        const std::uint16_t thisCellId = transfers.edgeCellId[edge];
         if ((thisCellId ^ sourceCellId) >> label.getRank() && ((thisCellId ^ targetCellId) >> label.getRank()))
             [[likely]] {
             profiler.countMetric(DISCARDED_EDGE);
@@ -447,6 +448,7 @@ public:
 
         row("transfers.beginOut", Vector::memoryUsageInBytes(transfers.beginOut));
         row("transfers.labels", Vector::memoryUsageInBytes(transfers.labels));
+        row("transfers.edgeCellId", Vector::memoryUsageInBytes(transfers.edgeCellId));
         row("transfers.travelTime", Vector::memoryUsageInBytes(transfers.travelTime));
 
         row("cellIdOfStop", Vector::memoryUsageInBytes(cellIdOfStop));
