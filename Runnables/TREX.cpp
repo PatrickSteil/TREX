@@ -55,7 +55,6 @@ int main(int argc, char **argv) {
   new WriteTREXToCSV(shell);
   new EventDistributionOverTime(shell);
   new WriteTREXStopFailureDistribution(shell);
-  new CheckBorderStops(shell);
   new ExportTREXTimeExpandedGraph(shell);
   new BuildTBTEGraph(shell);
   new ShowInducedCellOfNetwork(shell);

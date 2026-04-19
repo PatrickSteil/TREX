@@ -31,8 +31,6 @@ This code contains the following journey planning algorithms:
  - TED (Time-Expanded Dijkstra)
  - PTL (Public Transit Labeling)
 
-as well as some ULTRA-Extensions for RAPTOR, TB and CSA. For more information, check out [ULTRA](https://github.com/kit-algo/ULTRA).
-
 ## How to use
 
 Clone the repo and all submodules using
