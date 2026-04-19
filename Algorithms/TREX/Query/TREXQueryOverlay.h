@@ -47,7 +47,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RESTRICT
 #endif
 
-static constexpr int MAX_LEVELS = 17;
 namespace TripBased {
 
 template <typename PROFILER = NoProfiler>
@@ -155,57 +154,7 @@ public:
           sourceStop(noStop),
           targetStop(noStop),
           sourceDepartureTime(never),
-          edgeRangeLookup(data.numberOfStopEvents()) {
-        for (auto& a : edgeRangeLookup) {
-            a.fill(noStopEvent);
-        }
-
-        auto inSameCell = [&](const StopId a, const StopId b, const int level) -> bool {
-            assert(level >= 0 && level < 16);
-            return (data.getCellIdOfStop(a) >> level) == (data.getCellIdOfStop(b) >> level);
-        };
-
-        // fill the edge range lookup
-        for (const RouteId route : data.routes()) {
-            const StopId* stopsOfRoute = data.raptorData.stopArrayOfRoute(route);
-            const std::size_t nrStopsInRoute = data.numberOfStopsInRoute(route);
-
-            for (int level = 0; level < data.numberOfLevels + 1; ++level) {
-                std::vector<std::uint8_t> lengths(nrStopsInRoute, 1);
-
-                if (nrStopsInRoute > 1) {
-                    std::size_t segmentEnd = nrStopsInRoute;
-
-                    for (std::size_t i = nrStopsInRoute - 1; i-- > 0;) {
-                        if (!inSameCell(stopsOfRoute[i], stopsOfRoute[i + 1], level)) {
-                            segmentEnd = i + 1;
-                        }
-
-                        const std::size_t len = segmentEnd - i;
-
-                        AssertMsg(len > 0, "Length must be >= 1");
-                        AssertMsg(len <= nrStopsInRoute - i, "Length exceeds trip suffix");
-                        AssertMsg(len < 256, "The length in a subtrip is larger than 255!");
-
-                        lengths[i] = static_cast<std::uint8_t>(len);
-                    }
-                }
-
-                for (std::size_t tripOffset = 0; tripOffset < data.raptorData.numberOfTripsInRoute(route);
-                     ++tripOffset) {
-                    const std::size_t startIndex =
-                        data.raptorData.firstStopEventOfRoute[route] + tripOffset * nrStopsInRoute;
-                    AssertMsg(startIndex < edgeRangeLookup.size(), "Start Index out of bounds!");
-
-                    for (std::size_t i = 0; i < nrStopsInRoute; ++i) {
-                        const StopEventId eventId(startIndex + i);
-                        AssertMsg(eventId < edgeRangeLookup.size(), "EventId is out of range!");
-                        edgeRangeLookup[eventId][level] = StopEventId(eventId + lengths[i]);
-                    }
-                }
-            }
-        }
-
+          edgeRangeLookup(data) {
 #pragma omp parallel for
         for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
             const StopId stop = data.getStopOfStopEvent(StopEventId(event));
@@ -437,7 +386,7 @@ private:
         const EventLookup* RESTRICT eventLookupPtr = data.eventLookup.data();
         const std::uint32_t* RESTRICT eventArrTimesPtr = data.eventArrTimes.data();
         const uint16_t* RESTRICT cellIdPtr = cellIdOfEvent.data();
-        const auto* RESTRICT edgeRangeLookupPtr = edgeRangeLookup.data();
+        const auto* RESTRICT edgeRangeLookupPtr = edgeRangeLookup.nextEvent.data();
 
         while (!tmpQueue.empty() && currentRoundNumber < MAX_ROUNDS) {
             ++currentRoundNumber;
@@ -632,7 +581,7 @@ public:
         row("targetCellQueue", targetCellQueue.memoryUsageInBytes());
         row("reachedIndex", reachedIndex.memoryUsageInBytes());
         row("targetLabels", Vector::memoryUsageInBytes(targetLabels));
-        row("edgeRangeLookup", Vector::memoryUsageInBytes(edgeRangeLookup));
+        row("edgeRangeLookup", Vector::memoryUsageInBytes(edgeRangeLookup.nextEvent));
 
         long long otherStuff = 4 * sizeof(StopId) + 2 * sizeof(uint16_t) + 2 * sizeof(int);
         row("rest", otherStuff);
@@ -670,7 +619,7 @@ private:
 
     Profiler profiler;
 
-    std::vector<std::array<StopEventId, MAX_LEVELS>> edgeRangeLookup;
+    EdgeRangeLookup edgeRangeLookup;
 };
 
 }  // namespace TripBased

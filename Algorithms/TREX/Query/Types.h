@@ -149,4 +149,62 @@ struct TransfersWithOverlays {
     std::vector<int> travelTime;
 };
 
+struct EdgeRangeLookup {
+    static constexpr int MAX_LEVELS = 17;
+
+    EdgeRangeLookup(const TREXData& data)
+        : nextEvent(data.numberOfStopEvents()) {
+        for (auto& a : nextEvent) {
+            a.fill(noStopEvent);
+        }
+
+        auto inSameCell = [&](const StopId a, const StopId b, const int level) -> bool {
+            assert(level >= 0 && level < 16);
+            return (data.getCellIdOfStop(a) >> level) == (data.getCellIdOfStop(b) >> level);
+        };
+
+        for (const RouteId route : data.routes()) {
+            const StopId* stopsOfRoute = data.raptorData.stopArrayOfRoute(route);
+            const std::size_t nrStopsInRoute = data.numberOfStopsInRoute(route);
+
+            for (int level = 0; level < data.numberOfLevels + 1; ++level) {
+                std::vector<std::uint8_t> lengths(nrStopsInRoute, 1);
+
+                if (nrStopsInRoute > 1) {
+                    std::size_t segmentEnd = nrStopsInRoute;
+
+                    for (std::size_t i = nrStopsInRoute - 1; i-- > 0;) {
+                        if (!inSameCell(stopsOfRoute[i], stopsOfRoute[i + 1], level)) {
+                            segmentEnd = i + 1;
+                        }
+
+                        const std::size_t len = segmentEnd - i;
+
+                        AssertMsg(len > 0, "Length must be >= 1");
+                        AssertMsg(len <= nrStopsInRoute - i, "Length exceeds trip suffix");
+                        AssertMsg(len < 256, "The length in a subtrip is larger than 255!");
+
+                        lengths[i] = static_cast<std::uint8_t>(len);
+                    }
+                }
+
+                for (std::size_t tripOffset = 0; tripOffset < data.raptorData.numberOfTripsInRoute(route);
+                     ++tripOffset) {
+                    const std::size_t startIndex =
+                        data.raptorData.firstStopEventOfRoute[route] + tripOffset * nrStopsInRoute;
+                    AssertMsg(startIndex < nextEvent.size(), "Start Index out of bounds!");
+
+                    for (std::size_t i = 0; i < nrStopsInRoute; ++i) {
+                        const StopEventId eventId(startIndex + i);
+                        AssertMsg(eventId < nextEvent.size(), "EventId is out of range!");
+                        nextEvent[eventId][level] = StopEventId(eventId + lengths[i]);
+                    }
+                }
+            }
+        }
+    }
+
+    std::vector<std::array<StopEventId, MAX_LEVELS>> nextEvent;
+};
+
 }  // namespace TripBased

@@ -177,58 +177,9 @@ public:
           minDepartureTime(never),
           maxDepartureTime(never),
           targetLabelChanged(16, false),
-          edgeRangeLookup(data.numberOfStopEvents()) {
-        for (auto& a : edgeRangeLookup) {
-            a.fill(noStopEvent);
-        }
+          edgeRangeLookup(data) {
         collectedDepTimes.reserve(data.raptorData.numberOfTrips());  // can be adjusted
         allJourneys.reserve(32);
-
-        auto inSameCell = [&](const StopId a, const StopId b, const int level) -> bool {
-            assert(level >= 0 && level < 16);
-            return (data.getCellIdOfStop(a) >> level) == (data.getCellIdOfStop(b) >> level);
-        };
-
-        // fill the edge range lookup
-        for (const RouteId route : data.routes()) {
-            const StopId* stopsOfRoute = data.raptorData.stopArrayOfRoute(route);
-            const std::size_t nrStopsInRoute = data.numberOfStopsInRoute(route);
-
-            for (int level = 0; level < data.numberOfLevels + 1; ++level) {
-                std::vector<std::uint8_t> lengths(nrStopsInRoute, 1);
-
-                if (nrStopsInRoute > 1) {
-                    std::size_t segmentEnd = nrStopsInRoute;
-
-                    for (std::size_t i = nrStopsInRoute - 1; i-- > 0;) {
-                        if (!inSameCell(stopsOfRoute[i], stopsOfRoute[i + 1], level)) {
-                            segmentEnd = i + 1;
-                        }
-
-                        const std::size_t len = segmentEnd - i;
-
-                        AssertMsg(len > 0, "Length must be >= 1");
-                        AssertMsg(len <= nrStopsInRoute - i, "Length exceeds trip suffix");
-                        AssertMsg(len < 256, "The length in a subtrip is larger than 255!");
-
-                        lengths[i] = static_cast<std::uint8_t>(len);
-                    }
-                }
-
-                for (std::size_t tripOffset = 0; tripOffset < data.raptorData.numberOfTripsInRoute(route);
-                     ++tripOffset) {
-                    const std::size_t startIndex =
-                        data.raptorData.firstStopEventOfRoute[route] + tripOffset * nrStopsInRoute;
-                    AssertMsg(startIndex < edgeRangeLookup.size(), "Start Index out of bounds!");
-
-                    for (std::size_t i = 0; i < nrStopsInRoute; ++i) {
-                        const StopEventId eventId(startIndex + i);
-                        AssertMsg(eventId < edgeRangeLookup.size(), "EventId is out of range!");
-                        edgeRangeLookup[eventId][level] = StopEventId(eventId + lengths[i]);
-                    }
-                }
-            }
-        }
 
 #pragma omp parallel for
         for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
@@ -452,7 +403,7 @@ private:
         const EventLookup* RESTRICT eventLookupPtr = data.eventLookup.data();
         const std::uint32_t* RESTRICT eventArrTimesPtr = data.eventArrTimes.data();
         const uint16_t* RESTRICT cellIdPtr = cellIdOfEvent.data();
-        const auto* RESTRICT edgeRangeLookupPtr = edgeRangeLookup.data();
+        const auto* RESTRICT edgeRangeLookupPtr = edgeRangeLookup.nextEvent.data();
 
         while (!tmpQueue.empty() && n < 16) {
             profiler.countMetric(METRIC_ROUNDS);
@@ -759,7 +710,7 @@ private:
 
     Profiler profiler;
 
-    std::vector<std::array<StopEventId, 17>> edgeRangeLookup;
+    EdgeRangeLookup edgeRangeLookup;
 };
 
 }  // namespace TripBased
