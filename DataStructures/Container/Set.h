@@ -189,6 +189,12 @@ public:
         return result;
     }
 
+    inline long long memoryUsageInBytes() const noexcept {
+        long long result = Vector::memoryUsageInBytes(indices);
+        result += Vector::memoryUsageInBytes(values);
+        return result;
+    }
+
 private:
     std::vector<size_t> indices;
     std::vector<ValueType> values;

@@ -1272,28 +1272,6 @@ public:
     }
 
 public:
-    inline size_t memoryConsumption() const noexcept {
-        size_t bytes = 0;
-
-        bytes += firstRouteSegmentOfStop.capacity() * sizeof(size_t);
-        bytes += firstStopIdOfRoute.capacity() * sizeof(size_t);
-        bytes += firstStopEventOfRoute.capacity() * sizeof(size_t);
-        bytes += routeSegments.capacity() * sizeof(RouteSegment);
-        bytes += stopIds.capacity() * sizeof(StopId);
-        bytes += stopEvents.capacity() * sizeof(StopEvent);
-        bytes += stopData.capacity() * sizeof(Stop);
-        bytes += routeData.capacity() * sizeof(Route);
-
-        bytes += transferGraph.memoryConsumption();
-
-        // bools are part of the object's inline storage, not heap allocations,
-        // but included for completeness
-        bytes += sizeof(implicitDepartureBufferTimes);
-        bytes += sizeof(implicitArrivalBufferTimes);
-
-        return bytes;
-    }
-
     std::vector<size_t> firstRouteSegmentOfStop;
 
     std::vector<size_t> firstStopIdOfRoute;

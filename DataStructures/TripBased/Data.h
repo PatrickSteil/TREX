@@ -408,28 +408,6 @@ public:
         return indices;
     }
 
-    virtual size_t memoryConsumption() const noexcept {
-        size_t bytes = 0;
-
-        bytes += raptorData.memoryConsumption();
-
-        bytes += firstTripOfRoute.capacity() * sizeof(TripId);
-
-        bytes += routeOfTrip.capacity() * sizeof(RouteId);
-        bytes += firstStopIdOfTrip.capacity() * sizeof(size_t);
-        bytes += firstStopEventOfTrip.capacity() * sizeof(StopEventId);
-
-        bytes += tripOfStopEvent.capacity() * sizeof(TripId);
-        bytes += indexOfStopEvent.capacity() * sizeof(StopIndex);
-
-        bytes += arrivalEvents.capacity() * sizeof(ArrivalEvent);
-
-        /* bytes += stopEventGraph.memoryConsumption(); */
-        /* bytes += dynamicEventGraph.memoryConsumption(); */
-
-        return bytes;
-    }
-
 public:
     RAPTOR::Data raptorData;
 

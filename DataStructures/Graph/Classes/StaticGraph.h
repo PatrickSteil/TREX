@@ -197,7 +197,8 @@ public:
     }
 
     inline long long memoryUsageInBytes() const noexcept {
-        long long result = vertexAttributes.memoryUsageInBytes();
+        long long result = Vector::memoryUsageInBytes(beginOut);
+        result += vertexAttributes.memoryUsageInBytes();
         result += edgeAttributes.memoryUsageInBytes();
         return result;
     }
@@ -799,11 +800,6 @@ public:
     inline const std::vector<Edge>& getBeginOut() const { return beginOut; }
 
     inline void prefetchBeginOut(const Vertex vertex) const noexcept { __builtin_prefetch(&beginOut[vertex]); }
-
-    inline std::size_t memoryConsumption() const noexcept {
-        return beginOut.capacity() * sizeof(Edge) + static_cast<std::size_t>(vertexAttributes.memoryUsageInBytes()) +
-               static_cast<std::size_t>(edgeAttributes.memoryUsageInBytes());
-    }
 
 private:
     std::vector<Edge> beginOut;

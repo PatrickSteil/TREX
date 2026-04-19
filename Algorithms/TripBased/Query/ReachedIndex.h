@@ -81,6 +81,13 @@ public:
         }
     }
 
+    inline long long memoryUsageInBytes() const noexcept {
+        long long result = Vector::memoryUsageInBytes(labels);
+        result += Vector::memoryUsageInBytes(defaultLabels);
+        result += Vector::memoryUsageInBytes(routeEnd);
+        return result;
+    }
+
 private:
     const Data& data;
 

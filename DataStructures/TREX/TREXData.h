@@ -456,20 +456,6 @@ public:
         file.close();
     }
 
-    inline size_t memoryConsumption() const noexcept override {
-        size_t bytes = TripBased::Data::memoryConsumption();
-
-        bytes += sizeof(numberOfLevels);
-
-        bytes += unionFind.memoryConsumption();
-        bytes += layoutGraph.memoryConsumption();
-
-        bytes += localLevelOfEvent.capacity() * sizeof(uint8_t);
-        bytes += cellIds.capacity() * sizeof(uint16_t);
-
-        return bytes;
-    }
-
 public:
     int numberOfLevels;
     UnionFind unionFind;

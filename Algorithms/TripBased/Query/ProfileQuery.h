@@ -478,8 +478,7 @@ private:
 
     inline std::pair<StopEventId, Edge> getParent(const TripLabel& parentLabel,
                                                   const TargetLabel& targetLabel) const noexcept {
-        // Final transfer to target may start exactly at parentLabel.end if it has
-        // length 0
+        // Final transfer to target may start exactly at parentLabel.end if it has length 0
         const TripId trip = data.tripOfStopEvent[parentLabel.begin];
         const StopEventId end = data.firstStopEventOfTrip[trip + 1];
         for (StopEventId i = parentLabel.begin; i < end; i++) {
