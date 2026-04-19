@@ -32,43 +32,34 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace RAPTOR {
 
 class ArrivalLabel {
- public:
-  ArrivalLabel(const int arrivalTime = never, const size_t numberOfTrips = -1)
-      : arrivalTime(arrivalTime), numberOfTrips(numberOfTrips) {}
+public:
+    ArrivalLabel(const int arrivalTime = never, const size_t numberOfTrips = -1)
+        : arrivalTime(arrivalTime), numberOfTrips(numberOfTrips) {}
 
-  inline int travelTime(const int departureTime) const noexcept {
-    return arrivalTime - departureTime;
-  }
+    inline int travelTime(const int departureTime) const noexcept { return arrivalTime - departureTime; }
 
-  inline bool operator<(const ArrivalLabel &other) const noexcept {
-    return (arrivalTime < other.arrivalTime) ||
-           ((arrivalTime == other.arrivalTime) &&
-            (numberOfTrips < other.numberOfTrips));
-  }
+    inline bool operator<(const ArrivalLabel& other) const noexcept {
+        return (arrivalTime < other.arrivalTime) ||
+               ((arrivalTime == other.arrivalTime) && (numberOfTrips < other.numberOfTrips));
+    }
 
-  inline bool operator==(const ArrivalLabel &other) const noexcept {
-    return (arrivalTime == other.arrivalTime) &&
-           (numberOfTrips == other.numberOfTrips);
-  }
+    inline bool operator==(const ArrivalLabel& other) const noexcept {
+        return (arrivalTime == other.arrivalTime) && (numberOfTrips == other.numberOfTrips);
+    }
 
-  inline bool operator!=(const ArrivalLabel &other) const noexcept {
-    return !(*this == other);
-  }
+    inline bool operator!=(const ArrivalLabel& other) const noexcept { return !(*this == other); }
 
-  inline bool dominates(const ArrivalLabel &other) const noexcept {
-    return arrivalTime <= other.arrivalTime &&
-           numberOfTrips <= other.numberOfTrips;
-  }
+    inline bool dominates(const ArrivalLabel& other) const noexcept {
+        return arrivalTime <= other.arrivalTime && numberOfTrips <= other.numberOfTrips;
+    }
 
-  inline friend std::ostream &operator<<(std::ostream &out,
-                                         const ArrivalLabel &label) noexcept {
-    return out << "arrivalTime: " << label.arrivalTime
-               << ", numberOfTrips: " << label.numberOfTrips;
-  }
+    inline friend std::ostream& operator<<(std::ostream& out, const ArrivalLabel& label) noexcept {
+        return out << "arrivalTime: " << label.arrivalTime << ", numberOfTrips: " << label.numberOfTrips;
+    }
 
- public:
-  int arrivalTime;
-  size_t numberOfTrips;
+public:
+    int arrivalTime;
+    size_t numberOfTrips;
 };
 
 }  // namespace RAPTOR
