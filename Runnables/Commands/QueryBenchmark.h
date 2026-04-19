@@ -41,7 +41,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Algorithms/TE/Query.h"
 #include "../../Algorithms/TripBased/Query/ProfileOneToAllQuery.h"
 #include "../../Algorithms/TripBased/Query/ProfileQuery.h"
-#include "../../Algorithms/TripBased/Query/TransitiveQuery.h"
+#include "../../Algorithms/TripBased/Query/Query.h"
 #include "../../DataStructures/CSA/Data.h"
 #include "../../DataStructures/PTL/Data.h"
 #include "../../DataStructures/Queries/Queries.h"
@@ -53,12 +53,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 using namespace Shell;
 
-class RunTransitiveRAPTORQueries : public ParameterizedCommand {
+class RunRAPTORQueries : public ParameterizedCommand {
 public:
-  RunTransitiveRAPTORQueries(BasicShell &shell)
+  RunRAPTORQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveRAPTORQueries",
-            "Runs the given number of random transitive RAPTOR queries.") {
+            shell, "runRAPTORQueries",
+            "Runs the given number of random RAPTOR queries.") {
     addParameter("RAPTOR input file");
     addParameter("Number of queries");
     addParameter("Number of rounds", "32");
@@ -88,10 +88,10 @@ public:
   }
 };
 
-class RunOneTransitiveRAPTORQuery : public ParameterizedCommand {
+class RunOneRAPTORQuery : public ParameterizedCommand {
 public:
-  RunOneTransitiveRAPTORQuery(BasicShell &shell)
-      : ParameterizedCommand(shell, "runOneTransitiveRAPTORQuery",
+  RunOneRAPTORQuery(BasicShell &shell)
+      : ParameterizedCommand(shell, "runOneRAPTORQuery",
                              "Runs the given RAPTOR query.") {
     addParameter("RAPTOR input file");
     addParameter("Source StopId");
@@ -128,12 +128,12 @@ public:
   }
 };
 
-class RunTransitiveCSAQueries : public ParameterizedCommand {
+class RunCSAQueries : public ParameterizedCommand {
 public:
-  RunTransitiveCSAQueries(BasicShell &shell)
+  RunCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveCSAQueries",
-            "Runs the given number of random transitive CSA queries.") {
+            shell, "runCSAQueries",
+            "Runs the given number of random CSA queries.") {
     addParameter("CSA input file");
     addParameter("Number of queries");
     addParameter("Target pruning?");
@@ -159,12 +159,12 @@ public:
   }
 };
 
-class RunTransitiveProfileCSAQueries : public ParameterizedCommand {
+class RunProfileCSAQueries : public ParameterizedCommand {
 public:
-  RunTransitiveProfileCSAQueries(BasicShell &shell)
+  RunProfileCSAQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveProfileCSAQueries",
-            "Runs the given number of random transitive ProfileCSA queries.") {
+            shell, "runProfileCSAQueries",
+            "Runs the given number of random ProfileCSA queries.") {
     addParameter("CSA input file");
     addParameter("Number of queries");
   }
@@ -190,12 +190,12 @@ public:
   }
 };
 
-class RunTransitiveTripBasedQueries : public ParameterizedCommand {
+class RunTripBasedQueries : public ParameterizedCommand {
 public:
-  RunTransitiveTripBasedQueries(BasicShell &shell)
+  RunTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveTripBasedQueries",
-            "Runs the given number of random transitive TripBased queries.") {
+            shell, "runTripBasedQueries",
+            "Runs the given number of random TripBased queries.") {
     addParameter("Trip-Based input file");
     addParameter("Number of queries");
   }
@@ -204,7 +204,7 @@ public:
     const std::string tripFile = getParameter("Trip-Based input file");
     TripBased::Data tripBasedData(tripFile);
     tripBasedData.printInfo();
-    TripBased::TransitiveQuery<TripBased::AggregateProfiler> algorithm(
+    TripBased::Query<TripBased::AggregateProfiler> algorithm(
         tripBasedData);
 
     const size_t n = getParameter<size_t>("Number of queries");
@@ -232,7 +232,7 @@ public:
   CompareGeoToLength(BasicShell &shell)
       : ParameterizedCommand(
             shell, "compareGeoToLength",
-            "Runs the given number of random transitive TripBased queries and "
+            "Runs the given number of random TripBased queries and "
             "compares geo distance to number of events on path.") {
     addParameter("Trip-Based input file");
     addParameter("Number of queries");
@@ -243,7 +243,7 @@ public:
     TripBased::Data tbData(tripFile);
     tbData.printInfo();
 
-    TripBased::TransitiveQuery<TripBased::NoProfiler> algorithm(tbData);
+    TripBased::Query<TripBased::NoProfiler> algorithm(tbData);
 
     const std::size_t n = getParameter<std::size_t>("Number of queries");
 
@@ -302,12 +302,12 @@ public:
   }
 };
 
-class RunTransitiveProfileTripBasedQueries : public ParameterizedCommand {
+class RunProfileTripBasedQueries : public ParameterizedCommand {
 public:
-  RunTransitiveProfileTripBasedQueries(BasicShell &shell)
+  RunProfileTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveProfileTripBasedQueries",
-            "Runs the given number of random transitive TripBased queries with "
+            shell, "runProfileTripBasedQueries",
+            "Runs the given number of random TripBased queries with "
             "a time range of [0, 24 hours).") {
     addParameter("Trip-Based input file");
     addParameter("Number of queries");
@@ -334,13 +334,13 @@ public:
   }
 };
 
-class RunTransitiveProfileOneToAllTripBasedQueries
+class RunProfileOneToAllTripBasedQueries
     : public ParameterizedCommand {
 public:
-  RunTransitiveProfileOneToAllTripBasedQueries(BasicShell &shell)
+  RunProfileOneToAllTripBasedQueries(BasicShell &shell)
       : ParameterizedCommand(
-            shell, "runTransitiveProfileOneToAllTripBasedQueries",
-            "Runs the given number of random transitive TripBased queries.") {
+            shell, "runProfileOneToAllTripBasedQueries",
+            "Runs the given number of random TripBased queries.") {
     addParameter("Trip-Based input file");
     addParameter("Number of queries");
   }
@@ -380,7 +380,7 @@ public:
     TripBased::Data tripBasedData(getParameter("TB input file"));
     tripBasedData.printInfo();
 
-    TripBased::TransitiveQuery<TripBased::AggregateProfiler> algorithm(
+    TripBased::Query<TripBased::AggregateProfiler> algorithm(
         tripBasedData);
 
     const size_t n = getParameter<size_t>("Number of source stops");

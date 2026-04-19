@@ -43,10 +43,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace TripBased {
 
-template <typename PROFILER = NoProfiler> class TransitiveQuery {
+template <typename PROFILER = NoProfiler> class Query {
 public:
   using Profiler = PROFILER;
-  using Type = TransitiveQuery<Profiler>;
+  using Type = Query<Profiler>;
 
 private:
   struct EventLookup {
@@ -91,7 +91,7 @@ private:
   };
 
 public:
-  TransitiveQuery(const Data &data)
+    Query(const Data &data)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),

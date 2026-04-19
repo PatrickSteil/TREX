@@ -40,7 +40,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Algorithms/TREX/Query/TREXQuery.h"
 #include "../../Algorithms/TREX/Query/TREXQueryOverlay.h"
 #include "../../Algorithms/TripBased/Preprocessing/StopEventGraphBuilder.h"
-#include "../../Algorithms/TripBased/Query/TransitiveQuery.h"
+#include "../../Algorithms/TripBased/Query/Query.h"
 #include "../../DataStructures/Graph/Graph.h"
 #include "../../DataStructures/Graph/Utils/IO.h"
 #include "../../DataStructures/Queries/Queries.h"
@@ -379,7 +379,7 @@ public:
       std::cout << "Evaluation against TB:" << std::endl;
       TripBased::Data trip(evalFile);
       trip.printInfo();
-      TripBased::TransitiveQuery<TripBased::AggregateProfiler> tripAlgorithm(
+      TripBased::Query<TripBased::AggregateProfiler> tripAlgorithm(
           trip);
       std::vector<std::vector<std::pair<int, int>>> tripResult;
       tripResult.assign(n, {});

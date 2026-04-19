@@ -62,11 +62,11 @@ int main(int argc, char **argv) {
   new RunTREXQuery(shell);
   new RunTREXProfileQueries(shell);
 
-  new RunTransitiveRAPTORQueries(shell);
-  new RunOneTransitiveRAPTORQuery(shell);
-  new RunTransitiveTripBasedQueries(shell);
-  new RunTransitiveCSAQueries(shell);
-  new RunTransitiveProfileTripBasedQueries(shell);
+  new RunRAPTORQueries(shell);
+  new RunOneRAPTORQuery(shell);
+  new RunTripBasedQueries(shell);
+  new RunCSAQueries(shell);
+  new RunProfileTripBasedQueries(shell);
 
   new RunGeoRankedTripBasedQueries(shell);
   new RunGeoRankedTREXQueries(shell);
