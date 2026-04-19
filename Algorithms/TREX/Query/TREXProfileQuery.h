@@ -30,6 +30,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/RAPTOR/Entities/RouteSegment.h"
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../../Helpers/String/String.h"
+#include "../../TripBased/Query/Types.h"
 
 #ifdef USE_SIMD
 #include "../../TripBased/Query/ProfileReachedIndexSIMD.h"
@@ -57,12 +58,6 @@ public:
     using Type = TREXProfileQuery<Profiler>;
 
 private:
-    struct EventLookup {
-        StopId stop;
-        uint32_t arrTime;
-
-        EventLookup(const StopId stop = noStop, uint32_t arrTime = 0) : stop(stop), arrTime(arrTime) {}
-    };
     struct TripLabel {
         TripLabel(const StopEventId begin = noStopEvent, const StopEventId end = noStopEvent,
                   const u_int32_t parent = -1)
@@ -77,13 +72,6 @@ private:
 
         Edge begin;
         Edge end;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        u_int32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     struct TargetLabel {

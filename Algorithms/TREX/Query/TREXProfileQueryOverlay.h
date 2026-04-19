@@ -32,6 +32,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/RAPTOR/Entities/RouteSegment.h"
 #include "../../../DataStructures/TREX/TREXData.h"
 #include "../../../Helpers/String/String.h"
+#include "../../TripBased/Query/Types.h"
 
 #ifdef USE_SIMD
 #include "../../TripBased/Query/ProfileReachedIndexSIMD.h"
@@ -67,14 +68,6 @@ private:
         TripId trip;
         StopIndex stopIndex;
         int depTime;
-    };
-
-    // compact information for an event
-    struct EventLookup {
-        StopId stop;
-        uint32_t arrTime;
-
-        EventLookup(const StopId stop = noStop, uint32_t arrTime = 0) : stop(stop), arrTime(arrTime) {}
     };
 
     struct QueueElementTargetCell {
@@ -145,13 +138,6 @@ private:
         EdgeRange() : begin(noEdge), end(noEdge) {}
         Edge begin;
         Edge end;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        uint32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     struct TargetLabel {

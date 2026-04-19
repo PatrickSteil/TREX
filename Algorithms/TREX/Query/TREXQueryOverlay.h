@@ -57,14 +57,6 @@ public:
     using Type = TREXQueryOverlay<Profiler>;
 
 private:
-    // compact information for an event
-    struct EventLookup {
-        StopId stop;
-        uint32_t arrTime;
-
-        EventLookup(const StopId stop = noStop, uint32_t arrTime = 0) : stop(stop), arrTime(arrTime) {}
-    };
-
     struct QueueElementTargetCell {
         QueueElementTargetCell(const StopEventId begin = noStopEvent, const StopEventId end = noStopEvent,
                                const uint32_t originalId = 0)
@@ -133,13 +125,6 @@ private:
         EdgeRange() : begin(noEdge), end(noEdge) {}
         Edge begin;
         Edge end;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        uint32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     struct TargetLabel {

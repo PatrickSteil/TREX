@@ -31,6 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../DataStructures/TripBased/Data.h"
 #include "../../TripBased/Query/Profiler.h"
 #include "../../TripBased/Query/ReachedIndex.h"
+#include "../../TripBased/Query/Types.h"
 
 // NOTE: die Länge der extracted paths stimmt nicht, weil ich beim entpacken
 // aufhöre sobald ich etwas sehe was ich vorher bereits schon entpackt habe
@@ -68,13 +69,6 @@ private:
         StopEventId stopEvent;
         TripId trip;
         StopEventId firstEvent;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        u_int32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     // Stores the shortcut information, which we insert into the

@@ -53,13 +53,6 @@ public:
     using Type = TREXQuery<Profiler>;
 
 private:
-    struct EventLookup {
-        StopId stop;
-        uint32_t arrTime;
-
-        EventLookup(const StopId stop = noStop, uint32_t arrTime = 0) : stop(stop), arrTime(arrTime) {}
-    };
-
     struct TripLabel {
         TripLabel(const StopEventId begin = noStopEvent, const StopEventId end = noStopEvent,
                   const u_int32_t parent = -1)
@@ -73,13 +66,6 @@ private:
         EdgeRange() : begin(noEdge), end(noEdge) {}
         Edge begin;
         Edge end;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        u_int32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     struct TargetLabel {

@@ -33,6 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../../Helpers/String/String.h"
 #include "../../TripBased/Query/ProfileReachedIndexSIMD.h"
 #include "../../TripBased/Query/Profiler.h"
+#include "../../TripBased/Query/Types.h"
 
 namespace TripBased {
 
@@ -66,13 +67,6 @@ private:
         StopEventId stopEvent;
         TripId trip;
         StopEventId firstEvent;
-    };
-
-    struct RouteLabel {
-        RouteLabel() : numberOfTrips(0) {}
-        inline StopIndex end() const noexcept { return StopIndex(departureTimes.size() / numberOfTrips); }
-        u_int32_t numberOfTrips;
-        std::vector<int> departureTimes;
     };
 
     struct TargetLabel {
