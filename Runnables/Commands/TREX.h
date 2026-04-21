@@ -40,6 +40,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Algorithms/TREX/Query/TREXQuery.h"
 #include "../../Algorithms/TREX/Query/TREXQueryOverlay.h"
 #include "../../Algorithms/TripBased/Preprocessing/StopEventGraphBuilder.h"
+#include "../../Algorithms/TripBased/Preprocessing/StopEventGraphBuilderEdgeList.h"
 #include "../../Algorithms/TripBased/Query/Query.h"
 #include "../../DataStructures/Graph/Graph.h"
 #include "../../DataStructures/Graph/Utils/IO.h"
@@ -901,5 +902,125 @@ public:
         progRedu.finished();
 
         std::cout << "Reduced Transfers:    " << bobTheBuilder.getStopEventGraph().numEdges() << std::endl;
+    };
+};
+
+class MeasureTransferGenerationTimeWindow : public ParameterizedCommand {
+public:
+    MeasureTransferGenerationTimeWindow(BasicShell& shell)
+        : ParameterizedCommand(shell, "measureTransferGenerationTimeWindow",
+                               "Given the TB data, this updates the transfer set "
+                               "of all trips operating in the time window.") {
+        addParameter("Input file (TREX Data)");
+        addParameter("Starting Hour", "7");
+        addParameter("Ending Hour", "9");
+        addParameter("Number of threads", "max");
+    }
+
+private:
+    inline int getNumberOfThreads() const noexcept {
+        if (getParameter("Number of threads") == "max") {
+            return numberOfCores();
+        } else {
+            return getParameter<int>("Number of threads");
+        }
+    }
+
+    std::unordered_set<std::uint32_t> selectAffectedTrips(const TripBased::Data& data, const int start, const int end) {
+        std::unordered_set<std::uint32_t> result;
+
+        for (size_t eventId(0); eventId < data.numberOfStopEvents(); ++eventId) {
+            auto& arrTime = data.arrivalTime(StopEventId(eventId));
+            auto& depTime = data.departureTime(StopEventId(eventId));
+
+            if ((start <= arrTime && arrTime <= end) || (start <= depTime && depTime <= end)) {
+                result.insert((std::uint32_t)data.tripOfStopEvent[eventId]);
+            }
+        }
+
+        return result;
+    }
+
+    virtual void execute() noexcept {
+        const std::string tbFile = getParameter("Input file (TREX Data)");
+        const int start = getParameter<int>("Starting Hour") * 60 * 60;
+        const int end = getParameter<int>("Ending Hour") * 60 * 60;
+
+        if (start > end) {
+            std::cout << "Times must be: 'Start < End'\n";
+            return;
+        }
+
+        const int numberOfThreads = getNumberOfThreads();
+        omp_set_num_threads(numberOfThreads);
+
+        TripBased::Data data(tbFile);
+        data.printInfo();
+
+        TransferGraph revTransferGraph = data.raptorData.transferGraph;
+        revTransferGraph.revert();
+
+        std::unordered_set<std::uint32_t> collectedTrips = selectAffectedTrips(data, start, end);
+        std::cout << "Got " << collectedTrips.size() << " many trips!" << std::endl;
+
+        std::vector<TripId> toProcessTrips(collectedTrips.begin(), collectedTrips.end());
+
+        const std::size_t numTrips = toProcessTrips.size();
+        {
+            std::vector<TripBased::StopEventGraphBuilder> builders(numberOfThreads,
+                                                                   TripBased::StopEventGraphBuilder(data));
+            omp_set_num_threads(numberOfThreads);
+
+            Progress progress(numTrips);
+
+#pragma omp for schedule(dynamic, 1)
+            for (size_t i = 0; i < numTrips; i++) {
+                int threadId = omp_get_thread_num();
+                assert((std::size_t)threadId < builders.size());
+                auto& builder = builders[threadId];
+
+                const TripId trip = toProcessTrips[i];
+                builder.generateFullTransfers(trip);
+                builder.reduceTransfers(trip);
+                progress++;
+            }
+
+            progress.finished();
+
+            std::size_t totalNumTransfer = 0;
+
+            for (const auto& bob : builders) {
+                totalNumTransfer += bob.getStopEventGraph().numEdges();
+            }
+            std::cout << "# Transfers:    " << totalNumTransfer << std::endl;
+        }
+        {
+            std::vector<TripBased::StopEventGraphBuilderEdgeList> builders(
+                numberOfThreads, TripBased::StopEventGraphBuilderEdgeList(data));
+            omp_set_num_threads(numberOfThreads);
+
+            Progress progress(numTrips);
+
+#pragma omp for schedule(dynamic, 1)
+            for (size_t i = 0; i < numTrips; i++) {
+                int threadId = omp_get_thread_num();
+                assert((std::size_t)threadId < builders.size());
+                auto& builder = builders[threadId];
+
+                const TripId trip = toProcessTrips[i];
+                builder.generateFullTransfers(trip);
+                builder.reduceTransfers(trip);
+                progress++;
+            }
+
+            progress.finished();
+
+            std::size_t totalNumTransfer = 0;
+
+            for (const auto& bob : builders) {
+                totalNumTransfer += bob.getStopEventGraph().numEdges();
+            }
+            std::cout << "# Transfers:    " << totalNumTransfer << std::endl;
+        }
     };
 };

@@ -37,14 +37,17 @@ private:
     public:
         StopLabel() : arrivalTime(INFTY), timestamp(0) {}
 
-        inline void checkTimestamp(const int newTimestamp) noexcept {
-            arrivalTime = (timestamp != newTimestamp) ? INFTY : arrivalTime;
-            timestamp = newTimestamp;
-        }
-
-        inline void update(const int newTimestamp, const int newArrivalTime) noexcept {
-            checkTimestamp(newTimestamp);
-            arrivalTime = std::min(arrivalTime, newArrivalTime);
+        inline bool update(const int newTimestamp, const int newArrivalTime) noexcept {
+            if (timestamp != newTimestamp) {
+                timestamp = newTimestamp;
+                arrivalTime = newArrivalTime;
+                return true;
+            }
+            if (arrivalTime > newArrivalTime) {
+                arrivalTime = newArrivalTime;
+                return true;
+            }
+            return false;
         }
 
         int arrivalTime;
@@ -155,20 +158,23 @@ public:
                 for (size_t j = data.numberOfStopsInTrip(toTrip) - toIndex - 1; j > 0; j--) {
                     const StopId destinationStop = toStops[j];
                     const int destinationArrivalTime = data.raptorData.stopEvents[toEvent + j].arrivalTime;
-                    labels[destinationStop].checkTimestamp(timestamp);
-                    if (labels[destinationStop].arrivalTime > destinationArrivalTime) {
-                        labels[destinationStop].arrivalTime = destinationArrivalTime;
-                        keep = true;
-                    }
+
+                    keep |= labels[destinationStop].update(timestamp, destinationArrivalTime);
+                    /* labels[destinationStop].checkTimestamp(timestamp); */
+                    /* if (labels[destinationStop].arrivalTime > destinationArrivalTime) { */
+                    /*     labels[destinationStop].arrivalTime = destinationArrivalTime; */
+                    /*     keep = true; */
+                    /* } */
                     for (const Edge edge : data.raptorData.transferGraph.edgesFrom(destinationStop)) {
                         const StopId arrivalStop = StopId(data.raptorData.transferGraph.get(ToVertex, edge));
                         const int arrivalTime =
                             destinationArrivalTime + data.raptorData.transferGraph.get(TravelTime, edge);
-                        labels[arrivalStop].checkTimestamp(timestamp);
-                        if (labels[arrivalStop].arrivalTime > arrivalTime) {
-                            labels[arrivalStop].arrivalTime = arrivalTime;
-                            keep = true;
-                        }
+                        keep |= labels[arrivalStop].update(timestamp, arrivalTime);
+                        /* labels[arrivalStop].checkTimestamp(timestamp); */
+                        /* if (labels[arrivalStop].arrivalTime > arrivalTime) { */
+                        /*     labels[arrivalStop].arrivalTime = arrivalTime; */
+                        /*     keep = true; */
+                        /* } */
                     }
                 }
                 if (keep) keepTransfers.emplace_back(transfer);
