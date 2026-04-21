@@ -926,19 +926,53 @@ private:
         }
     }
 
-    std::unordered_set<std::uint32_t> selectAffectedTrips(const TripBased::Data& data, const int start, const int end) {
-        std::unordered_set<std::uint32_t> result;
+    std::vector<TripId> selectAffectedTrips(const TripBased::Data& data, const int start, const int end) {
+        // unordered_set just to deduplicate, then we convert anyway — use a
+        // vector + sort + unique instead to avoid hashing overhead and get a
+        // cache-friendlier layout for the parallel loop below
+        std::vector<TripId> result;
+        result.reserve(256);
 
-        for (size_t eventId(0); eventId < data.numberOfStopEvents(); ++eventId) {
-            auto& arrTime = data.arrivalTime(StopEventId(eventId));
-            auto& depTime = data.departureTime(StopEventId(eventId));
+        for (size_t eventId = 0; eventId < data.numberOfStopEvents(); ++eventId) {
+            const auto arrTime = data.arrivalTime(StopEventId(eventId));
+            const auto depTime = data.departureTime(StopEventId(eventId));
 
             if ((start <= arrTime && arrTime <= end) || (start <= depTime && depTime <= end)) {
-                result.insert((std::uint32_t)data.tripOfStopEvent[eventId]);
+                result.push_back(TripId(data.tripOfStopEvent[eventId]));
             }
         }
 
+        std::sort(result.begin(), result.end());
+        result.erase(std::unique(result.begin(), result.end()), result.end());
         return result;
+    }
+
+    template <typename BuilderType>
+    std::size_t runBenchmark(const TripBased::Data& data, const std::vector<TripId>& trips, const int numberOfThreads,
+                             const int numCores, const int pinMultiplier) {
+        const std::size_t numTrips = trips.size();
+        std::atomic<std::size_t> totalEdges{0};
+        Progress progress(numTrips);
+
+#pragma omp parallel num_threads(numberOfThreads)
+        {
+            const int threadId = omp_get_thread_num();
+            pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+
+            BuilderType builder(data);
+
+#pragma omp for schedule(dynamic, 1) nowait
+            for (std::size_t i = 0; i < numTrips; i++) {
+                builder.generateFullTransfers(trips[i]);
+                builder.reduceTransfers(trips[i]);
+                progress++;
+            }
+
+            totalEdges.fetch_add(builder.getStopEventGraph().numEdges(), std::memory_order_relaxed);
+        }
+
+        progress.finished();
+        return totalEdges.load();
     }
 
     virtual void execute() noexcept {
@@ -952,75 +986,27 @@ private:
         }
 
         const int numberOfThreads = getNumberOfThreads();
-        omp_set_num_threads(numberOfThreads);
+        const int numCores = numberOfCores();
+        constexpr int pinMultiplier = 1;
 
         TripBased::Data data(tbFile);
         data.printInfo();
 
-        TransferGraph revTransferGraph = data.raptorData.transferGraph;
-        revTransferGraph.revert();
+        TripBased::ComputeStopEventGraphRouteBasedTimeWindow(data, start, end, numberOfThreads, pinMultiplier);
 
-        std::unordered_set<std::uint32_t> collectedTrips = selectAffectedTrips(data, start, end);
-        std::cout << "Got " << collectedTrips.size() << " many trips!" << std::endl;
-
-        std::vector<TripId> toProcessTrips(collectedTrips.begin(), collectedTrips.end());
-
-        const std::size_t numTrips = toProcessTrips.size();
+        /*
+        const std::vector<TripId> toProcessTrips = selectAffectedTrips(data, start, end);
+        std::cout << "Got " << toProcessTrips.size() << " many trips!\n";
         {
-            std::vector<TripBased::StopEventGraphBuilder> builders(numberOfThreads,
-                                                                   TripBased::StopEventGraphBuilder(data));
-            omp_set_num_threads(numberOfThreads);
-
-            Progress progress(numTrips);
-
-#pragma omp for schedule(dynamic, 1)
-            for (size_t i = 0; i < numTrips; i++) {
-                int threadId = omp_get_thread_num();
-                assert((std::size_t)threadId < builders.size());
-                auto& builder = builders[threadId];
-
-                const TripId trip = toProcessTrips[i];
-                builder.generateFullTransfers(trip);
-                builder.reduceTransfers(trip);
-                progress++;
-            }
-
-            progress.finished();
-
-            std::size_t totalNumTransfer = 0;
-
-            for (const auto& bob : builders) {
-                totalNumTransfer += bob.getStopEventGraph().numEdges();
-            }
-            std::cout << "# Transfers:    " << totalNumTransfer << std::endl;
+            const auto n = runBenchmark<TripBased::StopEventGraphBuilder>(data, toProcessTrips, numberOfThreads,
+                                                                          numCores, pinMultiplier);
+            std::cout << "# Transfers (StopEventGraphBuilder):         " << n << "\n";
         }
         {
-            std::vector<TripBased::StopEventGraphBuilderEdgeList> builders(
-                numberOfThreads, TripBased::StopEventGraphBuilderEdgeList(data));
-            omp_set_num_threads(numberOfThreads);
-
-            Progress progress(numTrips);
-
-#pragma omp for schedule(dynamic, 1)
-            for (size_t i = 0; i < numTrips; i++) {
-                int threadId = omp_get_thread_num();
-                assert((std::size_t)threadId < builders.size());
-                auto& builder = builders[threadId];
-
-                const TripId trip = toProcessTrips[i];
-                builder.generateFullTransfers(trip);
-                builder.reduceTransfers(trip);
-                progress++;
-            }
-
-            progress.finished();
-
-            std::size_t totalNumTransfer = 0;
-
-            for (const auto& bob : builders) {
-                totalNumTransfer += bob.getStopEventGraph().numEdges();
-            }
-            std::cout << "# Transfers:    " << totalNumTransfer << std::endl;
+            const auto n = runBenchmark<TripBased::StopEventGraphBuilderEdgeList>(data, toProcessTrips, numberOfThreads,
+                                                                                  numCores, pinMultiplier);
+            std::cout << "# Transfers (StopEventGraphBuilderEdgeList): " << n << "\n";
         }
-    };
+        */
+    }
 };

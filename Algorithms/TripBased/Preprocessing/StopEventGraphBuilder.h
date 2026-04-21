@@ -77,6 +77,51 @@ public:
     }
 
 public:
+    inline void generateRouteBasedTransfers(const RouteId fromRoute, const int timeWindowBegin,
+                                            const int timeWindowEnd) noexcept {
+        if (generatedTransfers.numEdges() > 1000000) {
+            generatedTransfers.clear();
+            generatedTransfers.addVertices(data.numberOfStopEvents());
+        }
+
+        const std::vector<RouteTransfer> routeTransfers = generateRouteTransfers(fromRoute);
+
+        const Range<TripId> allTrips = data.tripsOfRoute(fromRoute);
+        if (allTrips.empty()) return;
+
+        const StopIndex firstStop(0);
+        const StopIndex lastStop(data.numberOfStopsInRoute(fromRoute) - 1);
+        const TripId firstTrip = data.getEarliestTrip(fromRoute, firstStop, timeWindowBegin);
+        const TripId lastTrip = data.getLatestTrip(fromRoute, lastStop, timeWindowEnd);
+
+        if (firstTrip == noTripId || lastTrip == noTripId) return;
+        if (firstTrip > lastTrip) return;
+
+        for (TripId fromTrip(firstTrip); fromTrip <= lastTrip; ++fromTrip) {
+            RouteId toRoute = noRouteId;
+            std::vector<TripId> earliestTrip;
+            for (const RouteTransfer& routeTransfer : routeTransfers) {
+                if (routeTransfer.toRoute != toRoute) {
+                    toRoute = routeTransfer.toRoute;
+                    std::vector<TripId>(data.numberOfStopsInRoute(toRoute), noTripId).swap(earliestTrip);
+                }
+                const StopEventId fromEvent = data.getStopEventId(fromTrip, routeTransfer.fromIndex);
+                const int arrivalTime = data.raptorData.stopEvents[fromEvent].arrivalTime + routeTransfer.transferTime;
+                const TripId toTrip = data.getEarliestTrip(toRoute, routeTransfer.toIndex, arrivalTime);
+                if (toTrip >= earliestTrip[routeTransfer.toIndex]) continue;
+                if ((toRoute == fromRoute) && (toTrip >= fromTrip) &&
+                    (routeTransfer.toIndex >= routeTransfer.fromIndex))
+                    continue;
+                if (isUTurn(fromTrip, routeTransfer.fromIndex, toTrip, routeTransfer.toIndex)) continue;
+                for (StopIndex i = routeTransfer.toIndex; i < data.numberOfStopsInRoute(toRoute); i++) {
+                    earliestTrip[i] = std::min(earliestTrip[i], toTrip);
+                }
+                const StopEventId toEvent = data.getStopEventId(toTrip, routeTransfer.toIndex);
+                generatedTransfers.addEdge(Vertex(fromEvent), Vertex(toEvent));
+            }
+        }
+    }
+
     inline void generateRouteBasedTransfers(const RouteId fromRoute) noexcept {
         if (generatedTransfers.numEdges() > 1000000) {
             generatedTransfers.clear();
@@ -331,25 +376,24 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data) noexcept {
 
 inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int numberOfThreads,
                                             const int pinMultiplier = 1) noexcept {
-    Progress progress(data.numberOfRoutes());
     SimpleEdgeList stopEventGraph;
     stopEventGraph.addVertices(data.numberOfStopEvents());
 
     const int numCores = numberOfCores();
+    const size_t numberOfRoutes = data.numberOfRoutes();
     std::atomic<size_t> totalEdges{0};
 
-    omp_set_num_threads(numberOfThreads);
-#pragma omp parallel
+    std::vector<StopEventGraphBuilder> builders(numberOfThreads, StopEventGraphBuilder(data));
+
+    Progress progress(numberOfRoutes);
+
+#pragma omp parallel num_threads(numberOfThreads)
     {
-        int threadId = omp_get_thread_num();
+        const int threadId = omp_get_thread_num();
         pinThreadToCoreId((threadId * pinMultiplier) % numCores);
-        AssertMsg(omp_get_num_threads() == numberOfThreads,
-                  "Number of threads is " << omp_get_num_threads() << ", but should be " << numberOfThreads << "!");
+        auto& builder = builders[threadId];
 
-        StopEventGraphBuilder builder(data);
-        const size_t numberOfRoutes = data.numberOfRoutes();
-
-#pragma omp for schedule(dynamic, 1)
+#pragma omp for schedule(dynamic, 1) nowait
         for (size_t i = 0; i < numberOfRoutes; i++) {
             const RouteId route = RouteId(i);
             builder.generateRouteBasedTransfers(route);
@@ -357,8 +401,7 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int num
             progress++;
         }
 
-        const size_t localEdges = builder.getStopEventGraph().numEdges();
-        totalEdges.fetch_add(localEdges, std::memory_order_relaxed);
+        totalEdges.fetch_add(builder.getStopEventGraph().numEdges(), std::memory_order_relaxed);
 
 #pragma omp barrier
 
@@ -375,7 +418,59 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int num
 
     Graph::move(std::move(stopEventGraph), data.stopEventGraph);
     data.stopEventGraph.sortEdges(ToVertex);
+
     progress.finished();
+}
+
+inline void ComputeStopEventGraphRouteBasedTimeWindow(TripBased::Data& data, const int timeWindowBegin,
+                                                      const int timeWindowEnd, const int numberOfThreads,
+                                                      const int pinMultiplier = 1) noexcept {
+    /* SimpleEdgeList stopEventGraph; */
+    /* stopEventGraph.addVertices(data.numberOfStopEvents()); */
+
+    const int numCores = numberOfCores();
+    const size_t numberOfRoutes = data.numberOfRoutes();
+    std::atomic<size_t> totalEdges{0};
+
+    std::vector<StopEventGraphBuilder> builders(numberOfThreads, StopEventGraphBuilder(data));
+
+    Progress progress(numberOfRoutes);
+
+#pragma omp parallel num_threads(numberOfThreads)
+    {
+        const int threadId = omp_get_thread_num();
+        pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+        auto& builder = builders[threadId];
+
+#pragma omp for schedule(dynamic, 1) nowait
+        for (size_t i = 0; i < numberOfRoutes; i++) {
+            const RouteId route = RouteId(i);
+            builder.generateRouteBasedTransfers(route, timeWindowBegin, timeWindowEnd);
+            builder.reduceTransfers(route);
+            progress++;
+        }
+
+        totalEdges.fetch_add(builder.getStopEventGraph().numEdges(), std::memory_order_relaxed);
+
+        /* #pragma omp barrier */
+
+        /* #pragma omp single */
+        /* { stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load()); } */
+
+        /* #pragma omp critical */
+        /* { */
+        /* for (const auto [edge, from] : builder.getStopEventGraph().edgesWithFromVertex()) { */
+        /* stopEventGraph.addEdge(from, builder.getStopEventGraph().get(ToVertex, edge)); */
+        /* } */
+        /* } */
+    }
+
+    /* Graph::move(std::move(stopEventGraph), data.stopEventGraph); */
+    /* data.stopEventGraph.sortEdges(ToVertex); */
+
+    progress.finished();
+
+    std::cout << "# Transfers:    " << totalEdges.load() << std::endl;
 }
 
 }  // namespace TripBased
