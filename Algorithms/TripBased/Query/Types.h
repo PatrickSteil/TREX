@@ -174,7 +174,7 @@ public:
           firstTripOfRoute(data.firstTripOfRoute),
           firstRouteSegmentOfStop(data.raptorData.firstRouteSegmentOfStop),
           routeSegments(data.raptorData.routeSegments),
-          firstStopIdOfRoute(data.firstStopIdOfTrip),
+          firstStopIdOfRoute(data.raptorData.firstStopIdOfRoute),
           routeStopSequences(data.raptorData.stopIds),
           routeLabels(data.numberOfRoutes()) {
         reverseTransferGraph.revert();
