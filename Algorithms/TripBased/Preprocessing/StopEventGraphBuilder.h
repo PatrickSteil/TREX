@@ -33,17 +33,16 @@ namespace TripBased {
 
 class StopEventGraphBuilder {
 private:
-    struct StopLabel {
+    struct alignas(8) StopLabel {
     public:
         StopLabel() : arrivalTime(INFTY), timestamp(0) {}
 
         inline bool update(const int newTimestamp, const int newArrivalTime) noexcept {
-            if (timestamp != newTimestamp) {
+            const bool newRound = (timestamp != newTimestamp);
+            const int current = newRound ? INFTY : arrivalTime;
+
+            if (current > newArrivalTime) {
                 timestamp = newTimestamp;
-                arrivalTime = newArrivalTime;
-                return true;
-            }
-            if (arrivalTime > newArrivalTime) {
                 arrivalTime = newArrivalTime;
                 return true;
             }
@@ -86,16 +85,15 @@ public:
 
         const std::vector<RouteTransfer> routeTransfers = generateRouteTransfers(fromRoute);
 
-        const Range<TripId> allTrips = data.tripsOfRoute(fromRoute);
-        if (allTrips.empty()) return;
-
         const StopIndex firstStop(0);
         const StopIndex lastStop(data.numberOfStopsInRoute(fromRoute) - 1);
         const TripId firstTrip = data.getEarliestTrip(fromRoute, firstStop, timeWindowBegin);
         const TripId lastTrip = data.getLatestTrip(fromRoute, lastStop, timeWindowEnd);
 
-        if (firstTrip == noTripId || lastTrip == noTripId) return;
-        if (firstTrip > lastTrip) return;
+        if (firstTrip == noTripId || lastTrip == noTripId) [[unlikely]]
+            return;
+        if (firstTrip > lastTrip) [[unlikely]]
+            return;
 
         for (TripId fromTrip(firstTrip); fromTrip <= lastTrip; ++fromTrip) {
             RouteId toRoute = noRouteId;
