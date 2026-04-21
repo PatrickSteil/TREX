@@ -90,7 +90,6 @@ int main(int argc, char** argv) {
 
     new CompareGeoToLength(shell);
 
-    new MeasureTransferGeneration(shell);
     new MeasureTransferGenerationTimeWindow(shell);
 
     shell.run();

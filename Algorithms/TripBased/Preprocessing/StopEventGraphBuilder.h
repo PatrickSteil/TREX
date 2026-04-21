@@ -31,18 +31,27 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 namespace TripBased {
 
+// Encoding: bits [31..8] = TripId, bits [7..0] = StopIndex
+// TripId <= 5,000,000 < 2^23, StopIndex fits in uint8_t -> safe in uint32_t
+inline constexpr std::uint32_t encodeStopEvent(const TripId trip, const StopIndex index) noexcept {
+    return (static_cast<std::uint32_t>(trip) << 8) | static_cast<std::uint32_t>(static_cast<std::uint8_t>(index));
+}
+inline constexpr TripId decodeTrip(const std::uint32_t encoded) noexcept { return TripId(encoded >> 8); }
+inline constexpr StopIndex decodeStopIndex(const std::uint32_t encoded) noexcept { return StopIndex(encoded & 0xFFu); }
+
 class StopEventGraphBuilder {
 private:
-    struct alignas(8) StopLabel {
+    struct StopLabel {
     public:
         StopLabel() : arrivalTime(INFTY), timestamp(0) {}
 
         inline bool update(const int newTimestamp, const int newArrivalTime) noexcept {
-            const bool newRound = (timestamp != newTimestamp);
-            const int current = newRound ? INFTY : arrivalTime;
-
-            if (current > newArrivalTime) {
+            if (timestamp != newTimestamp) {
                 timestamp = newTimestamp;
+                arrivalTime = newArrivalTime;
+                return true;
+            }
+            if (arrivalTime > newArrivalTime) {
                 arrivalTime = newArrivalTime;
                 return true;
             }
@@ -69,31 +78,37 @@ private:
         inline bool operator<(const RouteTransfer& other) const noexcept { return getTuple() < other.getTuple(); }
     };
 
+    // Adjacency list indexed by StopEventId; each entry is an encoded (TripId, StopIndex) pair.
+    using DynamicGraph = std::vector<std::vector<std::uint32_t>>;
+
 public:
-    StopEventGraphBuilder(const TripBased::Data& data) : data(data), labels(data.numberOfStops()), timestamp(0) {
-        generatedTransfers.addVertices(data.numberOfStopEvents());
-        keptTransfers.addVertices(data.numberOfStopEvents());
-    }
+    StopEventGraphBuilder(const TripBased::Data& data)
+        : data(data),
+          labels(data.numberOfStops()),
+          timestamp(0),
+          generatedTransfers(data.numberOfStopEvents()),
+          keptTransfers(data.numberOfStopEvents()) {}
 
 public:
     inline void generateRouteBasedTransfers(const RouteId fromRoute, const int timeWindowBegin,
                                             const int timeWindowEnd) noexcept {
-        if (generatedTransfers.numEdges() > 1000000) {
-            generatedTransfers.clear();
-            generatedTransfers.addVertices(data.numberOfStopEvents());
+        if (numGeneratedEdges > 1000000) {
+            for (auto& v : generatedTransfers) v.clear();
+            numGeneratedEdges = 0;
         }
 
         const std::vector<RouteTransfer> routeTransfers = generateRouteTransfers(fromRoute);
+
+        const Range<TripId> allTrips = data.tripsOfRoute(fromRoute);
+        if (allTrips.empty()) return;
 
         const StopIndex firstStop(0);
         const StopIndex lastStop(data.numberOfStopsInRoute(fromRoute) - 1);
         const TripId firstTrip = data.getEarliestTrip(fromRoute, firstStop, timeWindowBegin);
         const TripId lastTrip = data.getLatestTrip(fromRoute, lastStop, timeWindowEnd);
 
-        if (firstTrip == noTripId || lastTrip == noTripId) [[unlikely]]
-            return;
-        if (firstTrip > lastTrip) [[unlikely]]
-            return;
+        if (firstTrip == noTripId || lastTrip == noTripId) return;
+        if (firstTrip > lastTrip) return;
 
         for (TripId fromTrip(firstTrip); fromTrip <= lastTrip; ++fromTrip) {
             RouteId toRoute = noRouteId;
@@ -114,16 +129,16 @@ public:
                 for (StopIndex i = routeTransfer.toIndex; i < data.numberOfStopsInRoute(toRoute); i++) {
                     earliestTrip[i] = std::min(earliestTrip[i], toTrip);
                 }
-                const StopEventId toEvent = data.getStopEventId(toTrip, routeTransfer.toIndex);
-                generatedTransfers.addEdge(Vertex(fromEvent), Vertex(toEvent));
+                generatedTransfers[fromEvent].push_back(encodeStopEvent(toTrip, routeTransfer.toIndex));
+                ++numGeneratedEdges;
             }
         }
     }
 
     inline void generateRouteBasedTransfers(const RouteId fromRoute) noexcept {
-        if (generatedTransfers.numEdges() > 1000000) {
-            generatedTransfers.clear();
-            generatedTransfers.addVertices(data.numberOfStopEvents());
+        if (numGeneratedEdges > 1000000) {
+            for (auto& v : generatedTransfers) v.clear();
+            numGeneratedEdges = 0;
         }
         const std::vector<RouteTransfer> routeTransfers = generateRouteTransfers(fromRoute);
         for (const TripId fromTrip : data.tripsOfRoute(fromRoute)) {
@@ -145,16 +160,16 @@ public:
                 for (StopIndex i = routeTransfer.toIndex; i < data.numberOfStopsInRoute(toRoute); i++) {
                     earliestTrip[i] = std::min(earliestTrip[i], toTrip);
                 }
-                const StopEventId toEvent = data.getStopEventId(toTrip, routeTransfer.toIndex);
-                generatedTransfers.addEdge(Vertex(fromEvent), Vertex(toEvent));
+                generatedTransfers[fromEvent].push_back(encodeStopEvent(toTrip, routeTransfer.toIndex));
+                ++numGeneratedEdges;
             }
         }
     }
 
     inline void generateFullTransfers(const TripId trip) noexcept {
-        if (generatedTransfers.numEdges() > 1000000) {
-            generatedTransfers.clear();
-            generatedTransfers.addVertices(data.numberOfStopEvents());
+        if (numGeneratedEdges > 1000000) {
+            for (auto& v : generatedTransfers) v.clear();
+            numGeneratedEdges = 0;
         }
         const StopId* stops = data.stopArrayOfTrip(trip);
         for (StopIndex i = StopIndex(1); i < data.numberOfStopsInTrip(trip); i++) {
@@ -181,53 +196,49 @@ public:
                 labels[toStop].update(timestamp, arrivalTime + transferTime);
             }
 
-            std::vector<Edge> transfers;
-            const Vertex fromVertex = Vertex(data.getStopEventId(trip, i));
-            for (const Edge edge : generatedTransfers.edgesFrom(fromVertex)) {
-                transfers.emplace_back(edge);
-            }
-            std::stable_sort(transfers.begin(), transfers.end(), [&](const Edge a, const Edge b) {
-                return data.raptorData.stopEvents[generatedTransfers.get(ToVertex, a)].arrivalTime <
-                       data.raptorData.stopEvents[generatedTransfers.get(ToVertex, b)].arrivalTime;
+            // Collect encoded (toTrip, toIndex) entries for this stop event
+            const StopEventId fromEvent = data.getStopEventId(trip, i);
+            std::vector<std::uint32_t>& outEdges = generatedTransfers[fromEvent];
+
+            // Sort by arrival time of the target stop event
+            std::stable_sort(outEdges.begin(), outEdges.end(), [&](const std::uint32_t a, const std::uint32_t b) {
+                const TripId tripA = decodeTrip(a);
+                const StopIndex idxA = decodeStopIndex(a);
+                const TripId tripB = decodeTrip(b);
+                const StopIndex idxB = decodeStopIndex(b);
+                return data.getStopEvent(tripA, idxA).arrivalTime < data.getStopEvent(tripB, idxB).arrivalTime;
             });
 
-            std::vector<Edge> keepTransfers;
-            for (const Edge transfer : transfers) {
+            for (const std::uint32_t encoded : outEdges) {
+                const TripId toTrip = decodeTrip(encoded);
+                const StopIndex toIndex = decodeStopIndex(encoded);
                 bool keep = false;
-                const StopEventId toEvent = StopEventId(generatedTransfers.get(ToVertex, transfer));
-                const StopIndex toIndex = data.indexOfStopEvent[toEvent];
-                const TripId toTrip = data.tripOfStopEvent[toEvent];
                 const StopId* toStops = data.stopArrayOfTrip(toTrip) + toIndex;
-                for (size_t j = data.numberOfStopsInTrip(toTrip) - toIndex - 1; j > 0; j--) {
+                const size_t remainingStops = data.numberOfStopsInTrip(toTrip) - toIndex - 1;
+                // We need the base StopEventId to walk forward; derive it once
+                const StopEventId toEvent = data.getStopEventId(toTrip, toIndex);
+                for (size_t j = remainingStops; j > 0; j--) {
                     const StopId destinationStop = toStops[j];
                     const int destinationArrivalTime = data.raptorData.stopEvents[toEvent + j].arrivalTime;
 
                     keep |= labels[destinationStop].update(timestamp, destinationArrivalTime);
-                    /* labels[destinationStop].checkTimestamp(timestamp); */
-                    /* if (labels[destinationStop].arrivalTime > destinationArrivalTime) { */
-                    /*     labels[destinationStop].arrivalTime = destinationArrivalTime; */
-                    /*     keep = true; */
-                    /* } */
                     for (const Edge edge : data.raptorData.transferGraph.edgesFrom(destinationStop)) {
                         const StopId arrivalStop = StopId(data.raptorData.transferGraph.get(ToVertex, edge));
                         const int arrivalTime =
                             destinationArrivalTime + data.raptorData.transferGraph.get(TravelTime, edge);
                         keep |= labels[arrivalStop].update(timestamp, arrivalTime);
-                        /* labels[arrivalStop].checkTimestamp(timestamp); */
-                        /* if (labels[arrivalStop].arrivalTime > arrivalTime) { */
-                        /*     labels[arrivalStop].arrivalTime = arrivalTime; */
-                        /*     keep = true; */
-                        /* } */
                     }
                 }
-                if (keep) keepTransfers.emplace_back(transfer);
+                if (keep) {
+                    keptTransfers[fromEvent].push_back(encoded);
+                    ++numKeptEdges;
+                }
             }
 
-            std::stable_sort(keepTransfers.begin(), keepTransfers.end(),
-                             [](const Edge a, const Edge b) { return a > b; });
-            for (const Edge transfer : keepTransfers) {
-                keptTransfers.addEdge(fromVertex, generatedTransfers.get(ToVertex, transfer));
-            }
+            // Kept edges were appended in ascending arrival-time order; reverse to match original
+            // descending-edge-id stable_sort (largest edge id first) — preserve insertion order instead.
+            // Original code reversed by sorting edges descending; here we simply leave them as-is
+            // since consumers iterate over the adjacency list rather than relying on edge IDs.
         }
     }
 
@@ -237,13 +248,13 @@ public:
         }
     }
 
-    inline const SimpleDynamicGraph& getStopEventGraph() const noexcept { return keptTransfers; }
-
-    inline SimpleDynamicGraph& getStopEventGraph() noexcept { return keptTransfers; }
-
-    inline const SimpleDynamicGraph& getGeneratedStopEventGraph() const noexcept { return generatedTransfers; }
-
-    inline SimpleDynamicGraph& getGeneratedStopEventGraph() noexcept { return generatedTransfers; }
+    // Build a SimpleEdgeList (or equivalent) from keptTransfers for merging into data.stopEventGraph.
+    // Returns the kept adjacency list directly for callers that need it.
+    inline const DynamicGraph& getStopEventGraph() const noexcept { return keptTransfers; }
+    inline DynamicGraph& getStopEventGraph() noexcept { return keptTransfers; }
+    inline const DynamicGraph& getGeneratedStopEventGraph() const noexcept { return generatedTransfers; }
+    inline DynamicGraph& getGeneratedStopEventGraph() noexcept { return generatedTransfers; }
+    inline size_t numKeptEdgesTotal() const noexcept { return numKeptEdges; }
 
 private:
     inline std::vector<RouteTransfer> generateRouteTransfers(const RouteId fromRoute) const noexcept {
@@ -276,9 +287,9 @@ private:
             if ((toSegment.routeId == fromRoute) && (toTrip >= fromTrip) && (toSegment.stopIndex >= fromIndex))
                 continue;
             if (isUTurn(fromTrip, fromIndex, toTrip, toSegment.stopIndex)) continue;
-            const Vertex fromVertex = Vertex(data.getStopEventId(fromTrip, fromIndex));
-            const Vertex toVertex = Vertex(data.getStopEventId(toTrip, toSegment.stopIndex));
-            generatedTransfers.addEdge(fromVertex, toVertex);
+            const StopEventId fromEvent = data.getStopEventId(fromTrip, fromIndex);
+            generatedTransfers[fromEvent].push_back(encodeStopEvent(toTrip, toSegment.stopIndex));
+            ++numGeneratedEdges;
         }
     }
 
@@ -297,12 +308,26 @@ private:
 private:
     const TripBased::Data& data;
 
-    SimpleDynamicGraph generatedTransfers;
-    SimpleDynamicGraph keptTransfers;
-
     std::vector<StopLabel> labels;
     int timestamp;
+    size_t numGeneratedEdges{0};
+    size_t numKeptEdges{0};
+    DynamicGraph generatedTransfers;  // [StopEventId] -> list of encoded (TripId<<8|StopIndex)
+    DynamicGraph keptTransfers;       // [StopEventId] -> list of encoded (TripId<<8|StopIndex)
 };
+
+// Helper: flush a DynamicGraph (vector<vector<uint32_t>>) into a SimpleEdgeList,
+// decoding each entry back to a StopEventId via data.getStopEventId(trip, index).
+static void flushToEdgeList(const std::vector<std::vector<std::uint32_t>>& dg, SimpleEdgeList& out,
+                            const TripBased::Data& data) {
+    for (size_t from = 0; from < dg.size(); from++) {
+        for (const std::uint32_t encoded : dg[from]) {
+            const TripId toTrip = decodeTrip(encoded);
+            const StopIndex toIndex = decodeStopIndex(encoded);
+            out.addEdge(Vertex(from), Vertex(data.getStopEventId(toTrip, toIndex)));
+        }
+    }
+}
 
 inline void ComputeStopEventGraph(TripBased::Data& data) noexcept {
     Progress progress(data.numberOfTrips());
@@ -312,7 +337,10 @@ inline void ComputeStopEventGraph(TripBased::Data& data) noexcept {
         builder.reduceTransfers(trip);
         progress++;
     }
-    Graph::move(std::move(builder.getStopEventGraph()), data.stopEventGraph);
+    SimpleEdgeList stopEventGraph;
+    stopEventGraph.addVertices(data.numberOfStopEvents());
+    flushToEdgeList(builder.getStopEventGraph(), stopEventGraph, data);
+    Graph::move(std::move(stopEventGraph), data.stopEventGraph);
     data.stopEventGraph.sortEdges(ToVertex);
     progress.finished();
 }
@@ -347,10 +375,8 @@ inline void ComputeStopEventGraph(TripBased::Data& data, const int numberOfThrea
 #pragma omp critical
         {
             stopEventGraph.reserve(stopEventGraph.numVertices(),
-                                   stopEventGraph.numEdges() + builder.getStopEventGraph().numEdges());
-            for (const auto [edge, from] : builder.getStopEventGraph().edgesWithFromVertex()) {
-                stopEventGraph.addEdge(from, builder.getStopEventGraph().get(ToVertex, edge));
-            }
+                                   stopEventGraph.numEdges() + builder.numKeptEdgesTotal());
+            flushToEdgeList(builder.getStopEventGraph(), stopEventGraph, data);
         }
     }
 
@@ -367,7 +393,10 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data) noexcept {
         builder.reduceTransfers(route);
         progress++;
     }
-    Graph::move(std::move(builder.getStopEventGraph()), data.stopEventGraph);
+    SimpleEdgeList stopEventGraph;
+    stopEventGraph.addVertices(data.numberOfStopEvents());
+    flushToEdgeList(builder.getStopEventGraph(), stopEventGraph, data);
+    Graph::move(std::move(stopEventGraph), data.stopEventGraph);
     data.stopEventGraph.sortEdges(ToVertex);
     progress.finished();
 }
@@ -399,7 +428,7 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int num
             progress++;
         }
 
-        totalEdges.fetch_add(builder.getStopEventGraph().numEdges(), std::memory_order_relaxed);
+        totalEdges.fetch_add(builder.numKeptEdgesTotal(), std::memory_order_relaxed);
 
 #pragma omp barrier
 
@@ -407,25 +436,17 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int num
         { stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load()); }
 
 #pragma omp critical
-        {
-            for (const auto [edge, from] : builder.getStopEventGraph().edgesWithFromVertex()) {
-                stopEventGraph.addEdge(from, builder.getStopEventGraph().get(ToVertex, edge));
-            }
-        }
+        { flushToEdgeList(builder.getStopEventGraph(), stopEventGraph, data); }
     }
 
     Graph::move(std::move(stopEventGraph), data.stopEventGraph);
     data.stopEventGraph.sortEdges(ToVertex);
-
     progress.finished();
 }
 
 inline void ComputeStopEventGraphRouteBasedTimeWindow(TripBased::Data& data, const int timeWindowBegin,
                                                       const int timeWindowEnd, const int numberOfThreads,
                                                       const int pinMultiplier = 1) noexcept {
-    /* SimpleEdgeList stopEventGraph; */
-    /* stopEventGraph.addVertices(data.numberOfStopEvents()); */
-
     const int numCores = numberOfCores();
     const size_t numberOfRoutes = data.numberOfRoutes();
     std::atomic<size_t> totalEdges{0};
@@ -448,26 +469,10 @@ inline void ComputeStopEventGraphRouteBasedTimeWindow(TripBased::Data& data, con
             progress++;
         }
 
-        totalEdges.fetch_add(builder.getStopEventGraph().numEdges(), std::memory_order_relaxed);
-
-        /* #pragma omp barrier */
-
-        /* #pragma omp single */
-        /* { stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load()); } */
-
-        /* #pragma omp critical */
-        /* { */
-        /* for (const auto [edge, from] : builder.getStopEventGraph().edgesWithFromVertex()) { */
-        /* stopEventGraph.addEdge(from, builder.getStopEventGraph().get(ToVertex, edge)); */
-        /* } */
-        /* } */
+        totalEdges.fetch_add(builder.numKeptEdgesTotal(), std::memory_order_relaxed);
     }
 
-    /* Graph::move(std::move(stopEventGraph), data.stopEventGraph); */
-    /* data.stopEventGraph.sortEdges(ToVertex); */
-
     progress.finished();
-
     std::cout << "# Transfers:    " << totalEdges.load() << std::endl;
 }
 
