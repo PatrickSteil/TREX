@@ -798,6 +798,7 @@ public:
     inline EdgeAttributes& getEdgeAttributes() { return edgeAttributes; }
 
     inline const std::vector<Edge>& getBeginOut() const { return beginOut; }
+    inline std::vector<Edge>& getBeginOut() { return beginOut; }
 
     inline void prefetchBeginOut(const Vertex vertex) const noexcept { __builtin_prefetch(&beginOut[vertex]); }
 

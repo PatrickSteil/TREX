@@ -25,6 +25,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **********************************************************************************/
 #pragma once
 
+#include <algorithm>
+#include <execution>
+
 #include "../../../DataStructures/TripBased/Data.h"
 #include "../../../Helpers/Console/Progress.h"
 #include "../../../Helpers/MultiThreading.h"
@@ -40,7 +43,6 @@ inline constexpr TripId decodeTrip(const std::uint32_t encoded) noexcept { retur
 inline constexpr StopIndex decodeStopIndex(const std::uint32_t encoded) noexcept { return StopIndex(encoded & 0xFFu); }
 
 class StopEventGraphBuilder {
-private:
     struct StopLabel {
     public:
         StopLabel() : arrivalTime(INFTY), timestamp(0) {}
@@ -256,7 +258,6 @@ public:
     inline DynamicGraph& getGeneratedStopEventGraph() noexcept { return generatedTransfers; }
     inline size_t numKeptEdgesTotal() const noexcept { return numKeptEdges; }
 
-private:
     inline std::vector<RouteTransfer> generateRouteTransfers(const RouteId fromRoute) const noexcept {
         std::vector<RouteTransfer> routeTransfers;
         const StopId* stops = data.raptorData.stopArrayOfRoute(fromRoute);
@@ -305,9 +306,7 @@ private:
         return true;
     }
 
-private:
     const TripBased::Data& data;
-
     std::vector<StopLabel> labels;
     int timestamp;
     size_t numGeneratedEdges{0};
@@ -316,8 +315,81 @@ private:
     DynamicGraph keptTransfers;       // [StopEventId] -> list of encoded (TripId<<8|StopIndex)
 };
 
-// Helper: flush a DynamicGraph (vector<vector<uint32_t>>) into a SimpleEdgeList,
-// decoding each entry back to a StopEventId via data.getStopEventId(trip, index).
+inline void mergeAndBuildStopEventGraph(TripBased::Data& data, std::vector<TripBased::StopEventGraphBuilder>& builders,
+                                        TransferGraphWithLocalLevel& stopEventGraph) {
+    const size_t numVertices = stopEventGraph.numVertices();
+    const size_t numBuilders = builders.size();
+
+    std::vector<Edge> degree(numVertices, Edge(0));
+    std::vector<size_t> vertexIdx(numVertices);
+    std::iota(vertexIdx.begin(), vertexIdx.end(), size_t(0));
+
+#pragma omp parallel for
+    for (std::size_t b = 0; b < numBuilders; ++b) {
+        const auto& bob = builders[b];
+        for (std::size_t v = 0; v < numVertices; ++v) {
+            assert(v < bob.getStopEventGraph().size());
+            if (bob.getStopEventGraph()[v].size() == 0) {
+                continue;
+            }
+
+            assert(v < degree.size());
+            degree[v] = Edge(bob.getStopEventGraph()[v].size());
+        }
+    }
+
+    std::vector<Edge> beginOut(numVertices + 1);
+    beginOut[0] = Edge(0);
+
+    std::exclusive_scan(std::execution::par, degree.begin(), degree.end(), beginOut.begin() + 1, Edge(0));
+
+    const size_t numEdges = static_cast<size_t>(beginOut[numVertices]);
+
+    std::vector<Vertex> toVertexVec(numEdges);
+    std::vector<int> travelTimeVec(numEdges, 0);           // zero-initialised
+    std::vector<std::uint8_t> localLevelVec(numEdges, 0);  // zero-initialised
+
+#pragma omp parallel for
+    for (std::size_t b = 0; b < numBuilders; ++b) {
+        const auto& bob = builders[b];
+        for (std::size_t v = 0; v < numVertices; ++v) {
+            assert(v < bob.getStopEventGraph().size());
+            if (bob.getStopEventGraph()[v].size() == 0) {
+                continue;
+            }
+
+            auto pos = beginOut[v];
+
+            for (auto encoded : bob.getStopEventGraph()[v]) {
+                const TripId trip = decodeTrip(encoded);
+                const StopIndex stopIndex = decodeStopIndex(encoded);
+                Vertex toEvent = Vertex(data.getStopEventId(trip, stopIndex));
+                assert(toEvent < numVertices);
+                AssertMsg(pos < toVertexVec.size(),
+                          "Position " << (int)pos << " is out of bounds! Size: " << toVertexVec.size());
+                toVertexVec[pos++] = toEvent;
+            }
+        }
+    }
+
+#pragma omp parallel for
+    for (size_t v = 0; v < numVertices; ++v) {
+        const size_t begin = beginOut[v];
+        const size_t end = beginOut[v + 1];
+
+        if (end - begin <= 1) continue;
+
+        std::sort(toVertexVec.begin() + begin, toVertexVec.begin() + end);
+    }
+
+    stopEventGraph.getBeginOut().swap(beginOut);
+    stopEventGraph.get(ToVertex).swap(toVertexVec);
+    stopEventGraph.get(TravelTime).swap(travelTimeVec);
+    stopEventGraph.get(LocalLevel).swap(localLevelVec);
+
+    AssertMsg(stopEventGraph.satisfiesInvariants(), "Invariants not satisfied after parallel merge!");
+}
+
 static void flushToEdgeList(const std::vector<std::vector<std::uint32_t>>& dg, SimpleEdgeList& out,
                             const TripBased::Data& data) {
     for (size_t from = 0; from < dg.size(); from++) {
@@ -403,12 +475,8 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data) noexcept {
 
 inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int numberOfThreads,
                                             const int pinMultiplier = 1) noexcept {
-    SimpleEdgeList stopEventGraph;
-    stopEventGraph.addVertices(data.numberOfStopEvents());
-
     const int numCores = numberOfCores();
     const size_t numberOfRoutes = data.numberOfRoutes();
-    std::atomic<size_t> totalEdges{0};
 
     std::vector<StopEventGraphBuilder> builders(numberOfThreads, StopEventGraphBuilder(data));
 
@@ -420,27 +488,20 @@ inline void ComputeStopEventGraphRouteBased(TripBased::Data& data, const int num
         pinThreadToCoreId((threadId * pinMultiplier) % numCores);
         auto& builder = builders[threadId];
 
-#pragma omp for schedule(dynamic, 1) nowait
+#pragma omp for schedule(dynamic, 1)
         for (size_t i = 0; i < numberOfRoutes; i++) {
-            const RouteId route = RouteId(i);
-            builder.generateRouteBasedTransfers(route);
-            builder.reduceTransfers(route);
+            builder.generateRouteBasedTransfers(RouteId(i));
+            builder.reduceTransfers(RouteId(i));
             progress++;
         }
-
-        totalEdges.fetch_add(builder.numKeptEdgesTotal(), std::memory_order_relaxed);
-
-#pragma omp barrier
-
-#pragma omp single
-        { stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load()); }
-
-#pragma omp critical
-        { flushToEdgeList(builder.getStopEventGraph(), stopEventGraph, data); }
     }
 
-    Graph::move(std::move(stopEventGraph), data.stopEventGraph);
-    data.stopEventGraph.sortEdges(ToVertex);
+    TransferGraphWithLocalLevel newGraph;
+    newGraph.addVertices(data.numberOfStopEvents());
+
+    mergeAndBuildStopEventGraph(data, builders, newGraph);
+
+    Graph::move(std::move(newGraph), data.stopEventGraph);
     progress.finished();
 }
 
@@ -449,7 +510,6 @@ inline void ComputeStopEventGraphRouteBasedTimeWindow(TripBased::Data& data, con
                                                       const int pinMultiplier = 1) noexcept {
     const int numCores = numberOfCores();
     const size_t numberOfRoutes = data.numberOfRoutes();
-    std::atomic<size_t> totalEdges{0};
 
     std::vector<StopEventGraphBuilder> builders(numberOfThreads, StopEventGraphBuilder(data));
 
@@ -468,12 +528,17 @@ inline void ComputeStopEventGraphRouteBasedTimeWindow(TripBased::Data& data, con
             builder.reduceTransfers(route);
             progress++;
         }
-
-        totalEdges.fetch_add(builder.numKeptEdgesTotal(), std::memory_order_relaxed);
     }
 
+    TransferGraphWithLocalLevel newGraph;
+    newGraph.addVertices(data.numberOfStopEvents());
+
+    mergeAndBuildStopEventGraph(data, builders, newGraph);
+    newGraph.sortEdges(ToVertex);
+    // we dont want to move, as it is partial
+    /* data.stopEventGraph = std::move(newGraph); */
+
     progress.finished();
-    std::cout << "# Transfers:    " << totalEdges.load() << std::endl;
 }
 
 }  // namespace TripBased
