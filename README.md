@@ -19,6 +19,7 @@ If you use this repository, please cite my work using
     language     = {english}
 }
 ```
+TODO: add ESA
 
 This code contains the following journey planning algorithms:
 
@@ -71,20 +72,21 @@ createCompactLayoutGraph ../Datasets/Karlsruhe/trex.binary ../Datasets/Karlsruhe
 ```
 The last command created the compact layout graph, which you can partition using e.g, MT-KaHyPar:
 ```
->>> ./../ExternalLibs/mt-kahypar/build/mt-kahypar/application/MtKaHyPar \
+>>> ./build/mt-kahypar/application/MtKaHyPar \
     -h [COMPACT_LAYOUT_GRAPH] \
     -k [1<< NUM_LEVELS e.g., 16] \
     -e [IMBALANCE e.g., 0.2] \
     -o cut \
-    -m rb \
     -t 6 \
-    --write-partition-file true \
-    --partition-output-folder [OUTPUTFOLDER] \
+    -m rb \
     --input-file-format metis \
-    --instance-type=graph \
+    --instance-type graph \
     --preset-type highest_quality \
     --i-r-flow-algo flow_cutter \
-    --i-r-refine-until-no-improvement true
+    --r-global-fm-type kway_fm \
+    --i-r-refine-until-no-improvement true \
+    --write-partition-file true \
+    --partition-output-folder [OUTPUTFOLDER]
 ```
 
 Then, again inside `./TREX`:
