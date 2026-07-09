@@ -32,8 +32,6 @@ This code contains the following journey planning algorithms:
  - TED (Time-Expanded Dijkstra)
  - PTL (Public Transit Labeling)
 
-as well as some ULTRA-Extensions for RAPTOR, TB and CSA. For more information, check out [ULTRA](https://github.com/kit-algo/ULTRA).
-
 ## How to use
 
 Clone the repo and all submodules using
@@ -97,8 +95,8 @@ customize ../Datasets/Karlsruhe/trex.binary ../Datasets/Karlsruhe/trex.binary
 showInfoOfTREX ../Datasets/Karlsruhe/trex.binary
 runTREXQueries ../Datasets/Karlsruhe/trex.binary 1000
 runTREXProfileQueries ../Datasets/Karlsruhe/trex.binary 1000
-runTransitiveTripBasedQueries ../Datasets/Karlsruhe/trex.binary.trip 1000
-runTransitiveRAPTORQueries /home/patrick/Documents/MLTB/Datasets/Karlsruhe/trex.binary.trip.raptor 1000
+runTripBasedQueries ../Datasets/Karlsruhe/trex.binary.trip 1000
+runRAPTORQueries /home/patrick/Documents/MLTB/Datasets/Karlsruhe/trex.binary.trip.raptor 1000
 ```
 
 which for example yields on my machine the following output:
@@ -176,7 +174,7 @@ Get Journeys: 501µs
 Scan trips: 10ms 573µs
 Total time: 11ms 306µs
 Avg. journeys: 40.67
-> runTransitiveTripBasedQueries ../Datasets/Karlsruhe/trex.binary.trip 1000
+> runTripBasedQueries ../Datasets/Karlsruhe/trex.binary.trip 1000
 Loading static graph from ../Datasets/Karlsruhe/trex.binary.trip.raptor.graph
 Loading static graph from ../Datasets/Karlsruhe/trex.binary.trip.graph
 (...)
@@ -192,7 +190,7 @@ Evaluate initial transfers: 9µs
 Scan trips: 1ms 410µs
 Total time: 1ms 425µs
 Avg. journeys: 1.60
-> runTransitiveRAPTORQueries /home/patrick/Documents/MLTB/Datasets/Karlsruhe/trex.binary.trip.raptor 1000
+> runRAPTORQueries /home/patrick/Documents/MLTB/Datasets/Karlsruhe/trex.binary.trip.raptor 1000
 Loading static graph from /home/patrick/Documents/MLTB/Datasets/Karlsruhe/trex.binary.trip.raptor.graph
 (...)
 Statistics:

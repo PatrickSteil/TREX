@@ -45,30 +45,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TripBased {
 
 struct PackedIBE {
-  uint32_t tripId : 24;
-  uint32_t stopIndex : 8;
+    uint32_t tripId : 24;
+    uint32_t stopIndex : 8;
 
-  constexpr PackedIBE(const TripId trip = noTripId,
-                      const StopIndex stop = noStopIndex)
-      : tripId(static_cast<uint32_t>(trip)),
-        stopIndex(static_cast<uint32_t>(stop)) {}
+    constexpr PackedIBE(const TripId trip = noTripId, const StopIndex stop = noStopIndex)
+        : tripId(static_cast<uint32_t>(trip)), stopIndex(static_cast<uint32_t>(stop)) {}
 
-  constexpr TripId getTripId() const noexcept { return TripId(tripId); }
+    constexpr TripId getTripId() const noexcept { return TripId(tripId); }
 
-  constexpr StopIndex getStopIndex() const noexcept {
-    return StopIndex(stopIndex);
-  }
+    constexpr StopIndex getStopIndex() const noexcept { return StopIndex(stopIndex); }
 
-  friend constexpr bool operator<(const PackedIBE &a,
-                                  const PackedIBE &b) noexcept {
-    return (static_cast<uint32_t>(a.tripId) << 8 | a.stopIndex) <
-           (static_cast<uint32_t>(b.tripId) << 8 | b.stopIndex);
-  }
+    friend constexpr bool operator<(const PackedIBE& a, const PackedIBE& b) noexcept {
+        return (static_cast<uint32_t>(a.tripId) << 8 | a.stopIndex) <
+               (static_cast<uint32_t>(b.tripId) << 8 | b.stopIndex);
+    }
 
-  friend constexpr bool operator==(const PackedIBE &a,
-                                   const PackedIBE &b) noexcept {
-    return a.tripId == b.tripId && a.stopIndex == b.stopIndex;
-  }
+    friend constexpr bool operator==(const PackedIBE& a, const PackedIBE& b) noexcept {
+        return a.tripId == b.tripId && a.stopIndex == b.stopIndex;
+    }
 };
 
 static_assert(sizeof(PackedIBE) == 4);
@@ -76,224 +70,199 @@ static_assert(std::is_trivially_copyable_v<PackedIBE>);
 
 class Builder {
 public:
-  Builder(TREXData &data, const int numberOfThreads = 1,
-          const int pinMultiplier = 1)
-      : data(data), numberOfThreads(numberOfThreads),
-        pinMultiplier(pinMultiplier),
-        edgeLabels(data.stopEventGraph.numEdges()),
-        routeLabels(data.raptorData.numberOfRoutes()),
-        cellIdOfEvent(data.numberOfStopEvents()), seekers(), IBEs() {
-    // set number of threads
-    tbb::global_control c(tbb::global_control::max_allowed_parallelism,
-                          numberOfThreads);
-    omp_set_num_threads(numberOfThreads);
+    Builder(TREXData& data, const int numberOfThreads = 1, const int pinMultiplier = 1)
+        : data(data),
+          numberOfThreads(numberOfThreads),
+          pinMultiplier(pinMultiplier),
+          edgeLabels(data.stopEventGraph.numEdges()),
+          routeLabels(data.raptorData.numberOfRoutes()),
+          cellIdOfEvent(data.numberOfStopEvents()),
+          seekers(),
+          IBEs() {
+        // set number of threads
+        tbb::global_control c(tbb::global_control::max_allowed_parallelism, numberOfThreads);
+        omp_set_num_threads(numberOfThreads);
 
-    for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
-      const StopId stop = data.getStopOfStopEvent(StopEventId(event));
-      AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
-      cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
-    }
-
-    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      const StopEventId toStopEvent =
-          StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
-      AssertMsg(toStopEvent < data.numberOfStopEvents(),
-                "StopEventId is out of bounds?");
-      edgeLabels[edge].setTrip(
-          data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
-      edgeLabels[edge].setFirstEvent(
-          data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
-      edgeLabels[edge].setStopIndex(
-          StopIndex(toStopEvent - edgeLabels[edge].getFirstEvent()));
-
-      AssertMsg(cellIdOfEvent[from] == cellIdOfEvent[toStopEvent - 1],
-                "CellIDs should change during transfer!");
-    }
-
-    for (const RouteId route : data.raptorData.routes()) {
-      const size_t numberOfStops = data.numberOfStopsInRoute(route);
-      const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
-      const RAPTOR::StopEvent *stopEvents =
-          data.raptorData.firstTripOfRoute(route);
-      routeLabels[route].numberOfTrips = numberOfTrips;
-      routeLabels[route].departureTimes.resize((numberOfStops - 1) *
-                                               numberOfTrips);
-      for (size_t trip = 0; trip < numberOfTrips; trip++) {
-        for (size_t stopIndex = 0; stopIndex + 1 < numberOfStops; stopIndex++) {
-          routeLabels[route]
-              .departureTimes[(stopIndex * numberOfTrips) + trip] =
-              stopEvents[(trip * numberOfStops) + stopIndex].departureTime;
+        for (size_t event = 0; event < data.numberOfStopEvents(); ++event) {
+            const StopId stop = data.getStopOfStopEvent(StopEventId(event));
+            AssertMsg(data.raptorData.isStop(Vertex(stop)), "Stop is not a stop!");
+            cellIdOfEvent[event] = (uint16_t)data.getCellIdOfStop(stop);
         }
-      }
-    }
 
-    seekers.reserve(numberOfThreads);
-    for (int i = 0; i < numberOfThreads; ++i)
-      seekers.emplace_back(data, edgeLabels, routeLabels, cellIdOfEvent);
+        for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+            const StopEventId toStopEvent = StopEventId(data.stopEventGraph.get(ToVertex, edge) + 1);
+            AssertMsg(toStopEvent < data.numberOfStopEvents(), "StopEventId is out of bounds?");
+            edgeLabels[edge].setTrip(data.tripOfStopEvent[data.stopEventGraph.get(ToVertex, edge)]);
+            edgeLabels[edge].setFirstEvent(data.firstStopEventOfTrip[edgeLabels[edge].getTrip()]);
+            edgeLabels[edge].setStopIndex(StopIndex(toStopEvent - edgeLabels[edge].getFirstEvent()));
 
-    profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
-    profiler.registerPhases({
-        PHASE_TREX_COLLECT_IBES,
-        PHASE_TREX_SORT_IBES,
-        PHASE_TREX_FILTER_IBES,
-    });
-  }
-
-  inline void collectAllIBEsOnLowestLevel() noexcept {
-    profiler.startPhase();
-    IBEs.reserve(data.numberOfStopEvents());
-
-    // TODO to only allow 'time range based' IBE
-    /* int minTime = 7 * 60 * 60; */
-    /* int maxTime = 8 * 60 * 60; */
-
-    auto inSameCell = [&](auto a, auto b) {
-      return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b));
-    };
-
-    auto tripTooEarly = [&]([[maybe_unused]] auto trip,
-                            [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return minTime > event.departureTime; */
-      return false;
-    };
-
-    auto tripTooLate = [&]([[maybe_unused]] auto trip,
-                           [[maybe_unused]] auto stopIndex) {
-      /* auto& event = data.getStopEvent(trip, stopIndex); */
-      /* return event.departureTime > maxTime; */
-      return false;
-    };
-
-    for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
-      for (const RAPTOR::RouteSegment &route :
-           data.routesContainingStop(stop)) {
-        // EDGE CASE: a stop is not a border stop (of a route) if it's at either
-        // end (start or end)
-        if (route.stopIndex == 0)
-          continue;
-
-        // check if the next / previous stop in stop array of route is in
-        // another cell
-        RAPTOR::RouteSegment neighbourSeg(route.routeId,
-                                          StopIndex(route.stopIndex - 1));
-
-        // check if neighbour is *not* in the same cell
-        if (!inSameCell(stop,
-                        data.raptorData.stopOfRouteSegment(neighbourSeg))) {
-          // add all stop events of this route
-          for (TripId trip : data.tripsOfRoute(route.routeId)) {
-            if (tripTooEarly(trip, StopIndex(route.stopIndex - 1)))
-              continue;
-            if (tripTooLate(trip, StopIndex(route.stopIndex - 1)))
-              break;
-            profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
-            IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
-          }
+            AssertMsg(cellIdOfEvent[from] == cellIdOfEvent[toStopEvent - 1], "CellIDs should change during transfer!");
         }
-      }
+
+        for (const RouteId route : data.raptorData.routes()) {
+            const size_t numberOfStops = data.numberOfStopsInRoute(route);
+            const size_t numberOfTrips = data.raptorData.numberOfTripsInRoute(route);
+            const RAPTOR::StopEvent* stopEvents = data.raptorData.firstTripOfRoute(route);
+            routeLabels[route].numberOfTrips = numberOfTrips;
+            routeLabels[route].departureTimes.resize((numberOfStops - 1) * numberOfTrips);
+            for (size_t trip = 0; trip < numberOfTrips; trip++) {
+                for (size_t stopIndex = 0; stopIndex + 1 < numberOfStops; stopIndex++) {
+                    routeLabels[route].departureTimes[(stopIndex * numberOfTrips) + trip] =
+                        stopEvents[(trip * numberOfStops) + stopIndex].departureTime;
+                }
+            }
+        }
+
+        seekers.reserve(numberOfThreads);
+        for (int i = 0; i < numberOfThreads; ++i) seekers.emplace_back(data, edgeLabels, routeLabels, cellIdOfEvent);
+
+        profiler.registerMetrics({METRIC_TREX_COLLECTED_IBES});
+        profiler.registerPhases({
+            PHASE_TREX_COLLECT_IBES,
+            PHASE_TREX_SORT_IBES,
+            PHASE_TREX_FILTER_IBES,
+        });
     }
-    profiler.donePhase(PHASE_TREX_COLLECT_IBES);
-  }
 
-  inline void filterIrrelevantIBEs(uint8_t level) {
-    // 'level' denotes the level, for which we filter the IBEs
-    // ... in other word: after this method, IBEs should contain all IBEs which
-    // cross at this level, not lower levels
+    inline void collectAllIBEsOnLowestLevel() noexcept {
+        profiler.startPhase();
+        IBEs.reserve(data.numberOfStopEvents());
 
-    profiler.startPhase();
-    IBEs.erase(std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
-                              [&](const PackedIBE &ibe) {
-                                auto trip = ibe.getTripId();
-                                auto stopIndex = ibe.getStopIndex();
+        // TODO to only allow 'time range based' IBE
+        /* int minTime = 7 * 60 * 60; */
+        /* int maxTime = 8 * 60 * 60; */
 
-                                auto fromStop = data.getStop(trip, stopIndex);
-                                auto toStop = data.getStop(
-                                    trip, StopIndex(stopIndex + 1));
+        auto inSameCell = [&](auto a, auto b) { return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b)); };
 
-                                return !((data.getCellIdOfStop(fromStop) ^
-                                          data.getCellIdOfStop(toStop)) >>
-                                         level);
-                              }),
-               IBEs.end());
-    profiler.donePhase(PHASE_TREX_FILTER_IBES);
-  }
+        auto tripTooEarly = [&]([[maybe_unused]] auto trip, [[maybe_unused]] auto stopIndex) {
+            /* auto& event = data.getStopEvent(trip, stopIndex); */
+            /* return minTime > event.departureTime; */
+            return false;
+        };
 
-  template <bool SORT_IBES = true, bool VERBOSE = true>
-  inline void run() noexcept {
-    profiler.start();
-    collectAllIBEsOnLowestLevel();
+        auto tripTooLate = [&]([[maybe_unused]] auto trip, [[maybe_unused]] auto stopIndex) {
+            /* auto& event = data.getStopEvent(trip, stopIndex); */
+            /* return event.departureTime > maxTime; */
+            return false;
+        };
 
-    assert(!IBEs.empty());
+        for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
+            for (const RAPTOR::RouteSegment& route : data.routesContainingStop(stop)) {
+                // EDGE CASE: a stop is not a border stop (of a route) if it's at either
+                // end (start or end)
+                if (route.stopIndex == 0) continue;
 
-    if (SORT_IBES) {
-      profiler.startPhase();
-      /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
-       * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
-      ips4o::parallel::sort(
-          IBEs.begin(), IBEs.end(),
-          [](const PackedIBE &a, const PackedIBE &b) { return a < b; });
-      profiler.donePhase(PHASE_TREX_SORT_IBES);
+                // check if the next / previous stop in stop array of route is in
+                // another cell
+                RAPTOR::RouteSegment neighbourSeg(route.routeId, StopIndex(route.stopIndex - 1));
+
+                // check if neighbour is *not* in the same cell
+                if (!inSameCell(stop, data.raptorData.stopOfRouteSegment(neighbourSeg))) {
+                    // add all stop events of this route
+                    for (TripId trip : data.tripsOfRoute(route.routeId)) {
+                        if (tripTooEarly(trip, StopIndex(route.stopIndex - 1))) continue;
+                        if (tripTooLate(trip, StopIndex(route.stopIndex - 1))) break;
+                        profiler.countMetric(METRIC_TREX_COLLECTED_IBES);
+                        IBEs.emplace_back(trip, StopIndex(route.stopIndex - 1));
+                    }
+                }
+            }
+        }
+        profiler.donePhase(PHASE_TREX_COLLECT_IBES);
     }
-    const int numCores = numberOfCores();
 
-    // now for every level, we have an invariant: IBEs contains exactly the IBEs
-    // we need on this level
-    for (uint8_t level(0); level < data.getNumberOfLevels(); ++level) {
-      if (VERBOSE)
-        std::cout << "Starting Level " << (int)level
-                  << " [IBEs: " << IBEs.size() << "]... " << std::endl;
+    inline void filterIrrelevantIBEs(uint8_t level) {
+        // 'level' denotes the level, for which we filter the IBEs
+        // ... in other word: after this method, IBEs should contain all IBEs which
+        // cross at this level, not lower levels
 
-      Progress progress(IBEs.size());
+        profiler.startPhase();
+        IBEs.erase(
+            std::remove_if(std::execution::par, IBEs.begin(), IBEs.end(),
+                           [&](const PackedIBE& ibe) {
+                               auto trip = ibe.getTripId();
+                               auto stopIndex = ibe.getStopIndex();
+
+                               auto fromStop = data.getStop(trip, stopIndex);
+                               auto toStop = data.getStop(trip, StopIndex(stopIndex + 1));
+
+                               return !((data.getCellIdOfStop(fromStop) ^ data.getCellIdOfStop(toStop)) >> level);
+                           }),
+            IBEs.end());
+        profiler.donePhase(PHASE_TREX_FILTER_IBES);
+    }
+
+    template <bool SORT_IBES = true, bool VERBOSE = true>
+    inline void run() noexcept {
+        profiler.start();
+        collectAllIBEsOnLowestLevel();
+
+        assert(!IBEs.empty());
+
+        if (SORT_IBES) {
+            profiler.startPhase();
+            /* std::sort(std::execution::par, IBEs.begin(), IBEs.end(), [](const
+             * PackedIBE &a, const PackedIBE &b) { return a < b; }); */
+            ips4o::parallel::sort(IBEs.begin(), IBEs.end(),
+                                  [](const PackedIBE& a, const PackedIBE& b) { return a < b; });
+            profiler.donePhase(PHASE_TREX_SORT_IBES);
+        }
+        const int numCores = numberOfCores();
+
+        // now for every level, we have an invariant: IBEs contains exactly the IBEs
+        // we need on this level
+        for (uint8_t level(0); level < data.getNumberOfLevels(); ++level) {
+            if (VERBOSE)
+                std::cout << "Starting Level " << (int)level << " [IBEs: " << IBEs.size() << "]... " << std::endl;
+
+            Progress progress(IBEs.size());
 
 #pragma omp parallel
-      {
+            {
 #pragma omp for schedule(dynamic)
-        for (size_t i = 0; i < IBEs.size(); ++i) {
-          int threadId = omp_get_thread_num();
-          pinThreadToCoreId((threadId * pinMultiplier) % numCores);
-          AssertMsg(omp_get_num_threads() == numberOfThreads,
-                    "Number of threads is " << omp_get_num_threads()
-                                            << ", but should be "
-                                            << numberOfThreads << "!");
+                for (size_t i = 0; i < IBEs.size(); ++i) {
+                    int threadId = omp_get_thread_num();
+                    pinThreadToCoreId((threadId * pinMultiplier) % numCores);
+                    AssertMsg(omp_get_num_threads() == numberOfThreads,
+                              "Number of threads is " << omp_get_num_threads() << ", but should be " << numberOfThreads
+                                                      << "!");
 
-          const auto &ibe = IBEs[i];
-          seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
-          ++progress;
+                    const auto& ibe = IBEs[i];
+                    seekers[threadId].run(ibe.getTripId(), ibe.getStopIndex(), level);
+                    ++progress;
+                }
+            }
+
+            progress.finished();
+
+            if (level < data.getNumberOfLevels() - 1) filterIrrelevantIBEs(level + 1);
+
+            if (VERBOSE) {
+                std::cout << "done!\n";
+            }
         }
-      }
 
-      progress.finished();
-
-      if (level < data.getNumberOfLevels() - 1)
-        filterIrrelevantIBEs(level + 1);
-
-      if (VERBOSE) {
-        std::cout << "done!\n";
-      }
-    }
-
-    const std::size_t numEdges = data.stopEventGraph.numEdges();
+        const std::size_t numEdges = data.stopEventGraph.numEdges();
 #pragma omp parallel for
-    for (Edge edge = Edge(0); edge < numEdges; ++edge) {
-      data.stopEventGraph.set(LocalLevel, edge, edgeLabels[edge].getRank());
+        for (Edge edge = Edge(0); edge < numEdges; ++edge) {
+            data.stopEventGraph.set(LocalLevel, edge, edgeLabels[edge].getRank());
+        }
+
+        profiler.done();
     }
 
-    profiler.done();
-  }
+    inline AggregateProfiler& getProfiler() noexcept { return profiler; }
 
-  inline AggregateProfiler &getProfiler() noexcept { return profiler; }
+    TREXData& data;
+    const int numberOfThreads;
+    const int pinMultiplier;
+    std::vector<EdgeLabel> edgeLabels;
+    std::vector<RouteLabel> routeLabels;
+    std::vector<uint16_t> cellIdOfEvent;
 
-  TREXData &data;
-  const int numberOfThreads;
-  const int pinMultiplier;
-  std::vector<EdgeLabel> edgeLabels;
-  std::vector<RouteLabel> routeLabels;
-  std::vector<uint16_t> cellIdOfEvent;
-
-  /* std::vector<TransferSearch<TripBased::AggregateProfiler>> seekers; */
-  std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
-  std::vector<PackedIBE> IBEs;
-  AggregateProfiler profiler;
+    /* std::vector<TransferSearch<TripBased::AggregateProfiler>> seekers; */
+    std::vector<TransferSearch<TripBased::NoProfiler>> seekers;
+    std::vector<PackedIBE> IBEs;
+    AggregateProfiler profiler;
 };
-} // namespace TripBased
+}  // namespace TripBased
