@@ -1335,6 +1335,122 @@ private:
   }
 
 public:
+  inline void createGraphForMETIS(const int TYPE = 0,
+                                  const bool verbose = true) {
+    if (verbose) {
+      std::cout << "METIS-Graph creating with:\n";
+      if (TYPE & TRIP_WEIGHTED)
+        std::cout << "\ttrip weighted\n";
+      if (TYPE & TRANSFER_WEIGHTED)
+        std::cout << "\ttransfer weighted\n";
+      if (TYPE & NODE_TRIPS_WEIGHTED)
+        std::cout << "\tnode weighted by amount of trips through it\n";
+    }
+    layoutGraph.clear();
+    layoutGraph.addVertices(stopData.size());
+    // layoutGraph.addVertices(transferGraph.numVertices());
+
+    for (Vertex vertex : layoutGraph.vertices()) {
+      layoutGraph.set(Weight, vertex, 1);
+      layoutGraph.set(Coordinates, vertex, stopData[vertex].coordinates);
+      // layoutGraph.set(Size, vertex, stopData[vertex].partition);
+    }
+
+    size_t amountOfWork = numberOfRoutes();
+
+    if (TYPE & TRANSFER_WEIGHTED)
+      amountOfWork += transferGraph.numEdges();
+
+    Progress progCreatingGraph(amountOfWork);
+
+    for (const RouteId route : routes()) {
+      SubRange<std::vector<StopId>> stopsInCurrentRoute = stopsOfRoute(route);
+      size_t numberOfTrips = numberOfTripsInRoute(route);
+
+      if (TYPE & NODE_TRIPS_WEIGHTED)
+        layoutGraph.set(
+            Weight, Vertex(stopsInCurrentRoute[0]),
+            layoutGraph.get(Weight, Vertex(stopsInCurrentRoute[0])) +
+                numberOfTrips);
+
+      for (size_t i(1); i < stopsInCurrentRoute.size(); ++i) {
+        if (stopsInCurrentRoute[i] == stopsInCurrentRoute[i - 1])
+          continue;
+        AssertMsg(layoutGraph.isVertex(stopsInCurrentRoute[i]),
+                  "Current Stop is not a valid vertex!\n");
+        if (TYPE & NODE_TRIPS_WEIGHTED)
+          layoutGraph.set(
+              Weight, Vertex(stopsInCurrentRoute[i]),
+              layoutGraph.get(Weight, Vertex(stopsInCurrentRoute[i])) +
+                  numberOfTrips);
+
+        Edge edgeHeadTail = layoutGraph.findEdge(
+            Vertex(stopsInCurrentRoute[i - 1]), Vertex(stopsInCurrentRoute[i]));
+        if (edgeHeadTail != noEdge) {
+          if (TYPE & TRIP_WEIGHTED) {
+            layoutGraph.set(Weight, edgeHeadTail,
+                            layoutGraph.get(Weight, edgeHeadTail) +
+                                numberOfTrips);
+            Edge edgeTailHead =
+                layoutGraph.findEdge(Vertex(stopsInCurrentRoute[i]),
+                                     Vertex(stopsInCurrentRoute[i - 1]));
+            AssertMsg(edgeTailHead != noEdge,
+                      "A reverse edge is missing between "
+                          << stopsInCurrentRoute[i - 1] << " and "
+                          << stopsInCurrentRoute[i] << "\n");
+            layoutGraph.set(Weight, edgeTailHead,
+                            layoutGraph.get(Weight, edgeTailHead) +
+                                numberOfTrips);
+          }
+        } else {
+          layoutGraph
+              .addEdge(Vertex(stopsInCurrentRoute[i - 1]),
+                       Vertex(stopsInCurrentRoute[i]))
+              .set(Weight, 1);
+          layoutGraph
+              .addEdge(Vertex(stopsInCurrentRoute[i]),
+                       Vertex(stopsInCurrentRoute[i - 1]))
+              .set(Weight, 1);
+        }
+      }
+      progCreatingGraph++;
+    }
+
+    if (TYPE & TRANSFER_WEIGHTED) {
+      for (const auto [transferEdge, from] :
+           transferGraph.edgesWithFromVertex()) {
+        Vertex to = transferGraph.get(ToVertex, transferEdge);
+        if (to == Vertex(from))
+          continue;
+        AssertMsg(layoutGraph.isVertex(from),
+                  "from Vertex is not a valid Vertex!\n");
+        AssertMsg(layoutGraph.isVertex(to),
+                  "to Vertex is not a valid Vertex!\n");
+        Edge edge = layoutGraph.findEdge(Vertex(from), to);
+        Edge reverse = layoutGraph.findEdge(to, Vertex(from));
+        if (edge == noEdge) {
+          layoutGraph.addEdge(Vertex(from), to).set(Weight, 1);
+          layoutGraph.addEdge(to, Vertex(from)).set(Weight, 1);
+        } else {
+          layoutGraph.set(Weight, edge, layoutGraph.get(Weight, edge) + 1);
+          layoutGraph.set(Weight, reverse,
+                          layoutGraph.get(Weight, reverse) + 1);
+        }
+      }
+    }
+
+    progCreatingGraph.finished();
+
+    AssertMsg(!(layoutGraph.edges().size() & 1),
+              "The number of edges is uneven, thus we check that every edge "
+              "has a reverse edge in the graph!\n");
+    if (verbose) {
+      std::cout << "Graph has been created!\nNumber of vertices:\t"
+                << layoutGraph.numVertices() << "\nNumber of edges:\t"
+                << layoutGraph.edges().size() << "\n";
+    }
+  }
+
   inline void writeLayoutGraphToFile(const std::string &fileName,
                                      const int TYPE = 0,
                                      const bool verbose = true) {
@@ -1480,8 +1596,6 @@ public:
     metisFile.close();
     progWritingMETIS.finished();
 
-    Graph::toGML(fileName, layoutGraph);
-
     if (verbose) {
       std::cout << "Finished creating metis file " << fileName << ".metis\n";
       std::cout << "Finished creating graphml file " << fileName
@@ -1566,6 +1680,8 @@ public:
 
   bool implicitDepartureBufferTimes;
   bool implicitArrivalBufferTimes;
+
+  DynamicGraphWithWeightsAndCoordinatesAndSize layoutGraph;
 };
 
 } // namespace RAPTOR

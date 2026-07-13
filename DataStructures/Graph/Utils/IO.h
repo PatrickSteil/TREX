@@ -49,22 +49,36 @@ inline void fromDimacs(const std::string &fileBaseName, GRAPH &graph) noexcept {
   move(std::move(edgeList), graph);
 }
 
-template <typename GRAPH, typename WEIGHT_TYPE>
-inline void toDimacs(const std::string &fileBaseName, const GRAPH &graph,
-                     const std::vector<WEIGHT_TYPE> &weight) noexcept {
+template <typename GRAPH, typename WEIGHT_TYPE, typename VERTEX_WEIGHT_TYPE>
+inline void
+toDimacs(const std::string &fileBaseName, const GRAPH &graph,
+         const std::vector<WEIGHT_TYPE> &weight,
+         const std::vector<VERTEX_WEIGHT_TYPE> &vertexWeight) noexcept {
   std::ofstream grOs(fileBaseName + ".gr");
   AssertMsg(grOs, "Cannot create output stream for " << fileBaseName << ".gr");
   AssertMsg(grOs.is_open(),
             "Cannot open output stream for " << fileBaseName << ".gr");
   grOs << "p sp " << graph.numVertices() << " " << graph.numEdges()
        << std::endl;
+  // for (std::size_t v = 0; v < vertexWeight.size(); ++v) {
+  //   grOs << "n " << (v + 1) << " ";
+  //   if constexpr (std::is_same_v<WEIGHT_TYPE, uint8_t>) {
+  //     grOs << (int)vertexWeight[v];
+  //   } else {
+  //     grOs << vertexWeight[v];
+  //   }
+  //   grOs << "\n";
+  // }
+
   for (const auto [edge, from] : graph.edgesWithFromVertex()) {
-    grOs << "a " << (from + 1) << " " << (graph.get(ToVertex, edge) + 1) << " ";
-    if constexpr (std::is_same_v<WEIGHT_TYPE, uint8_t>) {
-      grOs << (int)weight[edge];
-    } else {
-      grOs << weight[edge];
-    }
+    grOs << "a " << (from + 1) << " " << (graph.get(ToVertex, edge) + 1)
+         << " 1";
+    // assert(edge < weight.size());
+    // if constexpr (std::is_same_v<WEIGHT_TYPE, uint8_t>) {
+    //   grOs << (int)weight[edge];
+    // } else {
+    //   grOs << weight[edge];
+    // }
     grOs << std::endl;
   }
   grOs.close();
@@ -91,7 +105,8 @@ inline void toDimacs(const std::string &fileBaseName, const GRAPH &graph,
 template <typename GRAPH>
 inline void toDimacs(const std::string &fileBaseName,
                      const GRAPH &graph) noexcept {
-  toDimacs(fileBaseName, graph, graph.get(Weight));
+  toDimacs(fileBaseName, graph, graph.getEdgeAttributes().get(Weight),
+           graph.getVertexAttributes().get(Weight));
 }
 
 // Patrick Steil - to export TB Data conviently with Arc-Flag Info
@@ -119,18 +134,30 @@ inline void toEdgeListCSV(const std::string &fileBaseName,
 
   csv << "FromVertex,ToVertex";
 
-  if constexpr (GRAPH::HasEdgeAttribute(TravelTime)) csv << ",TravelTime";
-  if constexpr (GRAPH::HasEdgeAttribute(Distance)) csv << ",Distance";
-  if constexpr (GRAPH::HasEdgeAttribute(ViaVertex)) csv << ",ViaVertex";
-  if constexpr (GRAPH::HasEdgeAttribute(Weight)) csv << ",Weight";
-  if constexpr (GRAPH::HasEdgeAttribute(Capacity)) csv << ",Capacity";
-  if constexpr (GRAPH::HasEdgeAttribute(BundleSize)) csv << ",BundleSize";
-  if constexpr (GRAPH::HasEdgeAttribute(ReverseEdge)) csv << ",ReverseEdge";
-  if constexpr (GRAPH::HasEdgeAttribute(EdgeFlags)) csv << ",EdgeFlags";
-  if constexpr (GRAPH::HasEdgeAttribute(ARCFlag)) csv << ",ARCFlag";
-  if constexpr (GRAPH::HasEdgeAttribute(LocalLevel)) csv << ",LocalLevel";
-  if constexpr (GRAPH::HasEdgeAttribute(Hop)) csv << ",Hop";
-  if constexpr (GRAPH::HasEdgeAttribute(StopVertex)) csv << ",StopVertexx";
+  if constexpr (GRAPH::HasEdgeAttribute(TravelTime))
+    csv << ",TravelTime";
+  if constexpr (GRAPH::HasEdgeAttribute(Distance))
+    csv << ",Distance";
+  if constexpr (GRAPH::HasEdgeAttribute(ViaVertex))
+    csv << ",ViaVertex";
+  if constexpr (GRAPH::HasEdgeAttribute(Weight))
+    csv << ",Weight";
+  if constexpr (GRAPH::HasEdgeAttribute(Capacity))
+    csv << ",Capacity";
+  if constexpr (GRAPH::HasEdgeAttribute(BundleSize))
+    csv << ",BundleSize";
+  if constexpr (GRAPH::HasEdgeAttribute(ReverseEdge))
+    csv << ",ReverseEdge";
+  if constexpr (GRAPH::HasEdgeAttribute(EdgeFlags))
+    csv << ",EdgeFlags";
+  if constexpr (GRAPH::HasEdgeAttribute(ARCFlag))
+    csv << ",ARCFlag";
+  if constexpr (GRAPH::HasEdgeAttribute(LocalLevel))
+    csv << ",LocalLevel";
+  if constexpr (GRAPH::HasEdgeAttribute(Hop))
+    csv << ",Hop";
+  if constexpr (GRAPH::HasEdgeAttribute(StopVertex))
+    csv << ",StopVertexx";
 
   csv << "\n";
 
@@ -226,9 +253,9 @@ inline void toGML(const std::string &fileBaseName,
            "attr.name=\"viavertex\" attr.type=\"int\"/>\n";
   if constexpr (GRAPH::HasEdgeAttribute(ARCFlag))
     gml << "        <key id=\"arcflag_e\" for=\"edge\" attr.name=\"arcflag\" "
-           "attr.type=\"string\"/>\n";  // I don't know how else to 'elegantly'
-                                        // store a vector of booleans inside
-                                        // graphml
+           "attr.type=\"string\"/>\n"; // I don't know how else to 'elegantly'
+                                       // store a vector of booleans inside
+                                       // graphml
   if constexpr (GRAPH::HasEdgeAttribute(LocalLevel))
     gml << "        <key id=\"locallevel_e\" for=\"edge\" "
            "attr.name=\"locallevel\" attr.type=\"int\"/>\n";
@@ -358,9 +385,9 @@ inline void fromStrasserBinary(const std::string &fileName, GRAPH &graph,
             static_cast<int>((geo_distance[i] * distanceFactor * 10) + 5) / 10);
       }
       if constexpr (GRAPH::HasEdgeAttribute(TravelTime)) {
-        graph.set(
-            TravelTime, edge,
-            static_cast<int>((travel_time[i] * timeFactor * 10) + 5) / 10);
+        graph.set(TravelTime, edge,
+                  static_cast<int>((travel_time[i] * timeFactor * 10) + 5) /
+                      10);
       }
       (void)edge;
     }
@@ -368,4 +395,4 @@ inline void fromStrasserBinary(const std::string &fileName, GRAPH &graph,
   Assert(graph.satisfiesInvariants());
 }
 
-}  // namespace Graph
+} // namespace Graph

@@ -4,7 +4,7 @@ FLAGS = -std=c++2b -pipe
 OPTIMIZATION = -march=native -O3
 OPTIMIZATION += -flto
 
-DEBUG = -rdynamic -Werror -Wno-pedantic -Wall -Wextra -Wparentheses \
+DEBUG = -rdynamic -Werror -Wno-pedantic -Wextra -Wparentheses \
         -Wfatal-errors -D_GLIBCXX_DEBUG -g -fno-omit-frame-pointer
 
 RELEASE = -ffast-math -ftree-vectorize -Wfatal-errors -DNDEBUG \

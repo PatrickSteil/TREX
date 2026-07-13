@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the target directory and URL
-TARGET_DIR="../Datasets/Karlsruhe/GTFS"
+TARGET_DIR="../../Datasets/Karlsruhe/GTFS"
 ZIP_URL="https://projekte.kvv-efa.de/GTFS/google_transit.zip"
 ZIP_FILE="$TARGET_DIR/google_transit.zip"
 

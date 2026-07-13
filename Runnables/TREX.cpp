@@ -92,6 +92,8 @@ int main(int argc, char **argv) {
   new CompareGeoToLength(shell);
 
   new MeasureTransferGeneration(shell);
+
+  new RunBackwardForwardSearch(shell);
   shell.run();
   return 0;
 }

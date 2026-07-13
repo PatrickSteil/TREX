@@ -3,7 +3,7 @@ I=$2
 D=$3
 echo "Partition $D into $N with imbalance of $I"
 
-./../ExternalLibs/mt-kahypar/build/mt-kahypar/application/MtKaHyPar \
+./~/Documents/mt-kahypar/build/mt-kahypar/application/MtKaHyPar \
     -h ~/Documents/Datasets/$D/TREX/compact_layout.graph.metis \
     -k $N \
     -e $I \

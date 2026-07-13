@@ -33,6 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <vector>
 
 #include "../../Algorithms/TREX/BorderStops.h"
+#include "../../Algorithms/TREX/Preprocessing/BackwardForwardSearch.h"
 #include "../../Algorithms/TREX/Preprocessing/BuilderIBEs.h"
 #include "../../Algorithms/TREX/Preprocessing/TBTEGraph.h"
 #include "../../Algorithms/TREX/Query/TREXProfileQuery.h"
@@ -189,7 +190,8 @@ public:
 
     if (writeDimacs) {
       Graph::toDimacs(metisFile, data.layoutGraph,
-                      data.layoutGraph.getEdgeAttributes().get(Weight));
+                      data.layoutGraph.getEdgeAttributes().get(Weight),
+                      data.layoutGraph.getVertexAttributes().get(Weight));
     }
 
     data.serialize(mltbFile);
@@ -324,7 +326,7 @@ public:
     size_t numberOfJourneys = 0;
 
     auto run = [&](auto &algo) {
-      algo.printMemoryConsumption();
+      // algo.printMemoryConsumption();
       size_t i(0);
       for (const StopQuery &query : queries) {
         if (verbose)
@@ -1111,4 +1113,24 @@ public:
     std::cout << "Reduced Transfers:    "
               << bobTheBuilder.getStopEventGraph().numEdges() << std::endl;
   };
+};
+
+class RunBackwardForwardSearch : public ParameterizedCommand {
+public:
+  RunBackwardForwardSearch(BasicShell &shell)
+      : ParameterizedCommand(shell, "runBackwardForwardSearch",
+                             "TODO write text") {
+    addParameter("TREX Binary");
+  }
+
+  virtual void execute() noexcept {
+    const std::string networkFile = getParameter("TREX Binary");
+
+    TripBased::TREXData data(networkFile);
+    TripBased::BackwardForwardSweeper algo(data);
+
+    algo.run();
+
+    algo.showStats();
+  }
 };
