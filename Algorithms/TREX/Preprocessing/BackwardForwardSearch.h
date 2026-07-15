@@ -6,6 +6,7 @@
 
 #include "../../../DataStructures/Container/Queue.h"
 #include "../../../DataStructures/TREX/TREXData.h"
+#include "../../../Helpers/Console/Progress.h"
 #include "../../../Helpers/cell_bits.h"
 #include "../../../Helpers/iota_ranger.h"
 
@@ -14,15 +15,12 @@
 // TODO
 // - add cell information
 // - handle "in between trips" (prop not)
-// - process all border stops -> done via BackwardForwardSweeper
 //
 // infos:
 // - man muss sich nicht die "inbetween" trip segmente anschauen, weil wenn die
 // einen transfer zum aktuellen trip segment haben, dann wurden sie erreicht
 
 namespace TripBased {
-
-constexpr bool DEBUG = true;
 
 struct IBEInfo {
   StopId stopId;
@@ -80,12 +78,6 @@ private:
     while (left < right) {
       for (std::size_t i = left; i < right; ++i) {
         const auto &element = queue[i];
-        //
-        // if (DEBUG) {
-        //   std::cout << "QueueElement [From " << (int)element.begin << " To "
-        //             << (int)element.end << "]\n";
-        // }
-
         const auto begin =
             revTransferGraph.beginEdgeFrom(Vertex(element.begin));
         const auto end = revTransferGraph.beginEdgeFrom(Vertex(element.end));
@@ -99,16 +91,6 @@ private:
       // now flag the transfers directly
       for (std::size_t i = left; i < right; ++i) {
         const auto &element = queue[i];
-
-        // if (DEBUG) {
-        //   const TripId trip = data.tripOfStopEvent[element.begin];
-        //   assert(trip != noTripId);
-        //   assert(trip == data.tripOfStopEvent[element.end - 1]);
-        //
-        //   std::cout << "Trip Segment [TripId " << (int)trip << ", Route "
-        //             << (int)data.routeOfTrip[trip] << "]\n";
-        // }
-
         flagTripSegment(element.begin, element.end, cellToSet);
         // TODO add check that end - 1 Event always must find parent, bcs we
         // added its trip Segment via it
@@ -123,22 +105,11 @@ private:
   void flagTripSegment(const StopEventId left, const StopEventId right,
                        const std::uint16_t cellToSet) {
     for (StopEventId e = left; e < right; ++e) {
-      // if (DEBUG) {
-      //   std::cout << "\tScan from event " << (int)e << " with transfer range
-      //   ["
-      //             << (int)(left) << ", " << (int)(right) << "]\n";
-      // }
-
       for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(e))) {
         StopEventId toEvent{data.stopEventGraph.get(ToVertex, edge)};
         assert(toEvent < data.numberOfStopEvents());
 
         if (reachedTimeStamp[toEvent] == timeStamp) {
-          // if (DEBUG) {
-          //   std::cout << "Found! from " << int(e) << " to " << int(toEvent)
-          //             << std::endl;
-          // }
-
           setFlag(edge, cellToSet);
           break;
         }
@@ -202,14 +173,22 @@ private:
     Graph::printInfo(revTransferGraph);
   }
 
-  std::vector<IBEInfo> collectAllIBEs() {
+  std::size_t collectAllIBEs(std::vector<IBEInfo> &IBEs) {
+
+    std::cout << "Collect all IBEs";
+    Progress progress(data.numberOfStops());
+
     auto inSameCell = [&](const StopId a, const StopId b) {
       return (data.getCellIdOfStop(a) == data.getCellIdOfStop(b));
     };
 
-    std::vector<IBEInfo> IBEs;
+    std::size_t nrOfBorderStops = 0;
+
+    bool isBorder = false;
 
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
+      isBorder = false;
+
       for (const RAPTOR::RouteSegment &route :
            data.routesContainingStop(stop)) {
         if (route.stopIndex == 0)
@@ -223,24 +202,30 @@ private:
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
             IBEs.emplace_back(stop, trip, StopIndex(route.stopIndex - 1));
           }
+
+          isBorder = true;
         }
       }
+      nrOfBorderStops += (int)isBorder;
+      ++progress;
     }
 
-    return IBEs;
-  }
+    std::sort(IBEs.begin(), IBEs.end(),
+              [&](const auto &left, const auto &right) {
+                StopEventId leftEvent =
+                    data.getStopEventId(left.tripId, left.stopIndex);
+                StopEventId rightEvent =
+                    data.getStopEventId(right.tripId, right.stopIndex);
 
-  void processStop(const std::vector<IBEInfo> &IBEs, const std::size_t left,
-                   const std::size_t right) {
-    if (left >= right)
-      return;
+                // groupy by stop, depTime, id
+                return std::tie(left.stopId, data.departureTime(leftEvent),
+                                leftEvent) <
+                       std::tie(right.stopId, data.departureTime(rightEvent),
+                                rightEvent);
+              });
 
-    if (DEBUG) {
-      std::cout << "Process batch " << left << " to " << right << " [Stop "
-                << (int)IBEs[left].stopId << "]" << std::endl;
-    }
-
-    search.run(IBEs, left, right);
+    progress.finished();
+    return nrOfBorderStops;
   }
 
 public:
@@ -253,9 +238,27 @@ public:
 
   const std::vector<std::uint32_t> &getFlags() const { return flags; }
 
-  void showStats() const {
-    constexpr int NUM_LEVELS = 16;
+  void setCellOwnFlags() {
+    std::cout << "Setting Cell-Own Flags";
+    Progress progress(data.stopEventGraph.numEdges());
+    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
+      const StopId fromStop = data.getStopOfStopEvent(StopEventId(from));
 
+#ifndef DEBUG
+      const StopId toStop = data.getStopOfStopEvent(StopEventId(from));
+      assert(data.getCellIdOfStop(fromStop) == data.getCellIdOfStop(toStop));
+#endif // !DEBUG
+
+      assert(edge < flags.size());
+      flags[edge] |= expand(data.getCellIdOfStop(fromStop));
+
+      ++progress;
+    }
+
+    progress.finished();
+  }
+
+  void showStats() const {
     std::uint64_t totalTransfers = flags.size();
     std::uint64_t totalBitsSet = 0;
     std::size_t zeroFlagTransfers = 0;
@@ -283,7 +286,7 @@ public:
 
     std::cout << "===== Flag Stats =====\n";
     std::cout << "Total transfers (edges):        " << totalTransfers << "\n";
-    std::cout << "Total bits set to true:          " << totalBitsSet << " / "
+    std::cout << "Total bits set to true:         " << totalBitsSet << " / "
               << totalTransfers * 32 << "\n";
     std::cout << "Bits set per transfer: min "
               << (totalTransfers == 0 ? 0 : minBitsSet) << ", max "
@@ -300,26 +303,21 @@ public:
   }
 
   void run() {
-    std::vector<IBEInfo> IBEs = collectAllIBEs();
+    setCellOwnFlags();
 
-    std::sort(IBEs.begin(), IBEs.end(),
-              [&](const auto &left, const auto &right) {
-                if (left.stopId != right.stopId)
-                  return left.stopId < right.stopId;
-                StopEventId leftEvent =
-                    data.getStopEventId(left.tripId, left.stopIndex);
-                StopEventId rightEvent =
-                    data.getStopEventId(right.tripId, right.stopIndex);
-
-                return std::tie(data.departureTime(leftEvent), leftEvent) <
-                       std::tie(data.departureTime(rightEvent), rightEvent);
-              });
+    std::vector<IBEInfo> IBEs{};
+    std::size_t nrOfBorderStops = collectAllIBEs(IBEs);
 
     if (IBEs.empty()) {
       std::cout << "Warning: No IBEs found!\n";
       return;
     }
 
+    std::cout << "Running Backward Forward Search\n";
+
+    Progress progress(nrOfBorderStops);
+
+    // this set the range [, ) that is departing at the same stop
     std::size_t left = 0;
     for (std::size_t right = 0; right < IBEs.size(); ++right) {
       const bool isLast = (right + 1 == IBEs.size());
@@ -327,10 +325,13 @@ public:
           !isLast && IBEs[right + 1].stopId != IBEs[left].stopId;
 
       if (isLast || stopChanges) {
-        processStop(IBEs, left, right + 1);
+        search.run(IBEs, left, right + 1);
         left = right + 1;
+        ++progress;
       }
     }
+
+    progress.finished();
   }
 };
 

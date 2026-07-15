@@ -431,7 +431,9 @@ ComputeStopEventGraphRouteBased(TripBased::Data &data,
 #pragma omp barrier
 
 #pragma omp single
-    { stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load()); }
+    {
+      stopEventGraph.reserve(stopEventGraph.numVertices(), totalEdges.load());
+    }
 
 #pragma omp critical
     {
