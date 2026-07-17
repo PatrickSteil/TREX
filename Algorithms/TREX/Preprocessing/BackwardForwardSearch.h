@@ -13,12 +13,10 @@
 #include "BuilderIBEs.h"
 
 // TODO
-// - add cell information
-// - handle "in between trips" (prop not)
-//
-// infos:
-// - man muss sich nicht die "inbetween" trip segmente anschauen, weil wenn die
-// einen transfer zum aktuellen trip segment haben, dann wurden sie erreicht
+// - dont consider transfers that lead to trip segements that are in the same
+// n'th queue
+// - 'cut' the search at borderstops
+// - check that A -> B .... C -> D and A -> E .... F -> D not set one and the
 
 namespace TripBased {
 
@@ -37,16 +35,31 @@ struct QueueElement {
       : begin(begin), end(end) {}
 };
 
+struct RoundToken {
+  // could be tighter, currently we limit the nr of rounds to 32
+  std::uint32_t layer : 8;
+  std::uint32_t searchId : 24;
+};
+
+// Ensure it stays exactly 32 bits for memory density
+static_assert(sizeof(RoundToken) == sizeof(std::uint32_t),
+              "RoundToken must be exactly 32 bits");
+
 class BackwardForwardSearch {
 private:
+  static constexpr int MAX_ROUNDS = 32;
   const TREXData &data;
   const TransferGraph &revTransferGraph;
   std::vector<std::uint32_t> &flags;
+  std::uint32_t rootCellId;
 
   PreallocatedQueue<QueueElement> queue;
 
-  std::uint32_t timeStamp;
-  std::vector<std::uint32_t> reachedTimeStamp;
+  // Changed from std::uint32_t to our custom packed struct
+  std::vector<RoundToken> round;
+
+  std::uint32_t searchId;
+  std::uint32_t currentRound;
 
 private:
   void setFlag(const Edge edge, const std::uint16_t cell) {
@@ -54,28 +67,89 @@ private:
     flags[edge] |= expand(cell);
   }
 
-  void clearNewRun() {
-    timeStamp++;
+  bool isVisitedInCurrentSearch(const StopEventId e) const {
+    return round[e].searchId == searchId;
+  }
 
-    if (timeStamp == 0) {
-      timeStamp = 1;
-      std::fill(reachedTimeStamp.begin(), reachedTimeStamp.end(), 0);
+  bool isInRootCell(const StopEventId e) const {
+    const StopId currentStop = data.getStopOfStopEvent(e);
+    return (data.getCellIdOfStop(currentStop) == rootCellId);
+  }
+
+  std::uint32_t getRoundLayer(const StopEventId e) const {
+    // Returns 0 if unvisited in this search, otherwise returns the 1-based
+    // layer index
+    return isVisitedInCurrentSearch(e) ? (round[e].layer + 1) : 0;
+  }
+
+  // [left, right)
+  void flagTripSegment(const StopEventId left, const StopEventId right) {
+    for (StopEventId e = left; e < right; ++e) {
+      for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(e))) {
+        StopEventId toEvent{data.stopEventGraph.get(ToVertex, edge)};
+        assert(toEvent < data.numberOfStopEvents());
+
+        std::uint32_t toRound = getRoundLayer(toEvent);
+        std::uint32_t eRound = getRoundLayer(e);
+
+        if (toRound != 0 && toRound < eRound) {
+          setFlag(edge, rootCellId);
+          break;
+        }
+      }
+    }
+  }
+
+  void enqueue(const StopEventId to) {
+    assert(to < data.tripOfStopEvent.size());
+
+    // 1) did we already see it?
+    if (isVisitedInCurrentSearch(to))
+      return;
+
+    // 2) does it reach into the "root" cell?
+    if (isInRootCell(to))
+      return;
+
+    const TripId trip = data.tripOfStopEvent[to];
+    const StopEventId first = data.firstStopEventOfTrip[trip];
+
+    StopEventId left = to;
+    round[left] = RoundToken{.layer = currentRound, .searchId = searchId};
+
+    while (left != first && !isVisitedInCurrentSearch(StopEventId(left - 1))) {
+      left = StopEventId(left - 1);
+      round[left] = RoundToken{.layer = currentRound, .searchId = searchId};
     }
 
-    queue.clear();
+    queue.emplace(left, StopEventId(to + 1));
   }
 
   void startBackward(const IBEInfo &ibe) {
-    const std::uint64_t cellToSet = data.getCellIdOfStop(ibe.stopId);
+    rootCellId = data.getCellIdOfStop(ibe.stopId);
 
-    clearNewRun();
-    StopEventId startingEvent = data.getStopEventId(ibe.tripId, ibe.stopIndex);
+    ++searchId;
+
+    if (searchId >= (1U << 24)) [[unlikely]] {
+      std::fill(round.begin(), round.end(), RoundToken{0, 0});
+      searchId = 1;
+    }
+
+    queue.clear();
+    currentRound = 0;
+
+    StopEventId startingEvent =
+        data.getStopEventId(ibe.tripId, StopIndex(ibe.stopIndex));
     enqueue(startingEvent);
 
     std::size_t left = 0;
     std::size_t right = queue.size();
 
     while (left < right) {
+      ++currentRound;
+      assert(currentRound < MAX_ROUNDS &&
+             "Number of rounds exceeded safety layer limit!");
+
       for (std::size_t i = left; i < right; ++i) {
         const auto &element = queue[i];
         const auto begin =
@@ -88,58 +162,13 @@ private:
         }
       }
 
-      // now flag the transfers directly
       for (std::size_t i = left; i < right; ++i) {
         const auto &element = queue[i];
-        flagTripSegment(element.begin, element.end, cellToSet);
-        // TODO add check that end - 1 Event always must find parent, bcs we
-        // added its trip Segment via it
+        flagTripSegment(element.begin, element.end);
       }
 
       left = right;
       right = queue.size();
-    }
-  }
-
-  // [left, right)
-  void flagTripSegment(const StopEventId left, const StopEventId right,
-                       const std::uint16_t cellToSet) {
-    for (StopEventId e = left; e < right; ++e) {
-      for (const Edge edge : data.stopEventGraph.edgesFrom(Vertex(e))) {
-        StopEventId toEvent{data.stopEventGraph.get(ToVertex, edge)};
-        assert(toEvent < data.numberOfStopEvents());
-
-        if (reachedTimeStamp[toEvent] == timeStamp) {
-          setFlag(edge, cellToSet);
-          break;
-        }
-      }
-    }
-  }
-
-  void enqueue(const StopEventId to) {
-    const TripId trip = data.tripOfStopEvent[to];
-    const StopEventId first = data.firstStopEventOfTrip[trip];
-
-    StopEventId left = to;
-
-    while (true) {
-      if (reachedTimeStamp[left] == timeStamp) {
-        ++left;
-        break;
-      }
-
-      reachedTimeStamp[left] = timeStamp;
-
-      if (left == first) {
-        break;
-      }
-
-      --left;
-    }
-
-    if (left <= to) {
-      queue.emplace(StopEventId(left), StopEventId(to + 1));
     }
   }
 
@@ -148,8 +177,8 @@ public:
                         const TransferGraph &revTransferGraph,
                         std::vector<std::uint32_t> &flags)
       : data(data), revTransferGraph(revTransferGraph), flags(flags),
-        timeStamp(1), reachedTimeStamp(data.numberOfStopEvents(), 0),
-        queue(data.numberOfStopEvents()) {}
+        rootCellId(0), round(data.numberOfStopEvents(), RoundToken{0, 0}),
+        searchId(1), currentRound(0), queue(data.numberOfStopEvents()) {}
 
   void run(const std::vector<IBEInfo> &IBEs, const std::size_t left,
            const std::size_t right) {
@@ -174,7 +203,6 @@ private:
   }
 
   std::size_t collectAllIBEs(std::vector<IBEInfo> &IBEs) {
-
     std::cout << "Collect all IBEs";
     Progress progress(data.numberOfStops());
 
@@ -196,9 +224,9 @@ private:
 
         RAPTOR::RouteSegment neighbourSeg(route.routeId,
                                           StopIndex(route.stopIndex - 1));
+        StopId prevStop = data.raptorData.stopOfRouteSegment(neighbourSeg);
 
-        if (!inSameCell(stop,
-                        data.raptorData.stopOfRouteSegment(neighbourSeg))) {
+        if (!inSameCell(stop, prevStop)) {
           for (TripId trip : data.tripsOfRoute(route.routeId)) {
             IBEs.emplace_back(stop, trip, StopIndex(route.stopIndex - 1));
           }
@@ -217,7 +245,6 @@ private:
                 StopEventId rightEvent =
                     data.getStopEventId(right.tripId, right.stopIndex);
 
-                // groupy by stop, depTime, id
                 return std::tie(left.stopId, data.departureTime(leftEvent),
                                 leftEvent) <
                        std::tie(right.stopId, data.departureTime(rightEvent),
@@ -302,6 +329,13 @@ public:
     std::cout << "\n=======================\n";
   }
 
+  void debug() {
+    std::vector<IBEInfo> IBEs = {
+        IBEInfo{StopId(1066), TripId(31041), StopIndex(15)}};
+
+    search.run(IBEs, 0, 1);
+  }
+
   void run() {
     setCellOwnFlags();
 
@@ -332,6 +366,23 @@ public:
     }
 
     progress.finished();
+  }
+
+  static void saveFlags(const std::string &fileName,
+                        const std::vector<std::uint32_t> &flags) {
+    IO::serialize(fileName, flags);
+  }
+
+  static std::vector<std::uint32_t> loadFlags(const std::string &fileName) {
+    std::vector<std::uint32_t> flags;
+    IO::deserialize(fileName, flags);
+
+    return flags;
+  }
+
+  void ingestFlags(const std::string &fileName) {
+    flags.clear();
+    IO::deserialize(fileName, flags);
   }
 };
 

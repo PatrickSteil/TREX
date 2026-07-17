@@ -433,8 +433,7 @@ private:
 
   inline bool pruneEdge(const std::size_t edge) const {
     assert(edge < flags.size());
-    // TODO currently hardcoded
-    return !((flags[edge] & targetCellExpanded) & (0b1111));
+    return !((flags[edge] & targetCellExpanded) == targetCellExpanded);
   }
 
   inline void addTargetLabel(const int newArrivalTime,

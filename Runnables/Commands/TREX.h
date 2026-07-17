@@ -358,9 +358,10 @@ public:
           result[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
 
-          if (verbose)
+          if (verbose) {
             std::cout << "Nr Trips: " << (int)arr.numberOfTrips
                       << ", Arr Time: " << (int)arr.arrivalTime << std::endl;
+          }
         }
 
         i += 1;
@@ -1131,17 +1132,14 @@ public:
     TripBased::BackwardForwardSweeper preproc(data);
 
     preproc.run();
+    preproc.saveFlags("flags.flags", preproc.getFlags());
+    // preproc.ingestFlags("flags.flags");
     preproc.showStats();
 
-    // TODO save the flags somehow
-    // TODO execute and compare some queries
-
-    const std::size_t n = 100;
-    const bool verbose = true;
-    // const std::vector<StopQuery> queries =
-    //     generateRandomStopQueries(data.numberOfStops(), n);
-    const std::vector<StopQuery> queries = {
-        StopQuery(StopId(755), StopId(1072), 33787)};
+    const std::size_t n = 1000;
+    const bool verbose = false;
+    const std::vector<StopQuery> queries =
+        generateRandomStopQueries(data.numberOfStops(), n);
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});
 
@@ -1162,11 +1160,13 @@ public:
           for (auto &journey : algo.getJourneys()) {
             std::cout << query << std::endl;
             for (auto &leg : journey) {
-              std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
+              std::cout << (int)leg.from << " [Cell: "
+                        << (int)data.getCellIdOfStop(StopId(leg.from))
+                        << " ] -> " << (int)leg.to << " [Cell: "
+                        << (int)data.getCellIdOfStop(StopId(leg.to)) << " ] @ "
                         << leg.departureTime << " -> " << leg.arrivalTime
                         << (leg.usesRoute ? ", route: " : ", transfer: ")
                         << (int)leg.routeId;
-
               std::cout << std::endl;
             }
             std::cout << std::endl;
@@ -1178,8 +1178,10 @@ public:
           result[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
 
-          std::cout << "Nr Trips: " << (int)arr.numberOfTrips
-                    << ", Arr Time: " << (int)arr.arrivalTime << std::endl;
+          if (verbose) {
+            std::cout << "Nr Trips: " << (int)arr.numberOfTrips
+                      << ", Arr Time: " << (int)arr.arrivalTime << std::endl;
+          }
         }
 
         i += 1;
@@ -1217,11 +1219,14 @@ public:
         for (auto &journey : tripAlgorithm.getJourneys()) {
           std::cout << query << std::endl;
           for (auto &leg : journey) {
-            std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
-                      << leg.departureTime << " -> " << leg.arrivalTime
+            std::cout << (int)leg.from << " [Cell: "
+                      << (int)data.getCellIdOfStop(StopId(leg.from)) << " ] -> "
+                      << (int)leg.to
+                      << " [Cell: " << (int)data.getCellIdOfStop(StopId(leg.to))
+                      << " ] @ " << leg.departureTime << " -> "
+                      << leg.arrivalTime
                       << (leg.usesRoute ? ", route: " : ", transfer: ")
                       << (int)leg.routeId;
-
             std::cout << std::endl;
           }
           std::cout << std::endl;
