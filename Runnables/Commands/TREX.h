@@ -1120,32 +1120,51 @@ public:
 class RunBackwardForwardSearch : public ParameterizedCommand {
 public:
   RunBackwardForwardSearch(BasicShell &shell)
-      : ParameterizedCommand(shell, "runBackwardForwardSearch",
-                             "TODO write text") {
-    addParameter("TREX Binary");
+      : ParameterizedCommand(
+            shell, "runBackwardForwardSearch",
+            "Runs random BackwardForward flag queries on the given TREX "
+            "data. Flags are either computed and saved, or ingested from "
+            "an existing flag file, depending on whether one is given.") {
+    addParameter("Input file (TREX Data)");
+    addParameter("Input file (Flags)", "");
+    addParameter("Output file (Flags)", "flags.flags");
+    addParameter("Number of queries", "1000");
+    addParameter("Compare to TB?", "false");
+    addParameter("Verbose?", "false");
   }
 
   virtual void execute() noexcept {
-    const std::string networkFile = getParameter("TREX Binary");
+    const std::string networkFile = getParameter("Input file (TREX Data)");
+    const std::string flagsInputFile = getParameter("Input file (Flags)");
+    const std::string flagsOutputFile = getParameter("Output file (Flags)");
+    const std::size_t n = getParameter<std::size_t>("Number of queries");
+    const bool eval = getParameter<bool>("Compare to TB?");
+    const std::string evalFile = networkFile + ".trip";
+    const bool verbose = getParameter<bool>("Verbose?");
 
     TripBased::TREXData data(networkFile);
+    data.printInfo();
+
     TripBased::BackwardForwardSweeper preproc(data);
 
-    preproc.run();
-    preproc.saveFlags("flags.flags", preproc.getFlags());
-    // preproc.ingestFlags("flags.flags");
+    // If no flag file was given, compute the flags and save them.
+    // Otherwise, load the existing flags.
+    if (flagsInputFile.empty()) {
+      preproc.run();
+      preproc.saveFlags(flagsOutputFile, preproc.getFlags());
+    } else {
+      preproc.ingestFlags(flagsInputFile);
+    }
     preproc.showStats();
 
-    const std::size_t n = 1000;
-    const bool verbose = false;
     const std::vector<StopQuery> queries =
         generateRandomStopQueries(data.numberOfStops(), n);
+
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});
 
-    size_t numberOfJourneys = 0;
-
-    auto run = [&](auto &algo) {
+    auto runQueries = [&](auto &algo, auto &queryResult) {
+      size_t numberOfJourneys = 0;
       size_t i(0);
       for (const StopQuery &query : queries) {
         if (verbose)
@@ -1156,7 +1175,6 @@ public:
         numberOfJourneys += algo.getJourneys().size();
 
         if (verbose) {
-          std::cout << "TREX Query" << std::endl;
           for (auto &journey : algo.getJourneys()) {
             std::cout << query << std::endl;
             for (auto &leg : journey) {
@@ -1166,16 +1184,15 @@ public:
                         << (int)data.getCellIdOfStop(StopId(leg.to)) << " ] @ "
                         << leg.departureTime << " -> " << leg.arrivalTime
                         << (leg.usesRoute ? ", route: " : ", transfer: ")
-                        << (int)leg.routeId;
-              std::cout << std::endl;
+                        << (int)leg.routeId << std::endl;
             }
             std::cout << std::endl;
           }
         }
 
-        result[i].reserve(algo.getArrivals().size());
+        queryResult[i].reserve(algo.getArrivals().size());
         for (auto &arr : algo.getArrivals()) {
-          result[i].push_back(
+          queryResult[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
 
           if (verbose) {
@@ -1192,61 +1209,25 @@ public:
                                         (float)queries.size())
                 << std::endl;
     };
+
     TripBased::FlagQuery<TripBased::AggregateProfiler> algorithm(
         data, preproc.getFlags());
-    run(algorithm);
+    runQueries(algorithm, result);
 
-    size_t wrongQueries = 0;
+    if (!eval)
+      return;
+
     std::cout << "Evaluation against TB:" << std::endl;
-    TripBased::Data trip(networkFile + ".trip");
+    TripBased::Data trip(evalFile.empty() ? networkFile + ".trip" : evalFile);
     trip.printInfo();
+
     TripBased::TransitiveQuery<TripBased::AggregateProfiler> tripAlgorithm(
         trip);
     std::vector<std::vector<std::pair<int, int>>> tripResult;
     tripResult.assign(n, {});
+    runQueries(tripAlgorithm, tripResult);
 
-    numberOfJourneys = 0;
-    std::size_t i = 0;
-    for (const StopQuery &query : queries) {
-      if (verbose)
-        std::cout << "Query " << (int)query.source << ", " << (int)query.target
-                  << ", " << (int)query.departureTime << std::endl;
-      tripAlgorithm.run(query.source, query.departureTime, query.target);
-      numberOfJourneys += tripAlgorithm.getJourneys().size();
-
-      if (verbose) {
-        std::cout << "TB Query" << std::endl;
-        for (auto &journey : tripAlgorithm.getJourneys()) {
-          std::cout << query << std::endl;
-          for (auto &leg : journey) {
-            std::cout << (int)leg.from << " [Cell: "
-                      << (int)data.getCellIdOfStop(StopId(leg.from)) << " ] -> "
-                      << (int)leg.to
-                      << " [Cell: " << (int)data.getCellIdOfStop(StopId(leg.to))
-                      << " ] @ " << leg.departureTime << " -> "
-                      << leg.arrivalTime
-                      << (leg.usesRoute ? ", route: " : ", transfer: ")
-                      << (int)leg.routeId;
-            std::cout << std::endl;
-          }
-          std::cout << std::endl;
-        }
-      }
-
-      tripResult[i].reserve(tripAlgorithm.getArrivals().size());
-
-      for (auto &arr : tripAlgorithm.getArrivals()) {
-        tripResult[i].push_back(
-            std::make_pair(arr.numberOfTrips, arr.arrivalTime));
-      }
-
-      i += 1;
-    }
-    tripAlgorithm.getProfiler().printStatistics();
-    std::cout << "Avg. Journeys: "
-              << String::prettyDouble(numberOfJourneys / (float)queries.size())
-              << std::endl;
-
+    size_t wrongQueries = 0;
     for (size_t i(0); i < queries.size(); ++i) {
       // computes the results from TB, which are not in TREX
       std::set<std::pair<int, int>> set1(tripResult[i].begin(),

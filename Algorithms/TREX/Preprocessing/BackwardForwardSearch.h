@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 
@@ -11,12 +12,6 @@
 #include "../../../Helpers/iota_ranger.h"
 
 #include "BuilderIBEs.h"
-
-// TODO
-// - dont consider transfers that lead to trip segements that are in the same
-// n'th queue
-// - 'cut' the search at borderstops
-// - check that A -> B .... C -> D and A -> E .... F -> D not set one and the
 
 namespace TripBased {
 
@@ -41,7 +36,6 @@ struct RoundToken {
   std::uint32_t searchId : 24;
 };
 
-// Ensure it stays exactly 32 bits for memory density
 static_assert(sizeof(RoundToken) == sizeof(std::uint32_t),
               "RoundToken must be exactly 32 bits");
 
@@ -117,7 +111,8 @@ private:
     StopEventId left = to;
     round[left] = RoundToken{.layer = currentRound, .searchId = searchId};
 
-    while (left != first && !isVisitedInCurrentSearch(StopEventId(left - 1))) {
+    while (left != first && !isVisitedInCurrentSearch(StopEventId(left - 1)) &&
+           !isInRootCell(StopEventId(left - 1))) {
       left = StopEventId(left - 1);
       round[left] = RoundToken{.layer = currentRound, .searchId = searchId};
     }
@@ -131,7 +126,8 @@ private:
     ++searchId;
 
     if (searchId >= (1U << 24)) [[unlikely]] {
-      std::fill(round.begin(), round.end(), RoundToken{0, 0});
+      std::fill(round.begin(), round.end(),
+                RoundToken{.layer = 0, .searchId = 0});
       searchId = 1;
     }
 
@@ -271,10 +267,11 @@ public:
     for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
       const StopId fromStop = data.getStopOfStopEvent(StopEventId(from));
 
-#ifndef DEBUG
-      const StopId toStop = data.getStopOfStopEvent(StopEventId(from));
+#ifdef DEBUG
+      const StopId toStop = data.getStopOfStopEvent(
+          StopEventId(data.stopEventGraph.get(ToVertex, edge)));
       assert(data.getCellIdOfStop(fromStop) == data.getCellIdOfStop(toStop));
-#endif // !DEBUG
+#endif
 
       assert(edge < flags.size());
       flags[edge] |= expand(data.getCellIdOfStop(fromStop));
@@ -329,13 +326,6 @@ public:
     std::cout << "\n=======================\n";
   }
 
-  void debug() {
-    std::vector<IBEInfo> IBEs = {
-        IBEInfo{StopId(1066), TripId(31041), StopIndex(15)}};
-
-    search.run(IBEs, 0, 1);
-  }
-
   void run() {
     setCellOwnFlags();
 
@@ -351,7 +341,7 @@ public:
 
     Progress progress(nrOfBorderStops);
 
-    // this set the range [, ) that is departing at the same stop
+    // sets the range [, ) that is departing at the same stop
     std::size_t left = 0;
     for (std::size_t right = 0; right < IBEs.size(); ++right) {
       const bool isLast = (right + 1 == IBEs.size());
