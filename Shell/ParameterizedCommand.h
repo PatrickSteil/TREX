@@ -15,6 +15,7 @@ namespace Shell {
 class ParameterizedCommand : public Command {
  public:
   const static inline std::string DescriptionLineBreak = "\n    ";
+  using Command::parameterSuggestions;
 
  public:
   struct Parameter {
@@ -126,12 +127,11 @@ class ParameterizedCommand : public Command {
 
   virtual void execute() = 0;
 
-  virtual std::vector<std::string> parameterSuggestions(
-      const size_t index) const {
+  std::vector<std::string> parameterSuggestions(size_t index) const override {
     if ((index < parameters.size()) && (!parameters[index].options.empty())) {
       return parameters[index].options;
     } else {
-      return static_cast<const Command*>(this)->parameterSuggestions();
+      return Command::parameterSuggestions();
     }
   }
 

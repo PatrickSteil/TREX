@@ -32,7 +32,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <unordered_set>
 #include <vector>
 
-#include "../../Algorithms/TREX/BorderStops.h"
 #include "../../Algorithms/TREX/Preprocessing/BuilderIBEs.h"
 #include "../../Algorithms/TREX/Preprocessing/TBTEGraph.h"
 #include "../../Algorithms/TREX/Query/TREXProfileQuery.h"
@@ -57,8 +56,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 class ApplyPartitionFile : public ParameterizedCommand {
-public:
-  ApplyPartitionFile(BasicShell &shell)
+ public:
+  ApplyPartitionFile(BasicShell& shell)
       : ParameterizedCommand(
             shell, "applyPartitionFile",
             "Applies the given partition to the TREX data. Also give the "
@@ -86,8 +85,8 @@ public:
 };
 
 class RAPTORToTREX : public ParameterizedCommand {
-public:
-  RAPTORToTREX(BasicShell &shell)
+ public:
+  RAPTORToTREX(BasicShell& shell)
       : ParameterizedCommand(shell, "raptorToTREX",
                              "Reads RAPTOR Data, Number of Levels and Number "
                              "of Cells per Level and saves it to a TREX Data") {
@@ -133,7 +132,7 @@ public:
     data.serialize(mltbFile);
   }
 
-private:
+ private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -144,8 +143,8 @@ private:
 };
 
 class BuildTBTEGraph : public ParameterizedCommand {
-public:
-  BuildTBTEGraph(BasicShell &shell)
+ public:
+  BuildTBTEGraph(BasicShell& shell)
       : ParameterizedCommand(shell, "buildTBTEGraph",
                              "Given the TREX data, builds the TBTE Graph.") {
     addParameter("Input file (TREX Data)");
@@ -162,8 +161,8 @@ public:
 };
 
 class CreateCompactLayoutGraph : public ParameterizedCommand {
-public:
-  CreateCompactLayoutGraph(BasicShell &shell)
+ public:
+  CreateCompactLayoutGraph(BasicShell& shell)
       : ParameterizedCommand(
             shell, "createCompactLayoutGraph",
             "Creates the compact layout graph of the given TREX data, it "
@@ -197,8 +196,8 @@ public:
 };
 
 class Customization : public ParameterizedCommand {
-public:
-  Customization(BasicShell &shell)
+ public:
+  Customization(BasicShell& shell)
       : ParameterizedCommand(shell, "customize",
                              "Computes the customization of TREX") {
     addParameter("Input file (TREX Data)");
@@ -229,7 +228,7 @@ public:
     data.serialize(output);
   }
 
-private:
+ private:
   inline int getNumberOfThreads() const noexcept {
     if (getParameter("Number of threads") == "max") {
       return numberOfCores();
@@ -240,8 +239,8 @@ private:
 };
 
 class ShowInfoOfTREX : public ParameterizedCommand {
-public:
-  ShowInfoOfTREX(BasicShell &shell)
+ public:
+  ShowInfoOfTREX(BasicShell& shell)
       : ParameterizedCommand(shell, "showInfoOfTREX",
                              "Shows Information about the given TREX file.") {
     addParameter("Input file (TREX Data)");
@@ -285,14 +284,13 @@ public:
     /*                       << std::endl; */
     /*         } */
 
-    if (writeToCSV)
-      data.writeLocalLevelOfTripsToCSV(fileName);
+    if (writeToCSV) data.writeLocalLevelOfTripsToCSV(fileName);
   }
 };
 
 class RunTREXQuery : public ParameterizedCommand {
-public:
-  RunTREXQuery(BasicShell &shell)
+ public:
+  RunTREXQuery(BasicShell& shell)
       : ParameterizedCommand(
             shell, "runTREXQueries",
             "Runs the given number of random MultiLevel TB queries.") {
@@ -323,10 +321,10 @@ public:
 
     size_t numberOfJourneys = 0;
 
-    auto run = [&](auto &algo) {
+    auto run = [&](auto& algo) {
       algo.printMemoryConsumption();
       size_t i(0);
-      for (const StopQuery &query : queries) {
+      for (const StopQuery& query : queries) {
         if (verbose)
           std::cout << "Query " << (int)query.source << ", "
                     << (int)query.target << ", " << (int)query.departureTime
@@ -336,9 +334,9 @@ public:
 
         if (verbose) {
           std::cout << "TREX Query" << std::endl;
-          for (auto &journey : algo.getJourneys()) {
+          for (auto& journey : algo.getJourneys()) {
             std::cout << query << std::endl;
-            for (auto &leg : journey) {
+            for (auto& leg : journey) {
               std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
                         << leg.departureTime << " -> " << leg.arrivalTime
                         << (leg.usesRoute ? ", route: " : ", transfer: ")
@@ -351,7 +349,7 @@ public:
         }
 
         result[i].reserve(algo.getArrivals().size());
-        for (auto &arr : algo.getArrivals()) {
+        for (auto& arr : algo.getArrivals()) {
           result[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
 
@@ -388,7 +386,7 @@ public:
 
       numberOfJourneys = 0;
       std::size_t i = 0;
-      for (const StopQuery &query : queries) {
+      for (const StopQuery& query : queries) {
         if (verbose)
           std::cout << "Query " << (int)query.source << ", "
                     << (int)query.target << ", " << (int)query.departureTime
@@ -398,9 +396,9 @@ public:
 
         if (verbose) {
           std::cout << "TB Query" << std::endl;
-          for (auto &journey : tripAlgorithm.getJourneys()) {
+          for (auto& journey : tripAlgorithm.getJourneys()) {
             std::cout << query << std::endl;
-            for (auto &leg : journey) {
+            for (auto& leg : journey) {
               std::cout << (int)leg.from << " -> " << (int)leg.to << " @ "
                         << leg.departureTime << " -> " << leg.arrivalTime
                         << (leg.usesRoute ? ", route: " : ", transfer: ")
@@ -414,7 +412,7 @@ public:
 
         tripResult[i].reserve(tripAlgorithm.getArrivals().size());
 
-        for (auto &arr : tripAlgorithm.getArrivals()) {
+        for (auto& arr : tripAlgorithm.getArrivals()) {
           tripResult[i].push_back(
               std::make_pair(arr.numberOfTrips, arr.arrivalTime));
         }
@@ -448,8 +446,8 @@ public:
 };
 
 class RunTREXProfileQueries : public ParameterizedCommand {
-public:
-  RunTREXProfileQueries(BasicShell &shell)
+ public:
+  RunTREXProfileQueries(BasicShell& shell)
       : ParameterizedCommand(shell, "runTREXProfileQueries",
                              "Runs the given number of random transitive "
                              "TripBased queries with "
@@ -468,9 +466,9 @@ public:
     const std::vector<StopQuery> queries =
         generateRandomStopQueries(data.numberOfStops(), n);
 
-    auto run = [&](auto &algo) {
+    auto run = [&](auto& algo) {
       double numJourneys = 0;
-      for (const StopQuery &query : queries) {
+      for (const StopQuery& query : queries) {
         algo.run(query.source, query.target, 0, 24 * 60 * 60 - 1);
         numJourneys += algo.getAllJourneys().size();
       }
@@ -491,8 +489,8 @@ public:
 };
 
 class WriteTREXToCSV : public ParameterizedCommand {
-public:
-  WriteTREXToCSV(BasicShell &shell)
+ public:
+  WriteTREXToCSV(BasicShell& shell)
       : ParameterizedCommand(shell, "writeTREXToCSV",
                              "Writes TREX Data to csv files") {
     addParameter("Input file (TREX Data)");
@@ -515,8 +513,8 @@ public:
 };
 
 class EventDistributionOverTime : public ParameterizedCommand {
-public:
-  EventDistributionOverTime(BasicShell &shell)
+ public:
+  EventDistributionOverTime(BasicShell& shell)
       : ParameterizedCommand(shell, "eventDistribution",
                              "Shows the distribution of events over time. "
                              "Each bucket contains "
@@ -536,10 +534,9 @@ public:
     size_t offset = 60 * 60;
 
     for (size_t eventId(0); eventId < data.numberOfStopEvents(); ++eventId) {
-      auto &depTime = data.departureTime(StopEventId(eventId));
+      auto& depTime = data.departureTime(StopEventId(eventId));
 
-      if ((24 * 60 * 60) <= depTime)
-        continue;
+      if ((24 * 60 * 60) <= depTime) continue;
 
       // this is due to our implicit representation
       if (depTime < 0) {
@@ -555,8 +552,8 @@ public:
 };
 
 class RunGeoRankedTREXQueries : public ParameterizedCommand {
-public:
-  RunGeoRankedTREXQueries(BasicShell &shell)
+ public:
+  RunGeoRankedTREXQueries(BasicShell& shell)
       : ParameterizedCommand(
             shell, "runGeoRankedTREXQueries",
             "Runs TREX queries to the 2^r th stop, where r is the geo rank. "
@@ -642,7 +639,7 @@ public:
         prevIdx = idx;
       }
 
-      for (const StopQuery &query : queries) {
+      for (const StopQuery& query : queries) {
         algorithm.run(query.source, query.departureTime, query.target);
         queryRunTimes.emplace_back(algorithm.getProfiler().getTotalTime());
         algorithm.getProfiler().reset();
@@ -680,140 +677,9 @@ public:
   }
 };
 
-class CheckBorderStops : public ParameterizedCommand {
-public:
-  CheckBorderStops(BasicShell &shell)
-      : ParameterizedCommand(shell, "checkBorderStops",
-                             "Check stop-to-stop (only border stops) and see "
-                             "which transfers are used.") {
-    addParameter("Input file (TREX Data)");
-    addParameter("Output file (csv)", "transfers.csv");
-    addParameter("Number of threads", "max");
-  }
-
-  virtual void execute() noexcept {
-    const std::string mltb = getParameter("Input file (TREX Data)");
-    const std::string file = getParameter("Output file (csv)");
-    const int numberOfThreads = getNumberOfThreads();
-
-    TripBased::TREXData data(mltb);
-    data.printInfo();
-
-    std::vector<std::uint8_t> rankEstimate(data.stopEventGraph.numEdges(), 0);
-
-    const int numLevels = data.numberOfLevels;
-    TripBased::BorderStops checker(data);
-
-    std::unordered_set<std::uint32_t> stopSet;
-    std::vector<StopId> targets;
-    targets.reserve(data.numberOfStops());
-
-    omp_set_num_threads(numberOfThreads);
-
-    std::vector<TripBased::TransitiveOneToManyQuery<>> query(
-        numberOfThreads, TripBased::TransitiveOneToManyQuery<>(data));
-
-    for (int level = 0; level < numLevels; ++level) {
-      std::cout << "*** Level " << (numLevels - level) << " ***" << std::endl;
-      for (int cell = 0; cell < (1 << (numLevels - level)); ++cell) {
-        auto inAndOutTrips =
-            checker.collectIncommingAndOutgoingTrips(level, cell);
-
-        std::sort(inAndOutTrips.first.begin(), inAndOutTrips.first.end(),
-                  [&](const auto &left, const auto &right) {
-                    return std::tie(data.departureTime(data.getStopEventId(
-                                        left.first, left.second)),
-                                    left.first, left.second) <
-                           std::tie(data.departureTime(data.getStopEventId(
-                                        right.first, right.second)),
-                                    right.first, right.second);
-                  });
-
-        std::cout << "\nCell: " << cell << ", " << inAndOutTrips.first.size()
-                  << std::endl;
-
-        stopSet.clear();
-        targets.clear();
-
-        for (auto [t, stopIndex] : inAndOutTrips.second) {
-          for (StopIndex i = stopIndex; i < data.numberOfStopsInTrip(t); ++i) {
-            StopId stop = data.getStop(t, i);
-            stopSet.insert(static_cast<std::uint32_t>(stop));
-          }
-        }
-
-        for (auto t : stopSet) {
-          targets.push_back(static_cast<StopId>(t));
-        }
-
-        /* auto isTransferInCell = [&](const std::uint16_t stopCell) -> bool
-         * {
-         */
-        /*   return cell == (stopCell >> level); */
-        /* }; */
-
-        Progress progress(inAndOutTrips.first.size());
-#pragma omp parallel for
-        for (std::size_t j = 0; j < inAndOutTrips.first.size(); ++j) {
-          int tId = omp_get_thread_num();
-          auto [t, stopIndex] = inAndOutTrips.first[j];
-          for (StopIndex i = StopIndex(0); i < stopIndex; ++i) {
-            StopId source = data.getStop(t, i);
-            int depTime = data.departureTime(data.getStopEventId(t, i));
-
-            query[tId].run(source, depTime, targets, cell, level);
-            for (auto t : targets) {
-              auto journeys = query[tId].getJourneys(t);
-
-              for (auto &j : journeys) {
-                for (auto &leg : j) {
-                  if (!leg.usesRoute && leg.transferId != noEdge) {
-                    AssertMsg(leg.transferId < rankEstimate.size(),
-                              "Transfer Id is out of range!");
-                    /* StopId toStop = data.getStopOfStopEvent(StopEventId(
-                     */
-                    /*     data.stopEventGraph.get(ToVertex,
-                     * leg.transferId)));
-                     */
-
-                    /* if (!isTransferInCell(data.cellIds[toStop])) */
-                    /*   continue; */
-                    rankEstimate[leg.transferId] = level + 1;
-                  }
-                }
-              }
-            }
-          }
-          ++progress;
-        }
-      }
-    }
-
-    std::ofstream csv(file);
-    AssertMsg(csv, "Cannot create output stream for " << file);
-    AssertMsg(csv.is_open(), "Cannot open output stream for " << file);
-
-    csv << "FromVertex,ToVertex,RankEstimator\n";
-    for (const auto [edge, from] : data.stopEventGraph.edgesWithFromVertex()) {
-      csv << (int)from << "," << (int)data.stopEventGraph.get(ToVertex, edge)
-          << "," << (int)rankEstimate[edge] << "\n";
-    }
-    csv.close();
-  }
-
-private:
-  inline int getNumberOfThreads() const noexcept {
-    if (getParameter("Number of threads") == "max") {
-      return numberOfCores();
-    } else {
-      return getParameter<int>("Number of threads");
-    }
-  }
-};
-
 class ExportTREXTimeExpandedGraph : public ParameterizedCommand {
-public:
-  ExportTREXTimeExpandedGraph(BasicShell &shell)
+ public:
+  ExportTREXTimeExpandedGraph(BasicShell& shell)
       : ParameterizedCommand(
             shell, "exportTREXAsTE",
             "Export TREX data into a Time Expanded-like graph") {
@@ -870,8 +736,8 @@ public:
 };
 
 class ShowInducedCellOfNetwork : public ParameterizedCommand {
-public:
-  ShowInducedCellOfNetwork(BasicShell &shell)
+ public:
+  ShowInducedCellOfNetwork(BasicShell& shell)
       : ParameterizedCommand(
             shell, "showInducedCellOfNetwork",
             "Show stops, trips, lines inside the given cell.") {
@@ -903,7 +769,7 @@ public:
     for (StopId stop(0); stop < data.numberOfStops(); ++stop) {
       if (isInCell(stop, level, cellId)) {
         stopsInCell.push_back(stop);
-        for (const RAPTOR::RouteSegment &route :
+        for (const RAPTOR::RouteSegment& route :
              data.routesContainingStop(stop)) {
           collectedRoutes.insert(static_cast<std::uint32_t>(route.routeId));
         }
@@ -926,8 +792,8 @@ public:
 };
 
 class StopsImportance : public ParameterizedCommand {
-public:
-  StopsImportance(BasicShell &shell)
+ public:
+  StopsImportance(BasicShell& shell)
       : ParameterizedCommand(shell, "stopsImportance",
                              "Export the importance of each stop into a csv.") {
     addParameter("Input file (TREX Data)");
@@ -968,8 +834,8 @@ public:
 };
 
 class WriteTREXStopFailureDistribution : public ParameterizedCommand {
-public:
-  WriteTREXStopFailureDistribution(BasicShell &shell)
+ public:
+  WriteTREXStopFailureDistribution(BasicShell& shell)
       : ParameterizedCommand(
             shell, "writeTREXStopFailureDistribution",
             "Writes some metrics per stop of the given TREX data "
@@ -988,8 +854,8 @@ public:
 };
 
 class MeasureTransferGeneration : public ParameterizedCommand {
-public:
-  MeasureTransferGeneration(BasicShell &shell)
+ public:
+  MeasureTransferGeneration(BasicShell& shell)
       : ParameterizedCommand(shell, "measureTransferGeneration",
                              "Given the TB data, this updates the transfer set "
                              "of X random trips.") {
@@ -998,11 +864,10 @@ public:
     addParameter("Random Seed", "42");
   }
 
-  inline void
-  findIncomingTrips(const TripBased::Data &data,
-                    const TransferGraph &revTransferGraph, const TripId trip,
-                    std::unordered_set<std::uint32_t> &allTrips) const {
-    const StopId *stops = data.stopArrayOfTrip(trip);
+  inline void findIncomingTrips(
+      const TripBased::Data& data, const TransferGraph& revTransferGraph,
+      const TripId trip, std::unordered_set<std::uint32_t>& allTrips) const {
+    const StopId* stops = data.stopArrayOfTrip(trip);
     for (StopIndex i = StopIndex(0); i < data.numberOfStopsInTrip(trip) - 1;
          i++) {
       const StopId stop = stops[i];
@@ -1017,18 +882,16 @@ public:
     }
   }
 
-  inline void
-  findRevTransfers(const TripBased::Data &data, const TripId toTrip,
-                   const StopIndex toIndex, const StopId fromStop,
-                   const int fromDepartureTime,
-                   std::unordered_set<std::uint32_t> &allTrips) const noexcept {
+  inline void findRevTransfers(
+      const TripBased::Data& data, const TripId toTrip, const StopIndex toIndex,
+      const StopId fromStop, const int fromDepartureTime,
+      std::unordered_set<std::uint32_t>& allTrips) const noexcept {
     const RouteId toRoute = data.routeOfTrip[toTrip];
-    for (const RAPTOR::RouteSegment &fromSegment :
+    for (const RAPTOR::RouteSegment& fromSegment :
          data.raptorData.routesContainingStop(fromStop)) {
       const TripId fromTrip =
           data.getLatestTrip(fromSegment, fromDepartureTime);
-      if (fromTrip == noTripId)
-        continue;
+      if (fromTrip == noTripId) continue;
       if ((fromSegment.routeId == toRoute) && (fromTrip >= toTrip) &&
           (fromSegment.stopIndex >= toIndex))
         continue;
@@ -1038,13 +901,11 @@ public:
     }
   }
 
-  inline bool isUTurn(const TripBased::Data &data, const TripId fromTrip,
+  inline bool isUTurn(const TripBased::Data& data, const TripId fromTrip,
                       const StopIndex fromIndex, const TripId toTrip,
                       const StopIndex toIndex) const noexcept {
-    if (fromIndex < 2)
-      return false;
-    if (toIndex + 1 >= data.numberOfStopsInTrip(toTrip))
-      return false;
+    if (fromIndex < 2) return false;
+    if (toIndex + 1 >= data.numberOfStopsInTrip(toTrip)) return false;
     if (data.getStop(fromTrip, StopIndex(fromIndex - 1)) !=
         data.getStop(toTrip, StopIndex(toIndex + 1)))
       return false;

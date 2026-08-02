@@ -83,7 +83,7 @@ class ForwardPruningRAPTOR {
     relaxTransfers();
     profiler.donePhase(PHASE_TRANSFERS);
 
-    for (size_t i = 0;; i++) {
+    while (true) {
       profiler.startPhase();
       startNewRound();
       profiler.donePhase(PHASE_INITIALIZATION);

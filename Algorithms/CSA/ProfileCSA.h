@@ -36,7 +36,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../../Helpers/Timer.h"
 #include "../../Helpers/Types.h"
 #include "Profiler.h"
-#include "TimeShits.h"
+#include "TimeShift.h"
 
 namespace CSA {
 
@@ -59,6 +59,18 @@ class ProfileCSA {
     ConnectionId enter;
     ConnectionId exit;
   };
+
+  struct TripLabel {
+    bool reached = false;
+    int arrivalTime = never;
+    ConnectionId exit = ConnectionId(-1);
+  };
+
+  struct StopLabel {
+    int32_t arrivalTime;
+    int32_t minTransferTime;
+  };
+
   struct TripArrivalElement {
     TripArrivalElement(int arrivalTime = never,
                        ConnectionId exit = ConnectionId(-1))
@@ -77,11 +89,11 @@ class ProfileCSA {
           enter(enter),
           exit(exit) {}
 
-    inline bool dominates(ProfileElement other) {
+    inline bool dominates(const ProfileElement& other) const {
       return dominates(other.getDepartureTime(), other.getArrivalTime());
     }
 
-    inline bool dominates(int newDepartureTime, int newArrivalTime) {
+    inline bool dominates(int newDepartureTime, int newArrivalTime) const {
       return departureTime >= newDepartureTime && arrivalTime <= newArrivalTime;
     }
 
@@ -99,19 +111,11 @@ class ProfileCSA {
   struct Profile {
     Profile() : elements(1, ProfileElement()) { elements.reserve(64); };
 
-    inline int size() { return elements.size(); }
+    inline int size() const { return elements.size(); }
 
-    inline bool isDominated(ProfileElement newProfileElement) {
-      // one element in the profile (call it P) domiantes currentProfile iff
-      // P.departureTime >= currentProfile.departureTime && P.arrivalTime <=
-      // currentProfile.arrivalTime In other words: We don't need currentProfile
-      // if there is a ProfileElement 'P' that departs later (or equal) and
-      // arrives earlier (or equal) as currentProfile
-
-      int i = findIndex(newProfileElement);
-
-      return (elements[i].getArrivalTime() <=
-              newProfileElement.getArrivalTime());
+    inline bool isDominated(const ProfileElement& newProfileElement) const {
+      const int i = findIndex(newProfileElement);
+      return elements[i].getArrivalTime() <= newProfileElement.getArrivalTime();
     }
 
     inline void incorporate(ProfileElement newProfileElement) {
@@ -120,7 +124,6 @@ class ProfileCSA {
 
       iter = elements.insert(iter, newProfileElement);
 
-      // remove all dominated element that come later in the vector
       elements.erase(std::remove_if(std::next(iter), elements.end(),
                                     [&](auto& other) {
                                       return newProfileElement.dominates(other);
@@ -128,9 +131,9 @@ class ProfileCSA {
                      elements.end());
     }
 
-    inline int findIndex(ProfileElement newProfileElement) noexcept {
+    inline int findIndex(
+        const ProfileElement& newProfileElement) const noexcept {
       int i(size() - 1);
-
       while (elements[i].getDepartureTime() <
              newProfileElement.getDepartureTime())
         --i;
@@ -163,11 +166,10 @@ class ProfileCSA {
         reverseTransferGraph(data.transferGraph),
         sourceStop(noStop),
         targetStop(noStop),
-        tripArrivalTime(data.numberOfTrips(), TripArrivalElement()),
-        tripReached(data.numberOfTrips(), TripFlag()),
+        tripLabel(data.numberOfTrips()),
         profiles(data.numberOfStops(), Profile()),
         distanceToTarget(data.numberOfStops(), INFTY),
-        arrivalTimeToStop(data.numberOfStops(), never),
+        stopLabel(data.numberOfStops()),
         sourceDominationIndex(0),
         profiler(profilerTemplate) {
     reverseTransferGraph.revert();
@@ -179,6 +181,9 @@ class ProfileCSA {
     }
     AssertMsg(Vector::isSorted(data.connections),
               "Connections must be sorted in ascending order!");
+    for (const StopId stop : data.stops()) {
+      stopLabel[stop].minTransferTime = data.minTransferTime(stop);
+    }
     profiler.registerPhases({PHASE_CLEAR, PHASE_INITIALIZATION,
                              PHASE_CONNECTION_SCAN, PHASE_REACHABLE_EA_QUERY});
     profiler.registerMetrics({METRIC_CONNECTIONS, METRIC_EDGES,
@@ -230,81 +235,32 @@ class ProfileCSA {
     profiler.done();
   }
 
-  /* template <bool T = PathRetrieval, typename = std::enable_if_t<T ==
-  PathRetrieval && T>> inline Journey getJourney() const noexcept
-  {
-      return getJourney(targetStop);
-  }
-
-  template <bool T = PathRetrieval, typename = std::enable_if_t<T ==
-  PathRetrieval && T>> inline Journey getJourney(StopId stop) const noexcept
-  {
-      Journey journey;
-      if (!reachable(stop))
-          return journey;
-
-      while (stop != sourceStop) {
-          const ParentLabel& label = parentLabel[stop];
-          if (label.reachedByTransfer) {
-              const int travelTime = data.transferGraph.get(TravelTime,
-  label.transferId); journey.emplace_back(label.parent, stop, arrivalTime[stop]
-  - travelTime, arrivalTime[stop], label.transferId); } else {
-              journey.emplace_back(label.parent, stop,
-  data.connections[tripReached[label.tripId]].departureTime, arrivalTime[stop],
-  label.tripId);
-          }
-          stop = label.parent;
-      }
-      Vector::reverse(journey);
-      return journey;
-  }
-
-
-  inline std::vector<Vertex> getPath(const StopId stop) const noexcept
-  {
-      return journeyToPath(getJourney(stop));
-  }
-
-  inline std::vector<std::string> getRouteDescription(const StopId stop) const
-  noexcept
-  {
-      return data.journeyToText(getJourney(stop));
-  } */
-
   inline std::vector<Leg> getUsedConnections(StopId stop) {
     std::vector<Leg> journey;
 
     if (!reachable(stop)) return journey;
-
     if (distanceToTarget[stop] < INFTY) [[unlikely]]
       return journey;
 
-    // this currently grabs the last element => need to fix
     const ProfileElement& element = profiles[stop].elements.back();
-    int arrivalTimeAtTarget = getExactArrivalTime(element.arrivalTime);
+    const int arrivalTimeAtTarget = getExactArrivalTime(element.arrivalTime);
 
     journey.push_back({element.enter, element.exit});
     stop = data.connections[element.exit].arrivalStopId;
 
     while (distanceToTarget[stop] == INFTY) {
-      Profile& profil = profiles[stop];
+      const Profile& profile = profiles[stop];
 
       int i(0);
-
-      while (i < profil.size() &&
-             getExactArrivalTime(profil.elements[i].arrivalTime) !=
+      while (i < profile.size() &&
+             getExactArrivalTime(profile.elements[i].arrivalTime) !=
                  arrivalTimeAtTarget)
         ++i;
-      Assert(0 <= i && i < profil.size());
-      auto& e = profil.elements[i];
+      Assert(0 <= i && i < profile.size());
+      const ProfileElement& e = profile.elements[i];
 
       journey.push_back({e.enter, e.exit});
       stop = data.connections[e.exit].arrivalStopId;
-
-      std::cout << "Current Number of legs: " << journey.size() << "\n";
-      std::cout << "Stop : " << stop
-                << " distanceToTarget: " << distanceToTarget[stop] << "\n";
-      profil.printElements();
     }
 
     return journey;
@@ -338,13 +294,13 @@ class ProfileCSA {
           transformTime(reverseTransferGraph.get(TravelTime, edge));
     }
   }
+
   inline void clear() {
     sourceStop = noStop;
     targetStop = noStop;
     Vector::fill(profiles, Profile());
-    Vector::fill(tripArrivalTime, TripArrivalElement());
-    Vector::fill(tripReached, TripFlag());
-    Vector::fill(arrivalTimeToStop, never);
+    for (TripLabel& label : tripLabel) label = TripLabel();
+    for (StopLabel& label : stopLabel) label.arrivalTime = never;
     sourceDominationIndex = 0;
   }
 
@@ -360,16 +316,24 @@ class ProfileCSA {
   inline void runOneEAQuery(const ConnectionId earliestConnection,
                             const ConnectionId latestConnection,
                             const int minDepartureTime) noexcept {
-    arrivalTimeToStop[sourceStop] = minDepartureTime;
+    stopLabel[sourceStop].arrivalTime = minDepartureTime;
     relaxOutgoingEdges(sourceStop, minDepartureTime);
 
     for (ConnectionId i(earliestConnection); i < latestConnection; ++i) {
       const Connection& connection = data.connections[i];
+      if (i + PrefetchDistance < latestConnection) {
+        const Connection& upcoming = data.connections[i + PrefetchDistance];
+        // Locality hint 3: consumed within the next PrefetchDistance
+        // iterations of a tight loop, so it should land and stay in L1.
+        __builtin_prefetch(&stopLabel[upcoming.departureStopId], 0, 3);
+      }
       if (connectionIsReachable(connection)) {
         arrivalByTrip(connection.arrivalStopId, connection.arrivalTime);
       }
     }
   }
+
+  static constexpr size_t PrefetchDistance = 4;
 
   inline void scanConnections(const ConnectionId earliestConnection,
                               const ConnectionId latestConnection) noexcept {
@@ -381,22 +345,13 @@ class ProfileCSA {
     for (ConnectionId i(latestConnection); i > earliestConnection; --i) {
       const Connection& connection = data.connections[i - 1];
 
-      /*
-      // prefetch the next connections
-      if (i >= earliestConnection + 4) {
-          const Connection& nextConnection = data.connections[i - 1 - 3];
-          if (tripReached[nextConnection.tripId]) {
-              __builtin_prefetch(&profiles[nextConnection.arrivalStopId]);
-              __builtin_prefetch(&tripArrivalTime[nextConnection.tripId]);
-          }
-      }
-      */
-      // Through the previous EA Query
-      if (!tripReached[connection.tripId]) continue;
+      prefetchUpcomingConnection(i, earliestConnection);
+
+      if (!tripLabel[connection.tripId].reached) continue;
 
       const int tau1 =
           connection.arrivalTime + distanceToTarget[connection.arrivalStopId];
-      const int tau2 = tripArrivalTime[connection.tripId].arrivalTime;
+      const int tau2 = tripLabel[connection.tripId].arrivalTime;
       const int tau3 = earliestArrivalTimeInProfiles(connection.arrivalStopId,
                                                      connection.arrivalTime) +
                        (TransfersSecondCrit ? offset : 0);
@@ -406,16 +361,15 @@ class ProfileCSA {
       if (tauC == never) [[unlikely]]
         continue;
 
-      if (tauC < tripArrivalTime[connection.tripId].arrivalTime) {
-        tripArrivalTime[connection.tripId] = tauC;
-        tripArrivalTime[connection.tripId].exit = i;
+      if (tauC < tripLabel[connection.tripId].arrivalTime) {
+        tripLabel[connection.tripId].arrivalTime = tauC;
+        tripLabel[connection.tripId].exit = i;
       }
 
       profiler.countMetric(METRIC_CONNECTIONS);
-      Assert(tripArrivalTime[connection.tripId].exit != ConnectionId(-1));
-      const ProfileElement currentProfile(
-          connection.departureTime, tauC, i,
-          tripArrivalTime[connection.tripId].exit);
+      Assert(tripLabel[connection.tripId].exit != ConnectionId(-1));
+      const ProfileElement currentProfile(connection.departureTime, tauC, i,
+                                          tripLabel[connection.tripId].exit);
       Profile& profileArrivalStop = profiles[connection.arrivalStopId];
 
       if (!profileArrivalStop.isDominated(currentProfile) &&
@@ -426,6 +380,16 @@ class ProfileCSA {
         relaxIncommingEdges(connection.departureStopId, currentProfile);
       }
     }
+  }
+
+  inline void prefetchUpcomingConnection(
+      const ConnectionId i, const ConnectionId earliestConnection) noexcept {
+    if (i < earliestConnection + PrefetchDistance + 1) return;
+    const ConnectionId prefetchIndex = ConnectionId(i - 1 - PrefetchDistance);
+    const Connection& upcoming = data.connections[prefetchIndex];
+    if (!tripLabel[upcoming.tripId].reached) return;
+    __builtin_prefetch(&tripLabel[upcoming.tripId], 1, 3);
+    __builtin_prefetch(&profiles[upcoming.arrivalStopId], 1, 1);
   }
 
   inline bool checkSourceDomination(
@@ -442,7 +406,7 @@ class ProfileCSA {
 
   inline int earliestArrivalTimeInProfiles(const StopId stop,
                                            const int arrivalTime) noexcept {
-    auto stopProfile = profiles[stop];
+    const Profile& stopProfile = profiles[stop];
 
     int i(stopProfile.elements.size() - 1);
 
@@ -480,34 +444,34 @@ class ProfileCSA {
 
   inline bool connectionIsReachableFromStop(
       const Connection& connection) const noexcept {
-    return arrivalTimeToStop[connection.departureStopId] <=
-           connection.departureTime -
-               data.minTransferTime(connection.departureStopId);
+    const StopLabel& label = stopLabel[connection.departureStopId];
+    return label.arrivalTime <=
+           connection.departureTime - label.minTransferTime;
   }
 
   inline bool connectionIsReachableFromTrip(
       const Connection& connection) const noexcept {
-    return tripReached[connection.tripId];
+    return tripLabel[connection.tripId].reached;
   }
 
   inline bool connectionIsReachable(const Connection& connection) noexcept {
     if (connectionIsReachableFromTrip(connection)) return true;
     if (connectionIsReachableFromStop(connection)) {
-      tripReached[connection.tripId] = true;
+      tripLabel[connection.tripId].reached = true;
       return true;
     }
     return false;
   }
 
   inline void arrivalByTrip(const StopId stop, const int time) noexcept {
-    if (arrivalTimeToStop[stop] <= time) return;
-    arrivalTimeToStop[stop] = time;
+    if (stopLabel[stop].arrivalTime <= time) return;
+    stopLabel[stop].arrivalTime = time;
     relaxOutgoingEdges(stop, time);
   }
 
   inline void arrivalByTransfer(const StopId stop, const int time) noexcept {
-    if (arrivalTimeToStop[stop] <= time) return;
-    arrivalTimeToStop[stop] = time;
+    if (stopLabel[stop].arrivalTime <= time) return;
+    stopLabel[stop].arrivalTime = time;
   }
 
   inline int transformTime(int time) noexcept {
@@ -522,11 +486,10 @@ class ProfileCSA {
   StopId sourceStop;
   StopId targetStop;
 
-  std::vector<TripArrivalElement> tripArrivalTime;
-  std::vector<TripFlag> tripReached;
+  std::vector<TripLabel> tripLabel;
   std::vector<Profile> profiles;
   std::vector<int> distanceToTarget;
-  std::vector<int> arrivalTimeToStop;
+  std::vector<StopLabel> stopLabel;
 
   int sourceDominationIndex;
   Profiler profiler;

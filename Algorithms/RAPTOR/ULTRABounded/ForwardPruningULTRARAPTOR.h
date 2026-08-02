@@ -79,7 +79,7 @@ class ForwardPruningULTRARAPTOR {
     relaxInitialTransfers();
     profiler.donePhase(PHASE_TRANSFERS);
 
-    for (size_t i = 0; !stopsUpdatedByTransfer.empty(); i++) {
+    while (!stopsUpdatedByTransfer.empty()) {
       profiler.startPhase();
       startNewRound();
       profiler.donePhase(PHASE_INITIALIZATION);

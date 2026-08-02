@@ -33,7 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 using namespace Shell;
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   std::cout << std::endl;
   std::cout << "░        ░░       ░░░        ░░  ░░░░  ░\n";
   std::cout << "▒▒▒▒  ▒▒▒▒▒  ▒▒▒▒  ▒▒  ▒▒▒▒▒▒▒▒▒  ▒▒  ▒▒\n";
@@ -55,7 +55,6 @@ int main(int argc, char **argv) {
   new WriteTREXToCSV(shell);
   new EventDistributionOverTime(shell);
   new WriteTREXStopFailureDistribution(shell);
-  new CheckBorderStops(shell);
   new ExportTREXTimeExpandedGraph(shell);
   new BuildTBTEGraph(shell);
   new ShowInducedCellOfNetwork(shell);
@@ -67,6 +66,7 @@ int main(int argc, char **argv) {
   new RunOneTransitiveRAPTORQuery(shell);
   new RunTransitiveTripBasedQueries(shell);
   new RunTransitiveCSAQueries(shell);
+  new RunTransitiveProfileCSAQueries(shell);
   new RunTransitiveProfileTripBasedQueries(shell);
 
   new RunGeoRankedTripBasedQueries(shell);

@@ -157,11 +157,7 @@ inline constexpr bool ContainsAttribute() {
 // FIND ATTRIBUTE LIST
 namespace Implementation {
 template <AttributeNameType ATTRIBUTE_NAME, typename ATTRIBUTE_LIST>
-struct FindAttributeList {
-  static_assert(ATTRIBUTE_NAME != ATTRIBUTE_NAME,
-                "ATTRIBUTE_LIST does not contain an attribute with "
-                "ATTRIBUTE_NAME as name!");
-};
+struct FindAttributeList {};
 
 template <AttributeNameType ATTRIBUTE_NAME, AttributeNameType NAME_A,
           typename TYPE_A, typename... ATTRIBUTE_LIST>
@@ -180,11 +176,7 @@ using FindAttributeList =
 // FIND ATTRIBUTE TYPE
 namespace Implementation {
 template <AttributeNameType ATTRIBUTE_NAME, typename ATTRIBUTE_LIST>
-struct FindAttributeType {
-  static_assert(ATTRIBUTE_NAME != ATTRIBUTE_NAME,
-                "ATTRIBUTE_LIST does not contain an attribute with "
-                "ATTRIBUTE_NAME as name!");
-};
+struct FindAttributeType {};
 
 template <AttributeNameType ATTRIBUTE_NAME, AttributeNameType NAME_A,
           typename TYPE_A, typename... ATTRIBUTE_LIST>
