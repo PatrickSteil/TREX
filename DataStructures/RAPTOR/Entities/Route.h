@@ -37,23 +37,27 @@ class Route {
  public:
   Route(const std::string& name = "", const int type = -1)
       : name(name), type(type) {}
+  Route(const std::string& name, const std::string& shortName, const int type)
+      : name(name), type(type), shortName(shortName) {}
   Route(IO::Deserialization& deserialize) { this->deserialize(deserialize); }
 
   friend std::ostream& operator<<(std::ostream& out, const Route& r) {
-    return out << "Route{" << r.name << ", " << r.type << "}";
+    return out << "Route{" << r.name << " (" << r.shortName << "), " << r.type
+               << "}";
   }
 
   inline void serialize(IO::Serialization& serialize) const noexcept {
-    serialize(name, type);
+    serialize(name, type, shortName);
   }
 
   inline void deserialize(IO::Deserialization& deserialize) noexcept {
-    deserialize(name, type);
+    deserialize(name, type, shortName);
   }
 
  public:
   std::string name{""};
   int type{-1};
+  std::string shortName{""};
 };
 
 }  // namespace RAPTOR

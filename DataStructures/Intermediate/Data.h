@@ -257,12 +257,13 @@ class Data {
                  time += frequency.headwaySecs) {
               data.buildTrip(gtfs, stopIds, stopTimes,
                              seconds - stopTimes[0].departureTime + time,
-                             trip.name, route.name, route.type);
+                             trip.name, route.name, route.type,
+                             route.shortName);
             }
           }
         } else {
           data.buildTrip(gtfs, stopIds, stopTimes, seconds, trip.name,
-                         route.name, route.type);
+                         route.name, route.type, route.shortName);
         }
       }
     }
@@ -372,7 +373,8 @@ class Data {
     for (const auto& route : raptorCopy.routes()) {
       for (size_t i = 0; i < raptorCopy.numberOfTripsInRoute(route); ++i) {
         data.trips.emplace_back("", raptorCopy.routeData[route].name,
-                                raptorCopy.routeData[route].type);
+                                raptorCopy.routeData[route].type,
+                                raptorCopy.routeData[route].shortName);
         for (StopIndex stopIndex(0);
              stopIndex < raptorCopy.numberOfStopsInRoute(route); ++stopIndex) {
           const StopId stop = raptorCopy.stopArrayOfRoute(route)[stopIndex];
@@ -391,8 +393,9 @@ class Data {
   inline void buildTrip(const GTFS::Data& gtfs, Map<std::string, int>& stopIds,
                         const std::vector<GTFS::StopTime>& stopTimes,
                         const int offset, const std::string& tripName,
-                        const std::string& routeName, const int type) {
-    trips.emplace_back(tripName, routeName, type);
+                        const std::string& routeName, const int type,
+                        const std::string& routeShortName = "") {
+    trips.emplace_back(tripName, routeName, type, routeShortName);
     Trip& trip = trips.back();
     for (const GTFS::StopTime& stopTime : stopTimes) {
       int& stopId = stopIds[stopTime.stopId];
@@ -862,7 +865,8 @@ class Data {
     std::sort(trips.begin(), trips.end());
     std::vector<size_t> duplicateTrips;
     for (size_t i = 1; i < trips.size(); ++i) {
-      if (trips[i].dominates(trips[i - 1])) {
+      if (trips[i].dominates(trips[i - 1]) &&
+          sameRouteAttributes(trips[i], trips[i - 1])) {
         duplicateTrips.emplace_back(i - 1);
       }
     }
@@ -995,10 +999,14 @@ class Data {
               sortedTripsWithoutBicycleTransport.end());
     std::vector<std::vector<Intermediate::Trip>> routes;
     appendRoutes(routes, sortedTripsWithBicycleTransport,
-                 [](const Trip& a, const Trip& b) { return isFiFo(a, b); });
+                 [](const Trip& a, const Trip& b) {
+                   return isFiFo(a, b) && sameRouteAttributes(a, b);
+                 });
     numberOfBicycleTransportRoutes = routes.size();
     appendRoutes(routes, sortedTripsWithoutBicycleTransport,
-                 [](const Trip& a, const Trip& b) { return isFiFo(a, b); });
+                 [](const Trip& a, const Trip& b) {
+                   return isFiFo(a, b) && sameRouteAttributes(a, b);
+                 });
     return routes;
   }
 
@@ -1007,8 +1015,9 @@ class Data {
     std::vector<Intermediate::Trip> sortedTrips = trips;
     std::sort(sortedTrips.begin(), sortedTrips.end());
     std::vector<std::vector<Intermediate::Trip>> routes;
-    appendRoutes(routes, sortedTrips,
-                 [](const Trip& a, const Trip& b) { return isFiFo(a, b); });
+    appendRoutes(routes, sortedTrips, [](const Trip& a, const Trip& b) {
+      return isFiFo(a, b) && sameRouteAttributes(a, b);
+    });
     return routes;
   }
 
@@ -1060,7 +1069,7 @@ class Data {
       // now add the edges to the graph
       for (size_t i(0); i < (right - left); ++i) {
         for (size_t j(i + 1); j < (right - left); ++j) {
-          bool before = true;
+          bool before = sameRouteAttributes(trips[left + i], trips[left + j]);
 
           for (size_t stopIndex(0);
                before && stopIndex < trips[left + i].stopEvents.size();
@@ -1135,8 +1144,9 @@ class Data {
     std::vector<Intermediate::Trip> sortedTrips = trips;
     std::sort(sortedTrips.begin(), sortedTrips.end());
     std::vector<std::vector<Intermediate::Trip>> routes;
-    appendRoutes(routes, sortedTrips,
-                 [](const Trip& a, const Trip& b) { return isOffset(a, b); });
+    appendRoutes(routes, sortedTrips, [](const Trip& a, const Trip& b) {
+      return isOffset(a, b) && sameRouteAttributes(a, b);
+    });
     return routes;
   }
 
@@ -1147,7 +1157,8 @@ class Data {
     std::vector<std::vector<Intermediate::Trip>> routes;
     routes.emplace_back(std::vector<Intermediate::Trip>{sortedTrips[0]});
     for (size_t i = 1; i < sortedTrips.size(); ++i) {
-      if (equals(sortedTrips[i].stopEvents, sortedTrips[i - 1].stopEvents)) {
+      if (equals(sortedTrips[i].stopEvents, sortedTrips[i - 1].stopEvents) &&
+          sameRouteAttributes(sortedTrips[i], sortedTrips[i - 1])) {
         routes.back().emplace_back(sortedTrips[i]);
       } else {
         routes.emplace_back(std::vector<Intermediate::Trip>{sortedTrips[i]});
@@ -1507,13 +1518,15 @@ class Data {
         fileName, "Trips",
         [&]() {
           size_t count = 0;
-          IO::CSVReader<4, IO::TrimChars<>, IO::DoubleQuoteEscape<',', '"'>> in(
+          IO::CSVReader<5, IO::TrimChars<>, IO::DoubleQuoteEscape<',', '"'>> in(
               fileName);
           in.readHeader(IO::IGNORE_EXTRA_COLUMN | IO::IGNORE_MISSING_COLUMN,
-                        "trip_id", "name", "route", "vehicle");
+                        "trip_id", "name", "route", "routeShortName",
+                        "vehicle");
           TripId tripID;
           Trip trip;
-          while (in.readRow(tripID, trip.tripName, trip.routeName, trip.type)) {
+          while (in.readRow(tripID, trip.tripName, trip.routeName,
+                            trip.routeShortName, trip.type)) {
             if (tripID >= trips.size())
               trips.resize(tripID + 1, Trip("NOT_NAMED", "NOT_NAMED", -1));
             trips[tripID] = trip;

@@ -39,13 +39,15 @@ class Route {
   Route(const std::string& routeId = "", const std::string& agencyId = "",
         const std::string& name = "", const int type = -1,
         const std::string& routeColor = "FFFFFF",
-        const std::string& textColor = "000000")
+        const std::string& textColor = "000000",
+        const std::string& shortName = "")
       : routeId(routeId),
         agencyId(agencyId),
         name(name),
         type(type),
         routeColor(routeColor),
-        textColor(textColor) {}
+        textColor(textColor),
+        shortName(shortName) {}
   Route(IO::Deserialization& deserialize) { this->deserialize(deserialize); }
 
   inline bool validate() noexcept {
@@ -58,15 +60,16 @@ class Route {
   friend std::ostream& operator<<(std::ostream& out, const Route& r) {
     return out << "Route{" << r.routeId << ", " << r.agencyId << ", " << r.name
                << ", " << r.type << ", " << r.routeColor << ", " << r.textColor
-               << "}";
+               << ", " << r.shortName << "}";
   }
 
   inline void serialize(IO::Serialization& serialize) const noexcept {
-    serialize(routeId, agencyId, name, type, routeColor, textColor);
+    serialize(routeId, agencyId, name, type, routeColor, textColor, shortName);
   }
 
   inline void deserialize(IO::Deserialization& deserialize) noexcept {
-    deserialize(routeId, agencyId, name, type, routeColor, textColor);
+    deserialize(routeId, agencyId, name, type, routeColor, textColor,
+                shortName);
   }
 
  public:
@@ -76,6 +79,7 @@ class Route {
   int type{-1};
   std::string routeColor{"FFFFFF"};
   std::string textColor{"000000"};
+  std::string shortName{""};
 };
 
 }  // namespace GTFS

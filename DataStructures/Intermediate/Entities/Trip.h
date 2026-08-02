@@ -41,13 +41,19 @@ class Trip {
 
  public:
   Trip(const std::string& tripName = "", const std::string& routeName = "",
-       const int type = -1)
-      : tripName(tripName), routeName(routeName), type(type) {}
+       const int type = -1, const std::string& routeShortName = "")
+      : tripName(tripName),
+        routeName(routeName),
+        type(type),
+        routeShortName(routeShortName) {}
   template <typename TRIP_TYPE>
   Trip(const TRIP_TYPE& t)
       : tripName(t.tripName), routeName(t.routeName), type(t.type) {}
   Trip(const Trip& t, const int timeOffset)
-      : tripName(t.tripName), routeName(t.routeName), type(t.type) {
+      : tripName(t.tripName),
+        routeName(t.routeName),
+        type(t.type),
+        routeShortName(t.routeShortName) {
     for (const StopEvent se : t.stopEvents) {
       stopEvents.emplace_back(se, timeOffset);
     }
@@ -90,20 +96,22 @@ class Trip {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Trip& t) {
-    return out << "Trip{" << t.routeName << ", " << t.tripName << ", " << t.type
-               << ", " << t.stopEvents.size() << "}";
+    return out << "Trip{" << t.routeName << " (" << t.routeShortName << "), "
+               << t.tripName << ", " << t.type << ", " << t.stopEvents.size()
+               << "}";
   }
 
   inline void serialize(IO::Serialization& serialize) const noexcept {
-    serialize(stopEvents, tripName, routeName, type);
+    serialize(stopEvents, tripName, routeName, type, routeShortName);
   }
 
   inline void deserialize(IO::Deserialization& deserialize) noexcept {
-    deserialize(stopEvents, tripName, routeName, type);
+    deserialize(stopEvents, tripName, routeName, type, routeShortName);
   }
 
   inline std::ostream& toCSV(std::ostream& out) const {
-    return out << "\"" << tripName << "\",\"" << routeName << "\"," << type;
+    return out << "\"" << tripName << "\",\"" << routeName << "\",\""
+               << routeShortName << "\"," << type;
   }
 
   inline std::string toCSV() const {
@@ -128,6 +136,7 @@ class Trip {
     tripName = other.tripName;
     routeName = other.routeName;
     type = other.type;
+    routeShortName = other.routeShortName;
   }
 
   inline void shiftInTime(const int amount) noexcept {
@@ -148,9 +157,14 @@ class Trip {
   std::string tripName{""};
   std::string routeName{""};
   int type{-1};
+  std::string routeShortName{""};
 };
 
-const std::string Trip::CSV_HEADER = "name,route,vehicle";
+const std::string Trip::CSV_HEADER = "name,route,routeShortName,vehicle";
+
+inline bool sameRouteAttributes(const Trip& a, const Trip& b) noexcept {
+  return a.routeName == b.routeName && a.type == b.type;
+}
 
 inline bool isFiFo(const Trip& a, const Trip& b) noexcept {
   AssertMsg(a.stopEvents.size() == b.stopEvents.size(),

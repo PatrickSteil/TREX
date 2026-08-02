@@ -195,6 +195,7 @@ class Data {
           std::string longName;
           while (in.readRow(route.routeId, route.agencyId, shortName, longName,
                             route.type, route.routeColor, route.textColor)) {
+            route.shortName = shortName;
             route.name = "[" + shortName + "] " + longName;
             if (route.validate()) routes.emplace_back(route);
             count++;
