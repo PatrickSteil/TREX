@@ -1126,9 +1126,9 @@ public:
             "data. Flags are either computed and saved, or ingested from "
             "an existing flag file, depending on whether one is given.") {
     addParameter("Input file (TREX Data)");
-    addParameter("Input file (Flags)", "");
+    addParameter("Input file (Flags)", "-");
     addParameter("Output file (Flags)", "flags.flags");
-    addParameter("Number of queries", "1000");
+    addParameter("Number of queries", "0");
     addParameter("Compare to TB?", "false");
     addParameter("Verbose?", "false");
   }
@@ -1147,18 +1147,24 @@ public:
 
     TripBased::BackwardForwardSweeper preproc(data);
 
-    // If no flag file was given, compute the flags and save them.
-    // Otherwise, load the existing flags.
-    if (flagsInputFile.empty()) {
+    if (flagsInputFile == "-") {
       preproc.run();
       preproc.saveFlags(flagsOutputFile, preproc.getFlags());
     } else {
       preproc.ingestFlags(flagsInputFile);
     }
     preproc.showStats();
+    preproc.showPerEventStats();
+    preproc.showPerEventPruningStats();
+    preproc.writeFlagsToCSV("flags.csv");
 
-    const std::vector<StopQuery> queries =
-        generateRandomStopQueries(data.numberOfStops(), n);
+    if (n == 0)
+      return;
+
+    // const std::vector<StopQuery> queries =
+    //     generateRandomStopQueries(data.numberOfStops(), n);
+    const std::vector<StopQuery> queries = {
+        StopQuery(StopId(3940), StopId(3301), (int)32360)};
 
     std::vector<std::vector<std::pair<int, int>>> result;
     result.assign(n, {});

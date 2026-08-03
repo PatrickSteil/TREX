@@ -93,7 +93,7 @@ private:
   };
 
 public:
-  FlagQuery(const TREXData &data, const std::vector<std::uint32_t> &flags)
+  FlagQuery(const TREXData &data, const std::vector<std::uint64_t> &flags)
       : data(data), reverseTransferGraph(data.raptorData.transferGraph),
         transferFromSource(data.numberOfStops(), INFTY),
         transferToTarget(data.numberOfStops(), INFTY), lastSource(StopId(0)),
@@ -104,7 +104,7 @@ public:
         routeLabels(data.numberOfRoutes()),
         eventLookup(data.numberOfStopEvents()),
         eventArrTimes(data.numberOfStopEvents()), sourceStop(noStop),
-        targetStop(noStop), sourceDepartureTime(never), targetCellExpanded(0),
+        targetStop(noStop), sourceDepartureTime(never), targetCell(0),
         flags(flags) {
     assert(flags.size() == data.stopEventGraph.numEdges());
 
@@ -125,6 +125,8 @@ public:
       edgeLabels[edge].setStopIndex(
           StopIndex(data.stopEventGraph.get(ToVertex, edge) -
                     edgeLabels[edge].getFirstEvent() + 1));
+      edgeLabels[edge].setCellId(data.getCellIdOfStop(data.getStopOfStopEvent(
+          StopEventId(edgeLabels[edge].getStopEvent() - 1))));
     }
 
     for (const RouteId route : data.raptorData.routes()) {
@@ -148,7 +150,7 @@ public:
     profiler.registerMetrics({METRIC_ROUNDS, METRIC_SCANNED_TRIPS,
                               METRIC_SCANNED_STOPS, METRIC_RELAXED_TRANSFERS,
                               METRIC_ENQUEUES, METRIC_ADD_JOURNEYS,
-                              METRIC_COUNT_DISTANCE});
+                              METRIC_COUNT_PRUNED_EDGES});
   }
 
   inline void run(const Vertex source, const int departureTime,
@@ -164,7 +166,7 @@ public:
     clear();
     sourceStop = source;
     targetStop = target;
-    targetCellExpanded = expand(data.getCellIdOfStop(targetStop));
+    targetCell = data.getCellIdOfStop(targetStop);
     sourceDepartureTime = departureTime;
     computeInitialAndFinalTransfers();
     evaluateInitialTransfers();
@@ -413,14 +415,17 @@ private:
 
   inline void enqueue(const std::size_t edge, const size_t parent) noexcept {
     profiler.countMetric(METRIC_ENQUEUES);
-    if (pruneEdge(edge))
-      return;
-
-    const EdgeLabel &label = edgeLabels[edge];
+    const EdgeLabelCellId &label = edgeLabels[edge];
 
     const uint8_t reachedTrip = reachedIndex(label.getTrip());
     if (reachedTrip <= uint8_t(label.getStopIndex()))
       return;
+
+    assert(label.getCellId() < 64);
+    if (!(flags[edge] & (1u << targetCell))) {
+      profiler.countMetric(METRIC_COUNT_PRUNED_EDGES);
+      return;
+    }
     reachedIndex.update(label.getTrip(), StopIndex(label.getStopIndex()));
 
     queue[queueSize] = std::move(
@@ -429,11 +434,6 @@ private:
 
     queueSize++;
     AssertMsg(queueSize <= queue.size(), "Queue is overfull!");
-  }
-
-  inline bool pruneEdge(const std::size_t edge) const {
-    assert(edge < flags.size());
-    return !((flags[edge] & targetCellExpanded) == targetCellExpanded);
   }
 
   inline void addTargetLabel(const int newArrivalTime,
@@ -546,7 +546,7 @@ private:
   std::vector<TargetLabel> targetLabels;
   std::uint32_t minArrivalTime;
 
-  std::vector<EdgeLabel> edgeLabels;
+  std::vector<EdgeLabelCellId> edgeLabels;
   std::vector<RouteLabel> routeLabels;
 
   std::vector<EventLookup> eventLookup;
@@ -556,8 +556,8 @@ private:
   StopId targetStop;
   int sourceDepartureTime;
 
-  std::uint32_t targetCellExpanded;
-  const std::vector<std::uint32_t> &flags;
+  std::uint16_t targetCell;
+  const std::vector<std::uint64_t> &flags;
 
   Profiler profiler;
 };

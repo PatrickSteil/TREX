@@ -80,6 +80,7 @@ typedef enum {
   METRIC_TREX_COLLECTED_IBES,
   METRIC_TREX_STOPEVENT_TO_UNPACK,
   METRIC_TREX_NUMBER_OF_RUNS,
+  METRIC_COUNT_PRUNED_EDGES,
   NUM_METRICS
 } Metric;
 
@@ -96,7 +97,8 @@ constexpr const char *MetricNames[] = {"Rounds",
                                        "Number of discarded edges",
                                        "Number of collected IBEs",
                                        "Number of stop events to unpack",
-                                       "Number of runs"};
+                                       "Number of runs",
+                                       "Number of pruned edges"};
 
 class NoProfiler {
 public:
