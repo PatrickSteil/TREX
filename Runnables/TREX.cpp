@@ -33,65 +33,65 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 using namespace Shell;
 
-int main(int argc, char **argv) {
-  std::cout << std::endl;
-  std::cout << "░        ░░       ░░░        ░░  ░░░░  ░\n";
-  std::cout << "▒▒▒▒  ▒▒▒▒▒  ▒▒▒▒  ▒▒  ▒▒▒▒▒▒▒▒▒  ▒▒  ▒▒\n";
-  std::cout << "▓▓▓▓  ▓▓▓▓▓       ▓▓▓      ▓▓▓▓▓▓    ▓▓▓\n";
-  std::cout << "████  █████  ███  ███  █████████  ██  ██\n";
-  std::cout << "████  █████  ████  ██        ██  ████  █\n";
-  std::cout << std::endl;
+int main(int argc, char** argv) {
+    std::cout << std::endl;
+    std::cout << "░        ░░       ░░░        ░░  ░░░░  ░\n";
+    std::cout << "▒▒▒▒  ▒▒▒▒▒  ▒▒▒▒  ▒▒  ▒▒▒▒▒▒▒▒▒  ▒▒  ▒▒\n";
+    std::cout << "▓▓▓▓  ▓▓▓▓▓       ▓▓▓      ▓▓▓▓▓▓    ▓▓▓\n";
+    std::cout << "████  █████  ███  ███  █████████  ██  ██\n";
+    std::cout << "████  █████  ████  ██        ██  ████  █\n";
+    std::cout << std::endl;
 
-  CommandLineParser clp(argc, argv);
-  pinThreadToCoreId(clp.value<int>("core", 1));
-  checkAsserts();
-  ::Shell::Shell shell;
+    CommandLineParser clp(argc, argv);
+    pinThreadToCoreId(clp.value<int>("core", 1));
+    checkAsserts();
+    ::Shell::Shell shell;
 
-  new ApplyPartitionFile(shell);
-  new RAPTORToTREX(shell);
-  new CreateCompactLayoutGraph(shell);
-  new Customization(shell);
-  new ShowInfoOfTREX(shell);
-  new WriteTREXToCSV(shell);
-  new EventDistributionOverTime(shell);
-  new WriteTREXStopFailureDistribution(shell);
-  new CheckBorderStops(shell);
-  new ExportTREXTimeExpandedGraph(shell);
-  new BuildTBTEGraph(shell);
-  new ShowInducedCellOfNetwork(shell);
+    new ApplyPartitionFile(shell);
+    new RAPTORToTREX(shell);
+    new CreateCompactLayoutGraph(shell);
+    new Customization(shell);
+    new ShowInfoOfTREX(shell);
+    new WriteTREXToCSV(shell);
+    new EventDistributionOverTime(shell);
+    new WriteTREXStopFailureDistribution(shell);
+    new ExportTREXTimeExpandedGraph(shell);
+    new BuildTBTEGraph(shell);
+    new ShowInducedCellOfNetwork(shell);
 
-  new RunTREXQuery(shell);
-  new RunTREXProfileQueries(shell);
+    new RunTREXQuery(shell);
+    new RunTREXProfileQueries(shell);
 
-  new RunTransitiveRAPTORQueries(shell);
-  new RunOneTransitiveRAPTORQuery(shell);
-  new RunTransitiveTripBasedQueries(shell);
-  new RunTransitiveCSAQueries(shell);
-  new RunTransitiveProfileTripBasedQueries(shell);
+    new RunRAPTORQueries(shell);
+    new RunOneRAPTORQuery(shell);
+    new RunTripBasedQueries(shell);
+    new RunCSAQueries(shell);
+    new RunProfileTripBasedQueries(shell);
 
-  new RunGeoRankedTripBasedQueries(shell);
-  new RunGeoRankedTREXQueries(shell);
+    new RunGeoRankedTripBasedQueries(shell);
+    new RunGeoRankedTREXQueries(shell);
 
-  new IntermediateToTD(shell);
-  new IntermediateToTE(shell);
+    new IntermediateToTD(shell);
+    new IntermediateToTE(shell);
 
-  new ExportTEGraphToHubLabelFile(shell);
+    new ExportTEGraphToHubLabelFile(shell);
 
-  new RunTDDijkstraQueries(shell);
-  new RunTEDijkstraQueries(shell);
+    new RunTDDijkstraQueries(shell);
+    new RunTEDijkstraQueries(shell);
 
-  new TEToPTL(shell);
-  new RunPTLQueries(shell);
+    new TEToPTL(shell);
+    new RunPTLQueries(shell);
 
-  new TEToPPTL(shell);
-  new RunPPTLQueries(shell);
+    new TEToPPTL(shell);
+    new RunPPTLQueries(shell);
 
-  new DistanceNetwork(shell);
-  new StopsImportance(shell);
+    new DistanceNetwork(shell);
+    new StopsImportance(shell);
 
-  new CompareGeoToLength(shell);
+    new CompareGeoToLength(shell);
 
-  new MeasureTransferGeneration(shell);
-  shell.run();
-  return 0;
+    new MeasureTransferGenerationTimeWindow(shell);
+
+    shell.run();
+    return 0;
 }

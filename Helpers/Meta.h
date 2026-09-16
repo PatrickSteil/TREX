@@ -21,22 +21,22 @@ namespace Meta {
 
 template <typename T>
 struct ID {
-  using Type = T;
+    using Type = T;
 };
 
 // TRUE & FALSE
 
 struct True {
-  constexpr static bool Value = true;
+    constexpr static bool Value = true;
 };
 
 struct False {
-  constexpr static bool Value = false;
+    constexpr static bool Value = false;
 };
 
 template <typename T>
 struct FalseIfInstantiated {
-  constexpr static bool Value = false;
+    constexpr static bool Value = false;
 };
 
 // EQUALS
@@ -51,7 +51,7 @@ struct Equals<T, T> : True {};
 
 template <typename T, typename U>
 inline constexpr bool Equals() {
-  return Implementation::Equals<T, U>::Value;
+    return Implementation::Equals<T, U>::Value;
 }
 
 // IF THEN ELSE
@@ -59,12 +59,12 @@ inline constexpr bool Equals() {
 namespace Implementation {
 template <bool CONDITION, typename IF_TYPE, typename ELSE_TYPE>
 struct If {
-  using Type = ELSE_TYPE;
+    using Type = ELSE_TYPE;
 };
 
 template <typename IF_TYPE, typename ELSE_TYPE>
 struct If<true, IF_TYPE, ELSE_TYPE> {
-  using Type = IF_TYPE;
+    using Type = IF_TYPE;
 };
 }  // namespace Implementation
 
@@ -75,8 +75,8 @@ using IF = typename Implementation::If<CONDITION, IF_TYPE, ELSE_TYPE>::Type;
 
 template <typename... VALUES>
 struct List {
-  using Type = List<VALUES...>;
-  constexpr static size_t Size = sizeof...(VALUES);
+    using Type = List<VALUES...>;
+    constexpr static size_t Size = sizeof...(VALUES);
 };
 
 // LIST HEAD
@@ -112,8 +112,7 @@ template <typename LIST_A, typename LIST_B>
 struct Concat;
 
 template <typename... VALUES_A, typename... VALUES_B>
-struct Concat<List<VALUES_A...>, List<VALUES_B...>>
-    : List<VALUES_A..., VALUES_B...> {};
+struct Concat<List<VALUES_A...>, List<VALUES_B...>> : List<VALUES_A..., VALUES_B...> {};
 }  // namespace Implementation
 
 template <typename LIST_A, typename LIST_B>
@@ -129,52 +128,46 @@ template <typename T>
 struct Contains<T, List<>> : False {};
 
 template <typename T, typename HEAD, typename... TAIL>
-struct Contains<T, List<HEAD, TAIL...>>
-    : IF<!Meta::Equals<T, HEAD>(), Contains<T, List<TAIL...>>, True> {};
+struct Contains<T, List<HEAD, TAIL...>> : IF<!Meta::Equals<T, HEAD>(), Contains<T, List<TAIL...>>, True> {};
 }  // namespace Implementation
 
 template <typename T, typename LIST>
 inline constexpr bool Contains() {
-  return Implementation::Contains<T, LIST>::Value;
+    return Implementation::Contains<T, LIST>::Value;
 }
 
 // TO STRING (for Types)
 
 namespace Implementation {
 inline std::string type(const char* name) noexcept {
-  int status = -4;
-  std::unique_ptr<char, void (*)(void*)> res{
-      abi::__cxa_demangle(name, NULL, NULL, &status), std::free};
-  return (status == 0) ? res.get() : name;
+    int status = -4;
+    std::unique_ptr<char, void (*)(void*)> res{abi::__cxa_demangle(name, NULL, NULL, &status), std::free};
+    return (status == 0) ? res.get() : name;
 }
 
-inline std::string type(const std::string& name) noexcept {
-  return type(name.c_str());
-}
+inline std::string type(const std::string& name) noexcept { return type(name.c_str()); }
 
 inline std::string cleanType(const char* name) noexcept {
-  std::string typeID = type(name);
-  typeID = typeID.substr(9, typeID.size() - 10);
-  typeID = String::replaceAll(typeID, "> ", ">");
-  typeID = String::replaceAll(typeID, "::__debug::", "::");
-  size_t i = String::firstIndexOf(typeID, ", std::allocator<");
-  while (i < typeID.size()) {
-    int parenthesisCount = 1;
-    size_t j;
-    for (j = i + 17; j < typeID.size(); j++) {
-      if (parenthesisCount == 0) break;
-      if (typeID[j] == '<') parenthesisCount++;
-      if (typeID[j] == '>') parenthesisCount--;
+    std::string typeID = type(name);
+    typeID = typeID.substr(9, typeID.size() - 10);
+    typeID = String::replaceAll(typeID, "> ", ">");
+    typeID = String::replaceAll(typeID, "::__debug::", "::");
+    size_t i = String::firstIndexOf(typeID, ", std::allocator<");
+    while (i < typeID.size()) {
+        int parenthesisCount = 1;
+        size_t j;
+        for (j = i + 17; j < typeID.size(); j++) {
+            if (parenthesisCount == 0) break;
+            if (typeID[j] == '<') parenthesisCount++;
+            if (typeID[j] == '>') parenthesisCount--;
+        }
+        typeID = typeID.substr(0, i) + typeID.substr(j);
+        i = String::firstIndexOf(typeID, ", std::allocator<");
     }
-    typeID = typeID.substr(0, i) + typeID.substr(j);
-    i = String::firstIndexOf(typeID, ", std::allocator<");
-  }
-  return typeID;
+    return typeID;
 }
 
-inline std::string cleanType(const std::string& name) noexcept {
-  return cleanType(name.c_str());
-}
+inline std::string cleanType(const std::string& name) noexcept { return cleanType(name.c_str()); }
 
 template <typename T>
 struct Type;
@@ -182,17 +175,17 @@ struct Type;
 
 template <typename T>
 inline std::string type(T&&) noexcept {
-  return Implementation::cleanType(typeid(ID<T&&>).name());
+    return Implementation::cleanType(typeid(ID<T&&>).name());
 }
 
 template <typename T>
 inline std::string type() noexcept {
-  return Implementation::cleanType(typeid(ID<T>).name());
+    return Implementation::cleanType(typeid(ID<T>).name());
 }
 
 template <typename T>
 struct Type {
-  Type() { Implementation::Type<T> type; }
+    Type() { Implementation::Type<T> type; }
 };
 
 // MAKE CONST
@@ -200,27 +193,27 @@ struct Type {
 namespace Implementation {
 template <typename T>
 struct MakeConst {
-  using Type = const T;
+    using Type = const T;
 };
 
 template <typename T>
 struct MakeConst<T*> {
-  using Type = const T*;
+    using Type = const T*;
 };
 
 template <typename T>
 struct MakeConst<T* const> {
-  using Type = const T* const;
+    using Type = const T* const;
 };
 
 template <typename T>
 struct MakeConst<T&> {
-  using Type = const T&;
+    using Type = const T&;
 };
 
 template <typename T>
 struct MakeConst<T&&> {
-  using Type = const T&&;
+    using Type = const T&&;
 };
 }  // namespace Implementation
 
@@ -231,7 +224,7 @@ using MakeConst = typename Implementation::MakeConst<T>::Type;
 
 template <typename T>
 inline constexpr bool IsConst() {
-  return Equals<T, MakeConst<T>>();
+    return Equals<T, MakeConst<T>>();
 }
 
 // REMOVE CONSTNESS
@@ -239,32 +232,32 @@ inline constexpr bool IsConst() {
 namespace Implementation {
 template <typename T>
 struct RemoveConstness {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemoveConstness<const T> {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemoveConstness<const T*> {
-  using Type = T*;
+    using Type = T*;
 };
 
 template <typename T>
 struct RemoveConstness<const T* const> {
-  using Type = T*;
+    using Type = T*;
 };
 
 template <typename T>
 struct RemoveConstness<const T&> {
-  using Type = T&;
+    using Type = T&;
 };
 
 template <typename T>
 struct RemoveConstness<const T&&> {
-  using Type = T&&;
+    using Type = T&&;
 };
 }  // namespace Implementation
 
@@ -291,7 +284,7 @@ struct IsReference<T&&> : True {};
 
 template <typename T>
 inline constexpr bool IsReference() {
-  return Implementation::IsReference<T>::Value;
+    return Implementation::IsReference<T>::Value;
 }
 
 // REMOVE REFERENCE
@@ -299,17 +292,17 @@ inline constexpr bool IsReference() {
 namespace Implementation {
 template <typename T>
 struct RemoveReference {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemoveReference<T&> {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemoveReference<T&&> {
-  using Type = T;
+    using Type = T;
 };
 }  // namespace Implementation
 
@@ -328,7 +321,7 @@ struct IsPointer<T*> : True {};
 
 template <typename T>
 inline constexpr bool IsPointer() {
-  return Implementation::IsPointer<RemoveConstness<T>>::Value;
+    return Implementation::IsPointer<RemoveConstness<T>>::Value;
 }
 
 // REMOVE POINTER
@@ -336,17 +329,17 @@ inline constexpr bool IsPointer() {
 namespace Implementation {
 template <typename T>
 struct RemovePointer {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemovePointer<T*> {
-  using Type = T;
+    using Type = T;
 };
 
 template <typename T>
 struct RemovePointer<T* const> {
-  using Type = T;
+    using Type = T;
 };
 }  // namespace Implementation
 
@@ -356,15 +349,13 @@ using RemovePointer = typename Implementation::RemovePointer<T>::Type;
 // PLAIN TYPE
 
 template <typename T>
-using PlainType = IF<IsReference<T>(), RemoveReference<RemoveConstness<T>>,
-                     RemovePointer<RemoveConstness<T>>>;
+using PlainType = IF<IsReference<T>(), RemoveReference<RemoveConstness<T>>, RemovePointer<RemoveConstness<T>>>;
 
 // IS MOVEABLE
 
 template <typename T>
 inline constexpr bool IsMovable() {
-  return std::is_move_assignable<T>::value &&
-         std::is_move_constructible<T>::value;
+    return std::is_move_assignable<T>::value && std::is_move_constructible<T>::value;
 }
 
 }  // namespace Meta
