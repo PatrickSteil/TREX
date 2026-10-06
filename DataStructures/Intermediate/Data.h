@@ -770,7 +770,8 @@ class Data {
       for (const Vertex other :
            ct.getNeighbors(transferGraph.get(Coordinates, stop),
                            maxConnectingDistanceInCM)) {
-        if (other == stop) continue;
+        // Every pair is seen from both ends; add both directions only once.
+        if (other >= stop) continue;
         const double distance = std::max(
             1.0,
             Geometry::geoDistanceInCM(transferGraph.get(Coordinates, stop),
