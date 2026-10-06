@@ -503,7 +503,7 @@ inline std::string bytesToString(const long long bytes,
 }
 
 inline int parseSeconds(const std::string &time) {
-  AssertMsg(time.length() == 8 || time.length() == 9,
+  AssertMsg(time.length() >= 7 && time.length() <= 9,
             "Time " << time << " has not the correct length!");
   int seconds = 0;
   int value = 0;

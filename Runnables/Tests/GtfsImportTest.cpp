@@ -116,6 +116,12 @@ int main() {
     CHECK(std::is_sorted(d.trips.begin(), d.trips.end()),
           "sorted: trips are not sorted after validate()");
   }
+  {  // 5. GTFS allows single-digit hours ("8:00:00").
+    auto d = load("shorttime", "t1,8:00:00,8:00:00,A,1\nt1,8:10:00,8:10:00,B,2\n");
+    CHECK(d.numberOfTrips() == 1 &&
+              d.trips[0].stopEvents.back().arrivalTime == 8 * 3600 + 600,
+          "shorttime: wrong trip");
+  }
   std::cout << (failures ? "FAILED" : "ok") << std::endl;
   return failures ? 1 : 0;
 }
