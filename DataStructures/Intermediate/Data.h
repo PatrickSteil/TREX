@@ -885,12 +885,11 @@ class Data {
       if (hasStopEvents[stop]) {
         newStops.emplace_back(stop);
       } else {
+        // Unused stops are removed from `stops` below, so their vertex must go
+        // as well. Keeping it as a plain vertex would leave footpaths that
+        // point to ids which are no longer stops.
         oldStops.emplace_back(stop);
-        if (deleteVertex[stop]) {
-          deletions.emplace_back(stop);
-        } else {
-          newVertices.emplace_back(stop);
-        }
+        deletions.emplace_back(stop);
       }
     }
     for (Vertex vertex = Vertex(numberOfStops());
