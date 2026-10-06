@@ -253,7 +253,8 @@ class Data {
           if (ignoreFrequencies) continue;
           for (const int i : frequencyIds[tripId]) {
             const GTFS::Frequency& frequency = gtfs.frequencies[i];
-            for (int time = frequency.startTime; time <= frequency.endTime;
+            // end_time is exclusive in GTFS.
+            for (int time = frequency.startTime; time < frequency.endTime;
                  time += frequency.headwaySecs) {
               data.buildTrip(gtfs, stopIds, stopTimes,
                              seconds - stopTimes[0].departureTime + time,
@@ -867,9 +868,19 @@ class Data {
         duplicateTrips.emplace_back(i - 1);
       }
     }
-    for (size_t i = duplicateTrips.size() - 1; i < duplicateTrips.size(); --i) {
-      trips[duplicateTrips[i]] = trips.back();
-      trips.pop_back();
+    // Remove them in a stable way so that the trips stay sorted.
+    if (!duplicateTrips.empty()) {
+      size_t next = 0;
+      size_t keep = 0;
+      for (size_t i = 0; i < trips.size(); ++i) {
+        if (next < duplicateTrips.size() && duplicateTrips[next] == i) {
+          ++next;
+          continue;
+        }
+        if (keep != i) trips[keep] = std::move(trips[i]);
+        ++keep;
+      }
+      trips.resize(keep);
     }
     for (const Edge edge : transferGraph.edges()) {
       if (transferGraph.get(FromVertex, edge) ==

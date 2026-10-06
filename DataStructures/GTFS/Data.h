@@ -28,6 +28,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <numeric>
 #include <set>
 #include <string>
 #include <vector>
@@ -243,18 +245,72 @@ class Data {
           std::string departureTime;
           while (in.readRow(stopTime.tripId, arrivalTime, departureTime,
                             stopTime.stopId, stopTime.stopSequence)) {
-            if (arrivalTime.empty() || departureTime.empty() ||
-                stopTime.stopId.empty()) {
-              continue;
+            if (stopTime.stopId.empty()) continue;
+            if (arrivalTime.empty() && departureTime.empty()) {
+              // Interpolated later, see interpolateMissingStopTimes().
+              stopTime.arrivalTime = missingTime;
+              stopTime.departureTime = missingTime;
+            } else {
+              stopTime.arrivalTime = String::parseSeconds(
+                  arrivalTime.empty() ? departureTime : arrivalTime);
+              stopTime.departureTime = String::parseSeconds(
+                  departureTime.empty() ? arrivalTime : departureTime);
             }
-            stopTime.arrivalTime = String::parseSeconds(arrivalTime);
-            stopTime.departureTime = String::parseSeconds(departureTime);
             if (stopTime.validate()) stopTimes.push_back(stopTime);
             count++;
           }
+          interpolateMissingStopTimes();
           return count;
         },
         verbose);
+  }
+
+  constexpr static int missingTime = std::numeric_limits<int>::min();
+
+  // Stops without times (non-timepoints) get times interpolated linearly by
+  // stop index between the surrounding stops with times. Stops before the
+  // first or after the last known time cannot be interpolated and are removed.
+  inline void interpolateMissingStopTimes() {
+    const auto isMissing = [](const StopTime& s) {
+      return s.arrivalTime == missingTime;
+    };
+    if (std::none_of(stopTimes.begin(), stopTimes.end(), isMissing)) return;
+    std::vector<size_t> order(stopTimes.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+      if (stopTimes[a].tripId != stopTimes[b].tripId)
+        return stopTimes[a].tripId < stopTimes[b].tripId;
+      return stopTimes[a].stopSequence < stopTimes[b].stopSequence;
+    });
+    size_t begin = 0;
+    while (begin < order.size()) {
+      size_t end = begin;
+      while (end < order.size() &&
+             stopTimes[order[end]].tripId == stopTimes[order[begin]].tripId) {
+        ++end;
+      }
+      bool hasKnown = false;
+      size_t lastKnown = begin;
+      for (size_t i = begin; i < end; ++i) {
+        const StopTime& known = stopTimes[order[i]];
+        if (isMissing(known)) continue;
+        if (hasKnown && i - lastKnown > 1) {
+          const long long from = stopTimes[order[lastKnown]].departureTime;
+          const long long to = known.arrivalTime;
+          const long long steps = i - lastKnown;
+          for (size_t k = lastKnown + 1; k < i; ++k) {
+            const int time = from + ((to - from) * (k - lastKnown)) / steps;
+            stopTimes[order[k]].arrivalTime = time;
+            stopTimes[order[k]].departureTime = time;
+          }
+        }
+        hasKnown = true;
+        lastKnown = i;
+      }
+      begin = end;
+    }
+    stopTimes.erase(std::remove_if(stopTimes.begin(), stopTimes.end(), isMissing),
+                    stopTimes.end());
   }
 
   inline void readTransfers(const std::string& fileName,
@@ -271,7 +327,9 @@ class Data {
           int transferType = 0;
           while (in.readRow(transfer.fromStopId, transfer.toStopId,
                             transfer.minTransferTime, transferType)) {
-            if (transferType == 3) continue;
+            // 3: not possible, 4/5: in-seat transfers (stay on the vehicle).
+            if (transferType == 3 || transferType == 4 || transferType == 5)
+              continue;
             if (transfer.validate()) transfers.emplace_back(transfer);
             count++;
           }
