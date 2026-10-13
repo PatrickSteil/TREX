@@ -953,6 +953,9 @@ public:
         file << "FromStopId,ToStopId,TravelTime\n";
         for (const StopId from : stops()) {
             for (const Edge edge : transferGraph.edgesFrom(from)) {
+                AssertMsg(isStop(transferGraph.get(ToVertex, edge)),
+                          "Footpath from stop " << from << " leads to vertex " << transferGraph.get(ToVertex, edge)
+                                                << ", which is not a stop!");
                 file << from.value() << "," << transferGraph.get(ToVertex, edge).value() << ","
                      << transferGraph.get(TravelTime, edge) << "\n";
             }

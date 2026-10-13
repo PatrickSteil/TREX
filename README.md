@@ -5,18 +5,36 @@
 This repo contains the code for T-REX, a journey planning algorithm I developed during my master thesis.
 The underlying code base is taken from [FLASH-TB](https://github.com/TransitRouting/FLASH-TB), which is based on [ULTRA](https://github.com/kit-algo/ULTRA).
 
-If you use this repository, please cite my work using
+If you use this repository, please cite our work using
 
 ```
 @mastersthesis{Steil2025_1000190843,
-    author       = {Steil, Patrick},
-    year         = {2025},
-    title        = {{A} {M}ultilevel {D}esign for {S}calable {P}areto-{O}ptimal {P}ublic {T}ransit {Q}ueries},
-    doi          = {10.5445/IR/1000190843},
-    publisher    = {{Karlsruher Institut für Technologie (KIT)}},
-    pagetotal    = {90},
-    school       = {Karlsruher Institut für Technologie (KIT)},
-    language     = {english}
+	title        = {{A} {M}ultilevel {D}esign for {S}calable {P}areto-{O}ptimal {P}ublic {T}ransit {Q}ueries},
+	author       = {Steil, Patrick},
+	year         = 2025,
+	publisher    = {{Karlsruher Institut für Technologie (KIT)}},
+	doi          = {10.5445/IR/1000190843},
+	pagetotal    = 90,
+	school       = {Karlsruher Institut für Technologie (KIT)},
+	language     = {english}
+}
+@inproceedings{sauer_et_al:LIPIcs.ESA.2026.9,
+	title        = {{T-REX: Fast and Dynamic Journey Planning for Continental-Scale Public Transit Networks}},
+	author       = {Sauer, Jonas and Steil, Patrick and Witt, Sascha},
+	year         = 2026,
+	booktitle    = {34th Annual European Symposium on Algorithms (ESA 2026)},
+	publisher    = {Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik},
+	address      = {Dagstuhl, Germany},
+	series       = {Leibniz International Proceedings in Informatics (LIPIcs)},
+	volume       = 388,
+	pages        = {9:1--9:25},
+	doi          = {10.4230/LIPIcs.ESA.2026.9},
+	isbn         = {978-3-95977-445-1},
+	issn         = {1868-8969},
+	url          = {https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ESA.2026.9},
+	editor       = {Bille, Philip and Pettie, Seth and Storandt, Sabine},
+	urn          = {urn:nbn:de:0030-drops-271458},
+	annote       = {Keywords: Public transit routing, graph algorithms, algorithm engineering}
 }
 ```
 
@@ -69,20 +87,21 @@ createCompactLayoutGraph ../Datasets/Karlsruhe/trex.binary ../Datasets/Karlsruhe
 ```
 The last command created the compact layout graph, which you can partition using e.g, MT-KaHyPar:
 ```
->>> ./../ExternalLibs/mt-kahypar/build/mt-kahypar/application/MtKaHyPar \
+>>> ./build/mt-kahypar/application/MtKaHyPar \
     -h [COMPACT_LAYOUT_GRAPH] \
     -k [1<< NUM_LEVELS e.g., 16] \
     -e [IMBALANCE e.g., 0.2] \
     -o cut \
-    -m rb \
     -t 6 \
-    --write-partition-file true \
-    --partition-output-folder [OUTPUTFOLDER] \
+    -m rb \
     --input-file-format metis \
-    --instance-type=graph \
+    --instance-type graph \
     --preset-type highest_quality \
     --i-r-flow-algo flow_cutter \
-    --i-r-refine-until-no-improvement true
+    --r-global-fm-type kway_fm \
+    --i-r-refine-until-no-improvement true \
+    --write-partition-file true \
+    --partition-output-folder [OUTPUTFOLDER]
 ```
 
 Then, again inside `./TREX`:

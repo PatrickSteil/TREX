@@ -473,7 +473,7 @@ inline std::string bytesToString(const long long bytes, const double k = 1000.0)
 }
 
 inline int parseSeconds(const std::string& time) {
-    AssertMsg(time.length() == 8 || time.length() == 9, "Time " << time << " has not the correct length!");
+    AssertMsg(time.length() >= 7 && time.length() <= 9, "Time " << time << " has not the correct length!");
     int seconds = 0;
     int value = 0;
     for (size_t i = 0; i < time.size(); i++) {

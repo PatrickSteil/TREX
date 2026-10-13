@@ -227,7 +227,8 @@ public:
                     if (ignoreFrequencies) continue;
                     for (const int i : frequencyIds[tripId]) {
                         const GTFS::Frequency& frequency = gtfs.frequencies[i];
-                        for (int time = frequency.startTime; time <= frequency.endTime; time += frequency.headwaySecs) {
+                        // end_time is exclusive in GTFS.
+                        for (int time = frequency.startTime; time < frequency.endTime; time += frequency.headwaySecs) {
                             data.buildTrip(gtfs, stopIds, stopTimes, seconds - stopTimes[0].departureTime + time,
                                            trip.name, route.name, route.type);
                         }
@@ -666,7 +667,8 @@ public:
 
             for (const Vertex other :
                  ct.getNeighbors(transferGraph.get(Coordinates, stop), maxConnectingDistanceInCM)) {
-                if (other == stop) continue;
+                // Every pair is seen from both ends; add both directions only once.
+                if (other >= stop) continue;
                 const double distance = std::max(1.0, Geometry::geoDistanceInCM(transferGraph.get(Coordinates, stop),
                                                                                 transferGraph.get(Coordinates, other)));
                 AssertMsg(distance <= maxConnectingDistanceInCM, "CoordinateTree returned a neighbor with distance "
@@ -755,9 +757,19 @@ public:
                 duplicateTrips.emplace_back(i - 1);
             }
         }
-        for (size_t i = duplicateTrips.size() - 1; i < duplicateTrips.size(); --i) {
-            trips[duplicateTrips[i]] = trips.back();
-            trips.pop_back();
+        // Remove them in a stable way so that the trips stay sorted.
+        if (!duplicateTrips.empty()) {
+            size_t next = 0;
+            size_t keep = 0;
+            for (size_t i = 0; i < trips.size(); ++i) {
+                if (next < duplicateTrips.size() && duplicateTrips[next] == i) {
+                    ++next;
+                    continue;
+                }
+                if (keep != i) trips[keep] = std::move(trips[i]);
+                ++keep;
+            }
+            trips.resize(keep);
         }
         for (const Edge edge : transferGraph.edges()) {
             if (transferGraph.get(FromVertex, edge) == transferGraph.get(ToVertex, edge)) continue;
@@ -772,12 +784,11 @@ public:
             if (hasStopEvents[stop]) {
                 newStops.emplace_back(stop);
             } else {
+                // Unused stops are removed from `stops` below, so their vertex must go
+                // as well. Keeping it as a plain vertex would leave footpaths that
+                // point to ids which are no longer stops.
                 oldStops.emplace_back(stop);
-                if (deleteVertex[stop]) {
-                    deletions.emplace_back(stop);
-                } else {
-                    newVertices.emplace_back(stop);
-                }
+                deletions.emplace_back(stop);
             }
         }
         for (Vertex vertex = Vertex(numberOfStops()); vertex < transferGraph.numVertices(); vertex++) {
