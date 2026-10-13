@@ -30,15 +30,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 using namespace Shell;
 
 int main(int argc, char** argv) {
-  CommandLineParser clp(argc, argv);
-  pinThreadToCoreId(clp.value<int>("core", 1));
-  checkAsserts();
-  ::Shell::Shell shell;
+    CommandLineParser clp(argc, argv);
+    pinThreadToCoreId(clp.value<int>("core", 1));
+    checkAsserts();
+    ::Shell::Shell shell;
 
-  new ExportTPDAGOfStop(shell);
-  new RunTransferPatternQueries(shell);
-  new ComputeTPUsingTB(shell);
+    new ExportTPDAGOfStop(shell);
+    new RunTransferPatternQueries(shell);
+    new ComputeTPUsingTB(shell);
 
-  shell.run();
-  return 0;
+    shell.run();
+    return 0;
 }

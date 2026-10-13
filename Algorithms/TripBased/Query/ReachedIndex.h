@@ -33,66 +33,67 @@ namespace TripBased {
 
 class ReachedIndex {
 public:
-  ReachedIndex(const Data &data)
-      : data(data), labels(data.numberOfTrips()),
-        defaultLabels(data.numberOfTrips()), routeEnd(data.numberOfTrips()) {
-    for (const TripId trip : data.trips()) {
-      if (data.numberOfStopsInTrip(trip) > 255) {
-        warning("Trip ", trip, " has ", data.numberOfStopsInTrip(trip),
-                " stops!");
-      }
-      defaultLabels[trip] = data.numberOfStopsInTrip(trip);
-      routeEnd[trip] = data.firstTripOfRoute[data.routeOfTrip[trip] + 1];
+    ReachedIndex(const Data& data)
+        : data(data),
+          labels(data.numberOfTrips()),
+          defaultLabels(data.numberOfTrips()),
+          routeEnd(data.numberOfTrips()) {
+        for (const TripId trip : data.trips()) {
+            if (data.numberOfStopsInTrip(trip) > 255) {
+                warning("Trip ", trip, " has ", data.numberOfStopsInTrip(trip), " stops!");
+            }
+            defaultLabels[trip] = data.numberOfStopsInTrip(trip);
+            routeEnd[trip] = data.firstTripOfRoute[data.routeOfTrip[trip] + 1];
+        }
     }
-  }
 
 public:
-  inline void clear() noexcept { labels = defaultLabels; }
+    inline void clear() noexcept { labels = defaultLabels; }
 
-  inline void clear(const RouteId route) noexcept {
-    const TripId start = data.firstTripOfRoute[route];
-    const TripId end = data.firstTripOfRoute[route + 1];
-    std::copy_n(defaultLabels.begin() + start, end - start,
-                labels.begin() + start);
-  }
-
-  inline StopIndex operator()(const TripId trip) const noexcept {
-    return static_cast<StopIndex>(labels[trip]);
-  }
-
-  inline bool alreadyReached(const TripId trip,
-                             const u_int8_t index) const noexcept {
-    return labels[trip] <= index;
-  }
-
-  inline void update(const TripId trip, const StopIndex index) noexcept {
-    const std::uint8_t newValue = index;
-    const uint32_t end = routeEnd[trip];
-
-    uint8_t *__restrict__ labelsPtr = labels.data();
-
-    uint32_t i = trip;
-    constexpr int UNROLL_FAKTOR = 16;
-    for (; i + UNROLL_FAKTOR < end; i += UNROLL_FAKTOR) {
-      if (labelsPtr[i] <= newValue)
-        return;
-      // THIS BETTER BE A CMOVE
-      for (int j = 0; j < UNROLL_FAKTOR; ++j) {
-        labelsPtr[i + j] = std::min(labelsPtr[i + j], newValue);
-      }
+    inline void clear(const RouteId route) noexcept {
+        const TripId start = data.firstTripOfRoute[route];
+        const TripId end = data.firstTripOfRoute[route + 1];
+        std::copy_n(defaultLabels.begin() + start, end - start, labels.begin() + start);
     }
 
-    for (; i < end; ++i) {
-      labelsPtr[i] = std::min(labelsPtr[i], newValue);
+    inline StopIndex operator()(const TripId trip) const noexcept { return static_cast<StopIndex>(labels[trip]); }
+
+    inline bool alreadyReached(const TripId trip, const u_int8_t index) const noexcept { return labels[trip] <= index; }
+
+    inline void update(const TripId trip, const StopIndex index) noexcept {
+        const std::uint8_t newValue = index;
+        const uint32_t end = routeEnd[trip];
+
+        uint8_t* __restrict__ labelsPtr = labels.data();
+
+        uint32_t i = trip;
+        constexpr int UNROLL_FAKTOR = 16;
+        for (; i + UNROLL_FAKTOR < end; i += UNROLL_FAKTOR) {
+            if (labelsPtr[i] <= newValue) return;
+            // THIS BETTER BE A CMOVE
+            for (int j = 0; j < UNROLL_FAKTOR; ++j) {
+                labelsPtr[i + j] = std::min(labelsPtr[i + j], newValue);
+            }
+        }
+
+        for (; i < end; ++i) {
+            labelsPtr[i] = std::min(labelsPtr[i], newValue);
+        }
     }
-  }
+
+    inline long long memoryUsageInBytes() const noexcept {
+        long long result = Vector::memoryUsageInBytes(labels);
+        result += Vector::memoryUsageInBytes(defaultLabels);
+        result += Vector::memoryUsageInBytes(routeEnd);
+        return result;
+    }
 
 private:
-  const Data &data;
+    const Data& data;
 
-  std::vector<uint8_t> labels;
-  std::vector<uint8_t> defaultLabels;
-  std::vector<uint32_t> routeEnd;
+    std::vector<uint8_t> labels;
+    std::vector<uint8_t> defaultLabels;
+    std::vector<uint32_t> routeEnd;
 };
 
-} // namespace TripBased
+}  // namespace TripBased

@@ -33,23 +33,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 namespace TripBased {
 
 typedef enum {
-  PHASE_SCAN_INITIAL,
-  PHASE_EVALUATE_INITIAL,
-  PHASE_SCAN_TRIPS,
-  PHASE_FORWARD,
-  PHASE_BACKWARD,
-  PHASE_MAIN,
-  PHASE_COLLECT_DEPTIMES,
-  PHASE_GET_JOURNEYS,
-  PHASE_ENQUEUE_COLLECTED_DEP_TIMES,
-  PHASE_TREX_COLLECT_IBES,
-  PHASE_TREX_SORT_IBES,
-  PHASE_TREX_FILTER_IBES,
-  PHASE_TREX_UNPACK,
-  NUM_PHASES,
+    PHASE_SCAN_INITIAL,
+    PHASE_EVALUATE_INITIAL,
+    PHASE_SCAN_TRIPS,
+    PHASE_FORWARD,
+    PHASE_BACKWARD,
+    PHASE_MAIN,
+    PHASE_COLLECT_DEPTIMES,
+    PHASE_GET_JOURNEYS,
+    PHASE_ENQUEUE_COLLECTED_DEP_TIMES,
+    PHASE_TREX_COLLECT_IBES,
+    PHASE_TREX_SORT_IBES,
+    PHASE_TREX_FILTER_IBES,
+    PHASE_TREX_UNPACK,
+    NUM_PHASES,
 } Phase;
 
-constexpr const char *PhaseNames[] = {
+constexpr const char* PhaseNames[] = {
     "Scan initial transfers",
     "Evaluate initial transfers",
     "Scan trips",
@@ -66,24 +66,24 @@ constexpr const char *PhaseNames[] = {
 };
 
 typedef enum {
-  METRIC_ROUNDS,
-  METRIC_SCANNED_TRIPS,
-  METRIC_SCANNED_STOPS,
-  METRIC_SCANNED_LEVEL_ZERO_TRIPS,
-  METRIC_SCANNED_LEVEL_ZERO_STOPS,
-  METRIC_RELAXED_TRANSFERS,
-  METRIC_ENQUEUES,
-  METRIC_ADD_JOURNEYS,
-  METRIC_COUNT_DISTANCE,
-  NUMBER_OF_RUNS,
-  DISCARDED_EDGE,
-  METRIC_TREX_COLLECTED_IBES,
-  METRIC_TREX_STOPEVENT_TO_UNPACK,
-  METRIC_TREX_NUMBER_OF_RUNS,
-  NUM_METRICS
+    METRIC_ROUNDS,
+    METRIC_SCANNED_TRIPS,
+    METRIC_SCANNED_STOPS,
+    METRIC_SCANNED_LEVEL_ZERO_TRIPS,
+    METRIC_SCANNED_LEVEL_ZERO_STOPS,
+    METRIC_RELAXED_TRANSFERS,
+    METRIC_ENQUEUES,
+    METRIC_ADD_JOURNEYS,
+    METRIC_COUNT_DISTANCE,
+    NUMBER_OF_RUNS,
+    DISCARDED_EDGE,
+    METRIC_TREX_COLLECTED_IBES,
+    METRIC_TREX_STOPEVENT_TO_UNPACK,
+    METRIC_TREX_NUMBER_OF_RUNS,
+    NUM_METRICS
 } Metric;
 
-constexpr const char *MetricNames[] = {"Rounds",
+constexpr const char* MetricNames[] = {"Rounds",
                                        "Scanned trips",
                                        "Scanned stops",
                                        "Scanned Level 0 trips",
@@ -100,121 +100,101 @@ constexpr const char *MetricNames[] = {"Rounds",
 
 class NoProfiler {
 public:
-  inline void
-  registerPhases(const std::initializer_list<Phase> &) const noexcept {}
-  inline void
-  registerMetrics(const std::initializer_list<Metric> &) const noexcept {}
+    inline void registerPhases(const std::initializer_list<Phase>&) const noexcept {}
+    inline void registerMetrics(const std::initializer_list<Metric>&) const noexcept {}
 
-  inline void start() const noexcept {}
-  inline void done() const noexcept {}
+    inline void start() const noexcept {}
+    inline void done() const noexcept {}
 
-  inline void startPhase() const noexcept {}
-  inline void donePhase(const Phase) const noexcept {}
+    inline void startPhase() const noexcept {}
+    inline void donePhase(const Phase) const noexcept {}
 
-  inline void countMetric(const Metric) const noexcept {}
+    inline void countMetric(const Metric) const noexcept {}
 
-  inline void printStatistics() const noexcept {}
+    inline void printStatistics() const noexcept {}
 
-  inline void printStatisticsAsCSV() const noexcept {}
+    inline void printStatisticsAsCSV() const noexcept {}
 
-  inline void reset() const noexcept {}
+    inline void reset() const noexcept {}
 };
 
 class AggregateProfiler : public NoProfiler {
 public:
-  AggregateProfiler()
-      : totalTime(0.0), phaseTime(NUM_PHASES, 0.0), metricValue(NUM_METRICS, 0),
-        numQueries(0) {}
+    AggregateProfiler() : totalTime(0.0), phaseTime(NUM_PHASES, 0.0), metricValue(NUM_METRICS, 0), numQueries(0) {}
 
-  inline void
-  registerPhases(const std::initializer_list<Phase> &phaseList) noexcept {
-    for (const Phase phase : phaseList) {
-      phases.push_back(phase);
+    inline void registerPhases(const std::initializer_list<Phase>& phaseList) noexcept {
+        for (const Phase phase : phaseList) {
+            phases.push_back(phase);
+        }
     }
-  }
 
-  inline void
-  registerMetrics(const std::initializer_list<Metric> &metricList) noexcept {
-    for (const Metric metric : metricList) {
-      metrics.push_back(metric);
+    inline void registerMetrics(const std::initializer_list<Metric>& metricList) noexcept {
+        for (const Metric metric : metricList) {
+            metrics.push_back(metric);
+        }
     }
-  }
 
-  inline void start() noexcept { totalTimer.restart(); }
+    inline void start() noexcept { totalTimer.restart(); }
 
-  inline void done() noexcept {
-    totalTime += totalTimer.elapsedMicroseconds();
-    numQueries++;
-  }
-
-  inline void startPhase() noexcept { phaseTimer.restart(); }
-
-  inline void donePhase(const Phase phase) noexcept {
-    phaseTime[phase] += phaseTimer.elapsedMicroseconds();
-  }
-
-  inline void countMetric(const Metric metric) noexcept {
-    metricValue[metric]++;
-  }
-
-  inline double getTotalTime() const noexcept { return totalTime / numQueries; }
-
-  inline double getPhaseTime(const Phase phase) const noexcept {
-    return phaseTime[phase] / numQueries;
-  }
-
-  inline double getMetric(const Metric metric) const noexcept {
-    return metricValue[metric] / static_cast<double>(numQueries);
-  }
-
-  inline void printStatistics() const noexcept {
-    for (const Metric metric : metrics) {
-      std::cout << MetricNames[metric] << ": "
-                << String::prettyDouble(
-                       metricValue[metric] / static_cast<double>(numQueries), 2)
-                << std::endl;
+    inline void done() noexcept {
+        totalTime += totalTimer.elapsedMicroseconds();
+        numQueries++;
     }
-    for (const Phase phase : phases) {
-      std::cout << PhaseNames[phase] << ": "
-                << String::musToString(phaseTime[phase] /
-                                       static_cast<double>(numQueries))
-                << std::endl;
-    }
-    std::cout << "Total time: " << String::musToString(totalTime / numQueries)
-              << std::endl;
-  }
 
-  inline void printStatisticsAsCSV() const noexcept {
-    for (const Metric metric : metrics) {
-      std::cout << "\"" << MetricNames[metric] << "\","
-                << (float)(metricValue[metric] / (double)(numQueries))
-                << std::endl;
-    }
-    for (const Phase phase : phases) {
-      std::cout << "\"" << PhaseNames[phase] << "\","
-                << (uint64_t)(phaseTime[phase] / (double)(numQueries))
-                << std::endl;
-    }
-    std::cout << "\"Total time\"," << (uint64_t)(totalTime / numQueries)
-              << std::endl;
-  }
+    inline void startPhase() noexcept { phaseTimer.restart(); }
 
-  inline void reset() noexcept {
-    totalTime = 0.0;
-    phaseTime.assign(NUM_PHASES, 0.0);
-    metricValue.assign(NUM_METRICS, 0);
-    numQueries = 0;
-  }
+    inline void donePhase(const Phase phase) noexcept { phaseTime[phase] += phaseTimer.elapsedMicroseconds(); }
+
+    inline void countMetric(const Metric metric) noexcept { metricValue[metric]++; }
+
+    inline double getTotalTime() const noexcept { return totalTime / numQueries; }
+
+    inline double getPhaseTime(const Phase phase) const noexcept { return phaseTime[phase] / numQueries; }
+
+    inline double getMetric(const Metric metric) const noexcept {
+        return metricValue[metric] / static_cast<double>(numQueries);
+    }
+
+    inline void printStatistics() const noexcept {
+        for (const Metric metric : metrics) {
+            std::cout << MetricNames[metric] << ": "
+                      << String::prettyDouble(metricValue[metric] / static_cast<double>(numQueries), 2) << std::endl;
+        }
+        for (const Phase phase : phases) {
+            std::cout << PhaseNames[phase] << ": "
+                      << String::musToString(phaseTime[phase] / static_cast<double>(numQueries)) << std::endl;
+        }
+        std::cout << "Total time: " << String::musToString(totalTime / numQueries) << std::endl;
+    }
+
+    inline void printStatisticsAsCSV() const noexcept {
+        for (const Metric metric : metrics) {
+            std::cout << "\"" << MetricNames[metric] << "\"," << (float)(metricValue[metric] / (double)(numQueries))
+                      << std::endl;
+        }
+        for (const Phase phase : phases) {
+            std::cout << "\"" << PhaseNames[phase] << "\"," << (uint64_t)(phaseTime[phase] / (double)(numQueries))
+                      << std::endl;
+        }
+        std::cout << "\"Total time\"," << (uint64_t)(totalTime / numQueries) << std::endl;
+    }
+
+    inline void reset() noexcept {
+        totalTime = 0.0;
+        phaseTime.assign(NUM_PHASES, 0.0);
+        metricValue.assign(NUM_METRICS, 0);
+        numQueries = 0;
+    }
 
 private:
-  Timer totalTimer;
-  double totalTime;
-  std::vector<Phase> phases;
-  std::vector<Metric> metrics;
-  Timer phaseTimer;
-  std::vector<double> phaseTime;
-  std::vector<long long> metricValue;
-  size_t numQueries;
+    Timer totalTimer;
+    double totalTime;
+    std::vector<Phase> phases;
+    std::vector<Metric> metrics;
+    Timer phaseTimer;
+    std::vector<double> phaseTime;
+    std::vector<long long> metricValue;
+    size_t numQueries;
 };
 
-} // namespace TripBased
+}  // namespace TripBased

@@ -45,229 +45,199 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 template <typename GRAPH, bool DEBUG = false>
 class DialDijkstra {
- public:
-  using Graph = GRAPH;
-  static constexpr bool Debug = DEBUG;
-  using Type = DialDijkstra<Graph, Debug>;
+public:
+    using Graph = GRAPH;
+    static constexpr bool Debug = DEBUG;
+    using Type = DialDijkstra<Graph, Debug>;
 
- public:
-  struct VertexLabel {
-    VertexLabel()
-        : distance(intMax), parent(noVertex), timeStamp(-1), isInQueue(false) {}
-    inline void reset(int time) {
-      distance = intMax;
-      parent = noVertex;
-      timeStamp = time;
-      isInQueue = false;
+public:
+    struct VertexLabel {
+        VertexLabel() : distance(intMax), parent(noVertex), timeStamp(-1), isInQueue(false) {}
+        inline void reset(int time) {
+            distance = intMax;
+            parent = noVertex;
+            timeStamp = time;
+            isInQueue = false;
+        }
+
+        int distance;
+        Vertex parent;
+        int timeStamp;
+        bool isInQueue;
+    };
+
+public:
+    DialDijkstra(const GRAPH& graph, const std::vector<int>& weight)
+        : graph(graph), weight(weight), Q(), label(graph.numVertices()), timeStamp(0), settleCount(0) {}
+
+    DialDijkstra(const GRAPH& graph) : DialDijkstra(graph, graph[TravelTime]) {}
+
+    template <AttributeNameType ATTRIBUTE_NAME>
+    DialDijkstra(const GRAPH& graph, const AttributeNameWrapper<ATTRIBUTE_NAME> weight)
+        : DialDijkstra(graph, graph[weight]) {}
+
+    DialDijkstra(const GRAPH&&, const std::vector<int>&) = delete;
+    DialDijkstra(const GRAPH&, const std::vector<int>&&) = delete;
+    DialDijkstra(const GRAPH&&) = delete;
+
+    template <AttributeNameType ATTRIBUTE_NAME>
+    DialDijkstra(const GRAPH&&, const AttributeNameWrapper<ATTRIBUTE_NAME>) = delete;
+
+    template <typename SETTLE = NO_OPERATION, typename STOP = NO_OPERATION, typename PRUNE_EDGE = NO_OPERATION>
+    inline void run(const Vertex source, const Vertex target = noVertex, const SETTLE& settle = NoOperation,
+                    const STOP& stop = NoOperation, const PRUNE_EDGE& pruneEdge = NoOperation) noexcept {
+        clear();
+        addSource(source);
+        run(target, settle, stop, pruneEdge);
     }
 
-    int distance;
-    Vertex parent;
-    int timeStamp;
-    bool isInQueue;
-  };
-
- public:
-  DialDijkstra(const GRAPH &graph, const std::vector<int> &weight)
-      : graph(graph),
-        weight(weight),
-        Q(),
-        label(graph.numVertices()),
-        timeStamp(0),
-        settleCount(0) {}
-
-  DialDijkstra(const GRAPH &graph) : DialDijkstra(graph, graph[TravelTime]) {}
-
-  template <AttributeNameType ATTRIBUTE_NAME>
-  DialDijkstra(const GRAPH &graph,
-               const AttributeNameWrapper<ATTRIBUTE_NAME> weight)
-      : DialDijkstra(graph, graph[weight]) {}
-
-  DialDijkstra(const GRAPH &&, const std::vector<int> &) = delete;
-  DialDijkstra(const GRAPH &, const std::vector<int> &&) = delete;
-  DialDijkstra(const GRAPH &&) = delete;
-
-  template <AttributeNameType ATTRIBUTE_NAME>
-  DialDijkstra(const GRAPH &&,
-               const AttributeNameWrapper<ATTRIBUTE_NAME>) = delete;
-
-  template <typename SETTLE = NO_OPERATION, typename STOP = NO_OPERATION,
-            typename PRUNE_EDGE = NO_OPERATION>
-  inline void run(const Vertex source, const Vertex target = noVertex,
-                  const SETTLE &settle = NoOperation,
-                  const STOP &stop = NoOperation,
-                  const PRUNE_EDGE &pruneEdge = NoOperation) noexcept {
-    clear();
-    addSource(source);
-    run(target, settle, stop, pruneEdge);
-  }
-
-  template <typename SETTLE = NO_OPERATION, typename STOP = NO_OPERATION,
-            typename PRUNE_EDGE = NO_OPERATION>
-  inline void run(const Vertex source, IndexedSet<false, Vertex> &targets,
-                  const SETTLE &settle = NoOperation,
-                  const STOP &stop = NoOperation,
-                  const PRUNE_EDGE &pruneEdge = NoOperation) noexcept {
-    clear();
-    addSource(source);
-    run(
-        noVertex,
-        [&](const Vertex u) {
-          settle(u);
-          targets.remove(u);
-        },
-        [&]() { return stop() || targets.empty(); }, pruneEdge);
-  }
-
-  template <typename SOURCE_CONTAINER, typename SETTLE = NO_OPERATION,
-            typename STOP = NO_OPERATION, typename PRUNE_EDGE = NO_OPERATION,
-            typename = decltype(std::declval<SOURCE_CONTAINER>().begin())>
-  inline void run(const SOURCE_CONTAINER &sources,
-                  const Vertex target = noVertex,
-                  const SETTLE &settle = NoOperation,
-                  const STOP &stop = NoOperation,
-                  const PRUNE_EDGE &pruneEdge = NoOperation) noexcept {
-    clear();
-    for (const Vertex source : sources) {
-      addSource(source);
+    template <typename SETTLE = NO_OPERATION, typename STOP = NO_OPERATION, typename PRUNE_EDGE = NO_OPERATION>
+    inline void run(const Vertex source, IndexedSet<false, Vertex>& targets, const SETTLE& settle = NoOperation,
+                    const STOP& stop = NoOperation, const PRUNE_EDGE& pruneEdge = NoOperation) noexcept {
+        clear();
+        addSource(source);
+        run(
+            noVertex,
+            [&](const Vertex u) {
+                settle(u);
+                targets.remove(u);
+            },
+            [&]() { return stop() || targets.empty(); }, pruneEdge);
     }
-    run(target, settle, stop, pruneEdge);
-  }
 
-  inline void clear() noexcept {
-    if constexpr (Debug) {
-      timer.restart();
-      settleCount = 0;
+    template <typename SOURCE_CONTAINER, typename SETTLE = NO_OPERATION, typename STOP = NO_OPERATION,
+              typename PRUNE_EDGE = NO_OPERATION, typename = decltype(std::declval<SOURCE_CONTAINER>().begin())>
+    inline void run(const SOURCE_CONTAINER& sources, const Vertex target = noVertex, const SETTLE& settle = NoOperation,
+                    const STOP& stop = NoOperation, const PRUNE_EDGE& pruneEdge = NoOperation) noexcept {
+        clear();
+        for (const Vertex source : sources) {
+            addSource(source);
+        }
+        run(target, settle, stop, pruneEdge);
     }
-    Q.clear();
-    timeStamp++;
-  }
 
-  inline void addSource(const Vertex source, const int distance = 0) noexcept {
-    VertexLabel &sourceLabel = getLabel(source);
-    sourceLabel.distance = distance;
-    sourceLabel.isInQueue = true;
-    Q.push_front(source);
-  }
+    inline void clear() noexcept {
+        if constexpr (Debug) {
+            timer.restart();
+            settleCount = 0;
+        }
+        Q.clear();
+        timeStamp++;
+    }
 
-  inline void run() noexcept {
-    run(noVertex, NoOperation, NoOperation, NoOperation);
-  }
+    inline void addSource(const Vertex source, const int distance = 0) noexcept {
+        VertexLabel& sourceLabel = getLabel(source);
+        sourceLabel.distance = distance;
+        sourceLabel.isInQueue = true;
+        Q.push_front(source);
+    }
 
-  template <typename SETTLE, typename STOP = NO_OPERATION,
-            typename PRUNE_EDGE = NO_OPERATION,
-            typename = decltype(std::declval<SETTLE>()(std::declval<Vertex>()))>
-  inline void run(const Vertex target, const SETTLE &settle,
-                  const STOP &stop = NoOperation,
-                  const PRUNE_EDGE &pruneEdge = NoOperation) noexcept {
-    while (!Q.empty()) {
-      if (stop()) break;
-      Vertex u = Q.front();
-      Q.pop_front();
+    inline void run() noexcept { run(noVertex, NoOperation, NoOperation, NoOperation); }
 
-      VertexLabel &uLabel = label[u];
-      uLabel.isInQueue = false;
+    template <typename SETTLE, typename STOP = NO_OPERATION, typename PRUNE_EDGE = NO_OPERATION,
+              typename = decltype(std::declval<SETTLE>()(std::declval<Vertex>()))>
+    inline void run(const Vertex target, const SETTLE& settle, const STOP& stop = NoOperation,
+                    const PRUNE_EDGE& pruneEdge = NoOperation) noexcept {
+        while (!Q.empty()) {
+            if (stop()) break;
+            Vertex u = Q.front();
+            Q.pop_front();
 
-      if (u == target) break;
-      for (const Edge edge : graph.edgesFrom(u)) {
-        const Vertex v = graph.get(ToVertex, edge);
-        if (pruneEdge(u, edge)) continue;
+            VertexLabel& uLabel = label[u];
+            uLabel.isInQueue = false;
 
-        VertexLabel &vLabel = getLabel(v);
-        const int distance = uLabel.distance + weight[edge];
-        if (vLabel.distance > distance) {
-          vLabel.distance = distance;
-          vLabel.parent = u;
+            if (u == target) break;
+            for (const Edge edge : graph.edgesFrom(u)) {
+                const Vertex v = graph.get(ToVertex, edge);
+                if (pruneEdge(u, edge)) continue;
 
-          if (!vLabel.isInQueue) {
-            if (weight[edge] == 0) {
-              Q.push_front(v);
-            } else {
-              Q.push_back(v);
+                VertexLabel& vLabel = getLabel(v);
+                const int distance = uLabel.distance + weight[edge];
+                if (vLabel.distance > distance) {
+                    vLabel.distance = distance;
+                    vLabel.parent = u;
+
+                    if (!vLabel.isInQueue) {
+                        if (weight[edge] == 0) {
+                            Q.push_front(v);
+                        } else {
+                            Q.push_back(v);
+                        }
+                        vLabel.isInQueue = true;
+                    }
+                }
             }
-            vLabel.isInQueue = true;
-          }
+            settle(u);
+            if constexpr (Debug) settleCount++;
         }
-      }
-      settle(u);
-      if constexpr (Debug) settleCount++;
-    }
-    if constexpr (Debug) {
-      std::cout << "Settled Vertices = " << String::prettyInt(settleCount)
-                << std::endl;
-      std::cout << "Time = " << String::msToString(timer.elapsedMilliseconds())
-                << std::endl;
-    }
-  }
-
-  inline bool reachable(const Vertex vertex) const noexcept {
-    return label[vertex].timeStamp == timeStamp;
-  }
-
-  inline bool visited(const Vertex vertex) const noexcept {
-    return label[vertex].timeStamp == timeStamp;
-  }
-
-  inline int getDistance(const Vertex vertex) const noexcept {
-    if (visited(vertex)) return label[vertex].distance;
-    return -1;
-  }
-
-  inline Vertex getParent(const Vertex vertex) const noexcept {
-    if (visited(vertex)) return label[vertex].parent;
-    return noVertex;
-  }
-
-  inline std::set<Vertex> getChildren(const Vertex vertex) const noexcept {
-    if (visited(vertex)) {
-      std::set<Vertex> children;
-      for (Vertex child : graph.outgoingNeighbors(vertex)) {
-        if (label[child].parent == vertex) {
-          children.insert(child);
+        if constexpr (Debug) {
+            std::cout << "Settled Vertices = " << String::prettyInt(settleCount) << std::endl;
+            std::cout << "Time = " << String::msToString(timer.elapsedMilliseconds()) << std::endl;
         }
-      }
-      return children;
     }
-    return std::set<Vertex>();
-  }
 
-  inline Vertex getQFront() const noexcept {
-    if (Q.empty()) return noVertex;
-    return Q.front();
-  }
+    inline bool reachable(const Vertex vertex) const noexcept { return label[vertex].timeStamp == timeStamp; }
 
-  inline std::vector<Vertex> getReversePath(const Vertex to) const noexcept {
-    std::vector<Vertex> path;
-    if (!visited(to)) return path;
-    path.push_back(to);
-    while (label[path.back()].parent != noVertex) {
-      path.push_back(label[path.back()].parent);
+    inline bool visited(const Vertex vertex) const noexcept { return label[vertex].timeStamp == timeStamp; }
+
+    inline int getDistance(const Vertex vertex) const noexcept {
+        if (visited(vertex)) return label[vertex].distance;
+        return -1;
     }
-    return path;
-  }
 
-  inline std::vector<Vertex> getPath(const Vertex to) const noexcept {
-    return Vector::reverse(getReversePath(to));
-  }
+    inline Vertex getParent(const Vertex vertex) const noexcept {
+        if (visited(vertex)) return label[vertex].parent;
+        return noVertex;
+    }
 
-  inline int getSettleCount() const noexcept { return settleCount; }
+    inline std::set<Vertex> getChildren(const Vertex vertex) const noexcept {
+        if (visited(vertex)) {
+            std::set<Vertex> children;
+            for (Vertex child : graph.outgoingNeighbors(vertex)) {
+                if (label[child].parent == vertex) {
+                    children.insert(child);
+                }
+            }
+            return children;
+        }
+        return std::set<Vertex>();
+    }
 
- private:
-  inline VertexLabel &getLabel(const Vertex vertex) noexcept {
-    VertexLabel &result = label[vertex];
-    if (result.timeStamp != timeStamp) result.reset(timeStamp);
-    return result;
-  }
+    inline Vertex getQFront() const noexcept {
+        if (Q.empty()) return noVertex;
+        return Q.front();
+    }
 
- private:
-  const GRAPH &graph;
-  const std::vector<int> &weight;
+    inline std::vector<Vertex> getReversePath(const Vertex to) const noexcept {
+        std::vector<Vertex> path;
+        if (!visited(to)) return path;
+        path.push_back(to);
+        while (label[path.back()].parent != noVertex) {
+            path.push_back(label[path.back()].parent);
+        }
+        return path;
+    }
 
-  std::deque<Vertex> Q;
+    inline std::vector<Vertex> getPath(const Vertex to) const noexcept { return Vector::reverse(getReversePath(to)); }
 
-  std::vector<VertexLabel> label;
-  int timeStamp;
+    inline int getSettleCount() const noexcept { return settleCount; }
 
-  int settleCount;
-  Timer timer;
+private:
+    inline VertexLabel& getLabel(const Vertex vertex) noexcept {
+        VertexLabel& result = label[vertex];
+        if (result.timeStamp != timeStamp) result.reset(timeStamp);
+        return result;
+    }
+
+private:
+    const GRAPH& graph;
+    const std::vector<int>& weight;
+
+    std::deque<Vertex> Q;
+
+    std::vector<VertexLabel> label;
+    int timeStamp;
+
+    int settleCount;
+    Timer timer;
 };
