@@ -29,11 +29,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <iostream>
 #include <map>
 #include <string>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "../../Algorithms/BipartiteGraphAlgorithms.h"
 #include "../../Algorithms/Dijkstra/Dijkstra.h"
 #include "../../Algorithms/StronglyConnectedComponents.h"
+#include "../../Algorithms/UnionFind.h"
 #include "../../Helpers/Assert.h"
 #include "../../Helpers/Console/Progress.h"
 #include "../../Helpers/Console/ProgressBar.h"
@@ -200,7 +203,8 @@ class Data {
   inline static Data FromGTFS(const GTFS::Data& gtfs, const int startDate,
                               const int endDate,
                               const bool ignoreDaysOfOperation = false,
-                              const bool ignoreFrequencies = false) noexcept {
+                              const bool ignoreFrequencies = false,
+                              const bool splitTrips = true) noexcept {
     std::cout << "Extracting timetable from " << dayToString(startDate)
               << " to " << dayToString(endDate) << ", "
               << (ignoreDaysOfOperation ? "ignoring" : ", applying")
@@ -310,6 +314,7 @@ class Data {
     }
     data.connectIsolatedStops();
     data.transferGraph.packEdges();
+    if (data.warnAboutLongTrips() > 0 && splitTrips) data.splitLongTrips();
     data.validate();
     return data;
   }
@@ -836,6 +841,214 @@ class Data {
       trips.emplace_back(trips[i], timeOffset);
     }
   }
+
+  // Upper bound on the number of stop events of a trip that the trip-based
+  // algorithms (Trip-Based Routing, TREX, ULTRA shortcuts, ...) can handle.
+  // Their reached indices store the position inside a trip, and the length of
+  // the trip, in a single byte.
+  static constexpr size_t MaxStopEventsPerTrip = 255;
+
+  // Counts the trips with more than `maxStopEvents` stop events and prints a
+  // warning if there are any. Returns the number of such trips.
+  inline size_t warnAboutLongTrips(
+      const size_t maxStopEvents = MaxStopEventsPerTrip) const noexcept {
+    size_t count = 0;
+    size_t longest = 0;
+    for (const Trip& trip : trips) {
+      if (trip.stopEvents.size() <= maxStopEvents) continue;
+      ++count;
+      longest = std::max(longest, trip.stopEvents.size());
+    }
+    if (count > 0) {
+      warning(String::prettyInt(count), " of ", String::prettyInt(trips.size()),
+              " trips have more than ", maxStopEvents,
+              " stop events (longest: ", longest,
+              "). Trip-based algorithms store stop indices in 8 bits and will "
+              "break on them; see Intermediate::Data::splitLongTrips.");
+    }
+    return count;
+  }
+
+  // Splits every trip with more than `maxStopEvents` stop events into several
+  // consecutive trips, each with at most `maxStopEvents` stop events. Returns
+  // the number of trips that were split.
+  //
+  // Why: GTFS feeds produced by nigiri (e.g. the Transitious feeds) "unroll"
+  // block ids. All trips of one block, i.e. all runs one vehicle drives in a
+  // row, are concatenated into a single trip. Such a trip is a vehicle's whole
+  // service day, and goes through the same few stops over and over again
+  // (typically a line that is driven back and forth, or a loop). In the
+  // Transitious exports such trips have up to ~2000 stop events, while they
+  // only visit a few dozen to a few hundred distinct stops. The trip-based
+  // algorithms assume that a trip has at most 255 stop events.
+  //
+  // This is not exact: a passenger who is in the vehicle at the cut would stay
+  // seated in the original trip, but has to change in the split one. The
+  // connection between the two stop events at the cut is dropped as well. For
+  // a run boundary of an unrolled block, that connection is not a ride at all
+  // (the vehicle drives from the last stop of one run to the first stop of the
+  // next), so nothing is lost there. We accept the inexactness for other cuts.
+  //
+  // Where to cut. Cuts are placed between two consecutive stop events (no
+  // stop event is duplicated), and only depend on the sequence of stops of the
+  // trip, never on its times. Hence all trips of a line (same stop sequence)
+  // are cut identically, and the pieces of a line again form lines.
+  // A cut in front of stop event i is
+  //   - a run boundary, if the "place" of event i is the place of the first
+  //     stop event of the trip (the vehicle is back where it started),
+  //   - a loop cut, if the place of event i occurs somewhere else in the trip
+  //     as well (the vehicle returns to a place it has visited),
+  //   - a hard cut otherwise.
+  // Two stops are the same "place" if they are at most `maxNeighbourTravelTime`
+  // seconds apart, either via a footpath in the transfer graph or by geo
+  // distance (walking with `speedInKMH`), transitively. This is needed since
+  // the runs of a block often end at the same station but at different
+  // stops/tracks. On the Transitious data this resolves all long trips without
+  // a hard cut, using exactly equal stops instead leaves a few hundred (USA).
+  // The cuts are chosen by dynamic programming over all positions, with the
+  // lexicographic objective (number of hard cuts, number of loop cuts, number of
+  // pieces), subject to every piece having between 2 and `maxStopEvents`
+  // stop events. Run boundaries are thus preferred, and among these we get few
+  // and long pieces rather than one piece per run.
+  //
+  // The first stop event of each piece gets arrival = departure - 1 and the
+  // last one departure = arrival + 1, like the ends of a trip in `FromGTFS`.
+  inline size_t splitLongTrips(
+      const size_t maxStopEvents = MaxStopEventsPerTrip,
+      const int maxNeighbourTravelTime = 60,
+      const double speedInKMH = 5.1) noexcept {
+    AssertMsg(maxStopEvents >= 2, "Trips need at least two stop events!");
+    size_t longTrips = 0;
+    for (const Trip& trip : trips) {
+      if (trip.stopEvents.size() > maxStopEvents) ++longTrips;
+    }
+    if (longTrips == 0) return 0;
+
+    UnionFind places = placesOfStops(maxNeighbourTravelTime, speedInKMH);
+    std::vector<Trip> result;
+    result.reserve(trips.size() + longTrips);
+    size_t numPieces = 0;
+    size_t hardCuts = 0;
+    for (Trip& trip : trips) {
+      if (trip.stopEvents.size() <= maxStopEvents) {
+        result.emplace_back(std::move(trip));
+        continue;
+      }
+      std::vector<int> place(trip.stopEvents.size());
+      for (size_t i = 0; i < place.size(); ++i) {
+        const StopId stop = trip.stopEvents[i].stopId;
+        place[i] = (stop < stops.size()) ? places(int(stop)) : int(stop);
+      }
+      const std::vector<size_t> cuts = tripCuts(place, maxStopEvents);
+      for (size_t k = 0; k + 1 < cuts.size(); ++k) {
+        result.emplace_back(trip.tripName, trip.routeName, trip.type);
+        std::vector<StopEvent>& events = result.back().stopEvents;
+        events.assign(trip.stopEvents.begin() + cuts[k],
+                      trip.stopEvents.begin() + cuts[k + 1]);
+        events.front().arrivalTime = events.front().departureTime - 1;
+        events.back().departureTime = events.back().arrivalTime + 1;
+        ++numPieces;
+        if (k > 0 && !isLoopCut(place, cuts[k])) ++hardCuts;
+      }
+    }
+    trips = std::move(result);
+    std::sort(trips.begin(), trips.end());
+    std::cout << "Split " << String::prettyInt(longTrips)
+              << " trips with more than " << maxStopEvents
+              << " stop events into " << String::prettyInt(numPieces)
+              << " trips (" << String::prettyInt(hardCuts)
+              << " cuts at places the trip does not return to)." << std::endl;
+    return longTrips;
+  }
+
+ protected:
+  // Groups stops that are at most `maxTravelTime` seconds apart, via footpaths
+  // in the transfer graph or by walking the geo distance at `speedInKMH`.
+  inline UnionFind placesOfStops(const int maxTravelTime,
+                                 const double speedInKMH) const noexcept {
+    UnionFind places(int(stops.size()));
+    for (const StopId stop : stopIds()) {
+      if (!transferGraph.isVertex(Vertex(stop))) continue;
+      for (const Edge edge : transferGraph.edgesFrom(Vertex(stop))) {
+        const Vertex other = transferGraph.get(ToVertex, edge);
+        if (other >= stops.size()) continue;
+        if (transferGraph.get(TravelTime, edge) <= maxTravelTime)
+          places.unite(int(stop), int(other));
+      }
+    }
+    if (stops.empty()) return places;
+    std::vector<Geometry::Point> coordinates;
+    coordinates.reserve(stops.size());
+    for (const Stop& stop : stops) coordinates.emplace_back(stop.coordinates);
+    const double maxDistanceInCM = maxTravelTime * speedInKMH / 0.036;
+    CoordinateTree<Geometry::GeoMetric> ct(Geometry::GeoMetric(), coordinates);
+    for (const StopId stop : stopIds()) {
+      for (const Vertex other :
+           ct.getNeighbors(coordinates[stop], maxDistanceInCM)) {
+        if (other > stop) places.unite(int(stop), int(other));
+      }
+    }
+    return places;
+  }
+
+  inline static bool isLoopCut(const std::vector<int>& place,
+                               const size_t cut) noexcept {
+    for (size_t i = 0; i < place.size(); ++i) {
+      if (i != cut && place[i] == place[cut]) return true;
+    }
+    return false;
+  }
+
+  // Positions {0 = c_0 < c_1 < ... < c_k = n} such that the pieces
+  // [c_i, c_{i+1}) have between 2 and maxStopEvents elements, chosen as
+  // described at `splitLongTrips`. `place[i]` identifies the place of event i.
+  inline static std::vector<size_t> tripCuts(const std::vector<int>& place,
+                                             const size_t maxStopEvents) {
+    const size_t n = place.size();
+    constexpr int runBoundary = 0;
+    constexpr int loopCut = 1;
+    constexpr int hardCut = 2;
+    std::unordered_map<int, size_t> occurrences;
+    for (const int p : place) ++occurrences[p];
+    auto cutClass = [&](const size_t i) {
+      if (place[i] == place[0]) return runBoundary;
+      return (occurrences[place[i]] > 1) ? loopCut : hardCut;
+    };
+    // (hard cuts, loop cuts, pieces) of the best split of the prefix [0, j)
+    // that has a cut at j. Lexicographically minimised.
+    using Cost = std::tuple<size_t, size_t, size_t>;
+    const Cost infinity(n + 1, n + 1, n + 1);
+    std::vector<Cost> cost(n + 1, infinity);
+    std::vector<size_t> previous(n + 1, 0);
+    cost[0] = Cost(0, 0, 0);
+    for (size_t j = 2; j <= n; ++j) {
+      Cost extra(0, 0, 1);
+      if (j < n) {
+        const int c = cutClass(j);
+        if (c == hardCut) std::get<0>(extra) = 1;
+        if (c == loopCut) std::get<1>(extra) = 1;
+      }
+      for (size_t i = (j > maxStopEvents) ? j - maxStopEvents : 0; i + 2 <= j;
+           ++i) {
+        if (cost[i] == infinity) continue;
+        const Cost candidate(std::get<0>(cost[i]) + std::get<0>(extra),
+                             std::get<1>(cost[i]) + std::get<1>(extra),
+                             std::get<2>(cost[i]) + std::get<2>(extra));
+        if (candidate < cost[j]) {
+          cost[j] = candidate;
+          previous[j] = i;
+        }
+      }
+    }
+    AssertMsg(cost[n] != infinity, "No valid split for a trip with " << n
+                                                                    << " stop events!");
+    std::vector<size_t> cuts{n};
+    for (size_t j = n; j > 0; j = previous[j]) cuts.emplace_back(previous[j]);
+    std::reverse(cuts.begin(), cuts.end());
+    return cuts;
+  }
+
+ public:
 
   inline void validate() noexcept {
     std::vector<bool> deleteVertex(transferGraph.numVertices(), true);

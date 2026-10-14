@@ -74,6 +74,7 @@ class GTFSToIntermediate : public ParameterizedCommand {
     addParameter("Use days of operation?");
     addParameter("Use frequencies?");
     addParameter("Output file");
+    addParameter("Split long trips?", "true", {"true", "false"});
   }
 
   virtual void execute() noexcept {
@@ -84,11 +85,13 @@ class GTFSToIntermediate : public ParameterizedCommand {
     const bool useDaysOfOperation =
         getParameter<bool>("Use days of operation?");
     const bool useFrequencies = getParameter<bool>("Use frequencies?");
+    const bool splitLongTrips = getParameter<bool>("Split long trips?");
 
     GTFS::Data gtfs = GTFS::Data::FromBinary(gtfsDirectory);
     gtfs.printInfo();
-    Intermediate::Data inter = Intermediate::Data::FromGTFS(
-        gtfs, firstDay, lastDay, !useDaysOfOperation, !useFrequencies);
+    Intermediate::Data inter =
+        Intermediate::Data::FromGTFS(gtfs, firstDay, lastDay, !useDaysOfOperation,
+                                     !useFrequencies, splitLongTrips);
     inter.printInfo();
     inter.serialize(outputFile);
   }
